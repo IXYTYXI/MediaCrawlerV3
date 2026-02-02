@@ -61,6 +61,79 @@ class XiaoHongShuCrawler(AbstractCrawler):
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
 
+    def _get_sleep_seconds(self, *, for_comments: bool = False) -> float:
+        """使用高级随机分布生成等待时间"""
+        from tools.anti_crawl_utils import generate_random_wait, get_wait_manager
+        
+        if not getattr(config, "RANDOM_SLEEP_ENABLED", False):
+            return float(getattr(config, "CRAWLER_MAX_SLEEP_SEC", 0))
+        
+        # 获取动态调整乘数
+        multiplier = get_wait_manager().get_multiplier(config)
+        
+        if for_comments:
+            min_sec = max(0.0, float(getattr(config, "RANDOM_SLEEP_COMMENTS_MIN_SEC", 3.0)))
+            max_sec = max(min_sec, float(getattr(config, "RANDOM_SLEEP_COMMENTS_MAX_SEC", 6.0)))
+            distribution = getattr(config, "RANDOM_SLEEP_COMMENTS_DISTRIBUTION", "lognormal")
+        else:
+            min_sec = max(0.0, float(getattr(config, "RANDOM_SLEEP_MIN_SEC", 5.0)))
+            max_sec = max(min_sec, float(getattr(config, "RANDOM_SLEEP_MAX_SEC", 10.0)))
+            distribution = getattr(config, "RANDOM_SLEEP_DISTRIBUTION", "lognormal")
+        
+        base_wait = generate_random_wait(min_sec, max_sec, distribution)
+        return base_wait * multiplier
+
+    async def _maybe_do_fake_action(self) -> bool:
+        """
+        随机执行假动作：搜索热门关键词、模拟滚动、鼠标移动等，模拟真实用户浏览行为。
+        数据不会保存。
+        Returns:
+            bool: 是否执行了假动作
+        """
+        from tools.anti_crawl_utils import (
+            generate_random_wait, simulate_scroll, 
+            simulate_mouse_move, simulate_input
+        )
+        
+        if not getattr(config, "FAKE_ACTION_ENABLED", False):
+            return False
+        
+        probability = getattr(config, "FAKE_ACTION_PROBABILITY", 0.15)
+        if random.random() > probability:
+            return False
+        
+        try:
+            # 1. 模拟页面滚动
+            if hasattr(self, 'context_page') and self.context_page:
+                await simulate_scroll(self.context_page, config)
+                await simulate_mouse_move(self.context_page, config)
+                await simulate_input(self.context_page, config)
+            
+            # 2. 随机搜索热门关键词
+            default_keywords = ["美食", "旅行", "穿搭", "护肤", "健身", "摄影", "宠物", "家居",
+                               "数码", "音乐", "电影", "书籍", "咖啡", "甜点", "打卡", "探店"]
+            fake_keywords = getattr(config, "FAKE_ACTION_KEYWORDS", None) or default_keywords
+            keyword = random.choice(fake_keywords)
+            
+            utils.logger.info(f"[FakeAction] 执行假动作：搜索关键词 '{keyword}'")
+            await self.xhs_client.get_note_by_keyword(
+                keyword=keyword,
+                search_id=get_search_id(),
+                page=1,
+                page_size=10
+            )
+            
+            # 假动作后的随机等待（使用高级分布）
+            min_sec = getattr(config, "FAKE_ACTION_MIN_SEC", 2.0)
+            max_sec = getattr(config, "FAKE_ACTION_MAX_SEC", 5.0)
+            wait_time = generate_random_wait(min_sec, max_sec, "lognormal")
+            utils.logger.info(f"[FakeAction] 假动作完成，等待 {wait_time:.1f}s")
+            await asyncio.sleep(wait_time)
+            return True
+        except Exception as e:
+            utils.logger.warning(f"[FakeAction] 假动作执行失败: {e}")
+            return False
+
     async def start(self) -> None:
         playwright_proxy_format, httpx_proxy_format = None, None
         if config.ENABLE_IP_PROXY:
@@ -175,8 +248,9 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     await self.batch_get_note_comments(note_ids, xsec_tokens)
 
                     # Sleep after each page navigation
-                    await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                    utils.logger.info(f"[XiaoHongShuCrawler.search] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {page-1}")
+                    sleep_seconds = self._get_sleep_seconds()
+                    await asyncio.sleep(sleep_seconds)
+                    utils.logger.info(f"[XiaoHongShuCrawler.search] Sleeping for {sleep_seconds} seconds after page {page-1}")
                 except DataFetchError:
                     utils.logger.error("[XiaoHongShuCrawler.search] Get note detail error")
                     break
@@ -204,7 +278,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 continue
 
             # Use fixed crawling interval
-            crawl_interval = config.CRAWLER_MAX_SLEEP_SEC
+            crawl_interval = self._get_sleep_seconds()
             # Get all note information of the creator
             all_notes_list = await self.xhs_client.get_all_notes_by_creator(
                 user_id=user_id,
@@ -298,13 +372,19 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     note_detail = await self.xhs_client.get_note_by_id_from_html(note_id, xsec_source, xsec_token,
                                                                                  enable_cookie=True)
                     if not note_detail:
-                        raise Exception(f"[get_note_detail_async_task] Failed to get note detail, Id: {note_id}")
+                        # 跳过失败的笔记，继续执行其他任务
+                        utils.logger.warning(f"[get_note_detail_async_task] Failed to get note detail, skipping Id: {note_id}")
+                        return None
 
                 note_detail.update({"xsec_token": xsec_token, "xsec_source": xsec_source})
 
                 # Sleep after fetching note detail
-                await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                utils.logger.info(f"[get_note_detail_async_task] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching note {note_id}")
+                sleep_seconds = self._get_sleep_seconds()
+                await asyncio.sleep(sleep_seconds)
+                utils.logger.info(f"[get_note_detail_async_task] Sleeping for {sleep_seconds} seconds after fetching note {note_id}")
+
+                # 随机执行假动作（模拟真实用户浏览其他内容）
+                await self._maybe_do_fake_action()
 
                 return note_detail
 
@@ -337,7 +417,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         async with semaphore:
             utils.logger.info(f"[XiaoHongShuCrawler.get_comments] Begin get note id comments {note_id}")
             # Use fixed crawling interval
-            crawl_interval = config.CRAWLER_MAX_SLEEP_SEC
+            crawl_interval = self._get_sleep_seconds(for_comments=True)
             await self.xhs_client.get_note_all_comments(
                 note_id=note_id,
                 xsec_token=xsec_token,
@@ -349,6 +429,9 @@ class XiaoHongShuCrawler(AbstractCrawler):
             # Sleep after fetching comments
             await asyncio.sleep(crawl_interval)
             utils.logger.info(f"[XiaoHongShuCrawler.get_comments] Sleeping for {crawl_interval} seconds after fetching comments for note {note_id}")
+
+            # 随机执行假动作
+            await self._maybe_do_fake_action()
 
     async def create_xhs_client(self, httpx_proxy: Optional[str]) -> XiaoHongShuClient:
         """Create Xiaohongshu client"""

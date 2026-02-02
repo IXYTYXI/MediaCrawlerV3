@@ -23,7 +23,7 @@ KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗�
 LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
 COOKIES = ""
 CRAWLER_TYPE = (
-    "search"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
+    "creator"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )
 # 是否开启 IP 代理
 ENABLE_IP_PROXY = False
@@ -64,11 +64,11 @@ CUSTOM_BROWSER_PATH = ""
 CDP_HEADLESS = False
 
 # 浏览器启动超时时间（秒）
-BROWSER_LAUNCH_TIMEOUT = 60
+BROWSER_LAUNCH_TIMEOUT = 120
 
 # 是否在程序结束时自动关闭浏览器
 # 设置为False可以保持浏览器运行，便于调试
-AUTO_CLOSE_BROWSER = True
+AUTO_CLOSE_BROWSER = False
 
 # 数据保存类型选项配置,支持六种类型：csv、db、json、sqlite、excel、postgres, 最好保存到DB，有排重的功能。
 SAVE_DATA_OPTION = "json"  # csv or db or json or sqlite or excel or postgres
@@ -79,8 +79,8 @@ USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
 # 爬取开始页数 默认从第一页开始
 START_PAGE = 1
 
-# 爬取视频/帖子的数量控制
-CRAWLER_MAX_NOTES_COUNT = 15
+# 爬取视频/帖子的数量控制（分批爬取，每批较少）
+CRAWLER_MAX_NOTES_COUNT = 50
 
 # 并发爬虫数量控制
 MAX_CONCURRENCY_NUM = 1
@@ -92,11 +92,11 @@ ENABLE_GET_MEIDAS = False
 ENABLE_GET_COMMENTS = True
 
 # 爬取一级评论的数量控制(单视频/帖子)
-CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 10
+CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 500
 
 # 是否开启爬二级评论模式, 默认不开启爬二级评论
 # 老版本项目使用了 db, 则需参考 schema/tables.sql line 287 增加表字段
-ENABLE_GET_SUB_COMMENTS = False
+ENABLE_GET_SUB_COMMENTS = True
 
 # 词云相关
 # 是否开启生成评论词云图
@@ -114,8 +114,29 @@ STOP_WORDS_FILE = "./docs/hit_stopwords.txt"
 # 中文字体文件路径
 FONT_PATH = "./docs/STZHONGS.TTF"
 
-# 爬取间隔时间
+# 爬取间隔时间（固定等待）
 CRAWLER_MAX_SLEEP_SEC = 2
+
+# 随机等待（反反爬策略）- 保守模式
+RANDOM_SLEEP_ENABLED = True
+RANDOM_SLEEP_MIN_SEC = 5.0
+RANDOM_SLEEP_MAX_SEC = 10.0
+
+# 评论抓取的随机等待（单独控制）
+RANDOM_SLEEP_COMMENTS_MIN_SEC = 3.0
+RANDOM_SLEEP_COMMENTS_MAX_SEC = 6.0
+
+# 批次暂停策略：每爬取 N 条后，额外暂停一段时间
+BATCH_PAUSE_ENABLED = True
+BATCH_PAUSE_EVERY_N = 10  # 每 10 条
+BATCH_PAUSE_MIN_SEC = 30.0  # 暂停 30~60 秒
+BATCH_PAUSE_MAX_SEC = 60.0
+
+# 假动作策略：随机访问无关内容，模拟真实用户浏览
+FAKE_ACTION_ENABLED = True
+FAKE_ACTION_PROBABILITY = 0.15  # 15% 概率触发假动作
+FAKE_ACTION_MIN_SEC = 2.0  # 假动作后等待 2~5 秒
+FAKE_ACTION_MAX_SEC = 5.0
 
 from .bilibili_config import *
 from .xhs_config import *

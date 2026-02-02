@@ -19,6 +19,7 @@
 
 import asyncio
 import json
+import random
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 from urllib.parse import urlencode
 
@@ -406,8 +407,24 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 comments = comments[: max_count - len(result)]
             if callback:
                 await callback(note_id, comments)
-            await asyncio.sleep(crawl_interval)
+            # Dynamic random sleep for each request
+            actual_sleep = crawl_interval + random.uniform(0, crawl_interval * 0.5) if crawl_interval > 0 else random.uniform(0.3, 0.8)
+            await asyncio.sleep(actual_sleep)
             result.extend(comments)
+            
+            # Batch pause strategy for comments (随机化批次阈值)
+            if getattr(config, "BATCH_PAUSE_ENABLED", False):
+                min_n = getattr(config, "BATCH_PAUSE_EVERY_N_MIN", 8)
+                max_n = getattr(config, "BATCH_PAUSE_EVERY_N_MAX", 12)
+                batch_n = random.randint(min_n, max_n)
+                if len(result) > 0 and len(result) % batch_n == 0:
+                    pause_min = getattr(config, "BATCH_PAUSE_MIN_SEC", 30.0)
+                    pause_max = getattr(config, "BATCH_PAUSE_MAX_SEC", 60.0)
+                    from tools.anti_crawl_utils import generate_random_wait
+                    pause_time = generate_random_wait(pause_min, pause_max, "lognormal")
+                    utils.logger.info(f"[XiaoHongShuClient] 评论批次暂停: 等待 {pause_time:.1f}s (已爬取 {len(result)} 条评论)")
+                    await asyncio.sleep(pause_time)
+            
             sub_comments = await self.get_comments_all_sub_comments(
                 comments=comments,
                 xsec_token=xsec_token,
@@ -479,7 +496,9 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 comments = comments_res["comments"]
                 if callback:
                     await callback(note_id, comments)
-                await asyncio.sleep(crawl_interval)
+                # Dynamic random sleep for each request
+                actual_sleep = crawl_interval + random.uniform(0, crawl_interval * 0.5) if crawl_interval > 0 else random.uniform(0.3, 0.8)
+                await asyncio.sleep(actual_sleep)
                 result.extend(comments)
         return result
 
@@ -593,7 +612,24 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 await callback(notes_to_add)
 
             result.extend(notes_to_add)
-            await asyncio.sleep(crawl_interval)
+            # Dynamic random sleep for each request
+            actual_sleep = crawl_interval + random.uniform(0, crawl_interval * 0.5) if crawl_interval > 0 else random.uniform(0.5, 1.5)
+            await asyncio.sleep(actual_sleep)
+            
+            # Batch pause strategy: pause longer every N items (N is randomized)
+            if getattr(config, "BATCH_PAUSE_ENABLED", False):
+                # 随机化批次阈值
+                min_n = getattr(config, "BATCH_PAUSE_EVERY_N_MIN", 8)
+                max_n = getattr(config, "BATCH_PAUSE_EVERY_N_MAX", 12)
+                batch_n = random.randint(min_n, max_n)
+                if len(result) > 0 and len(result) % batch_n == 0:
+                    pause_min = getattr(config, "BATCH_PAUSE_MIN_SEC", 30.0)
+                    pause_max = getattr(config, "BATCH_PAUSE_MAX_SEC", 60.0)
+                    # 使用对数正态分布
+                    from tools.anti_crawl_utils import generate_random_wait
+                    pause_time = generate_random_wait(pause_min, pause_max, "lognormal")
+                    utils.logger.info(f"[XiaoHongShuClient] 批次暂停: 等待 {pause_time:.1f}s (已爬取 {len(result)} 条)")
+                    await asyncio.sleep(pause_time)
 
         utils.logger.info(
             f"[XiaoHongShuClient.get_all_notes_by_creator] Finished getting notes for user {user_id}, total: {len(result)}"

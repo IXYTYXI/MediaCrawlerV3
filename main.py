@@ -34,6 +34,7 @@ from typing import Optional, Type
 
 import cmd_arg
 import config
+from config.anti_crawl_loader import apply_anti_crawl_config
 from database import db
 from base.base_crawler import AbstractCrawler
 from media_platform.bilibili import BilibiliCrawler
@@ -106,6 +107,9 @@ async def main() -> None:
         print(f"Database {args.init_db} initialized successfully.")
         return
 
+    # 加载反反爬配置（从 config/anti_crawl_config.json 读取）
+    apply_anti_crawl_config(config)
+
     crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
     await crawler.start()
 
@@ -121,7 +125,8 @@ async def async_cleanup() -> None:
     if crawler:
         if getattr(crawler, "cdp_manager", None):
             try:
-                await crawler.cdp_manager.cleanup(force=True)
+                # 使用 force=False，让 AUTO_CLOSE_BROWSER 配置生效
+                await crawler.cdp_manager.cleanup(force=False)
             except Exception as e:
                 error_msg = str(e).lower()
                 if "closed" not in error_msg and "disconnected" not in error_msg:

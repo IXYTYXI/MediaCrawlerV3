@@ -70,6 +70,51 @@ class AsyncFileWriter:
             async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(existing_data, ensure_ascii=False, indent=4))
 
+    async def write_grouped_items_to_json(
+        self,
+        item: Dict,
+        item_type: str,
+        group_key: str,
+        group_value: str,
+        group_title_key: str | None = None,
+        group_title_value: str | None = None,
+        group_items_key: str = "comments",
+    ):
+        file_path = self._get_file_path('json', item_type)
+        async with self.lock:
+            existing_data: List[Dict] = []
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    try:
+                        content = await f.read()
+                        if content:
+                            existing_data = json.loads(content)
+                        if not isinstance(existing_data, list):
+                            existing_data = [existing_data]
+                    except json.JSONDecodeError:
+                        existing_data = []
+
+            target_group = None
+            for entry in existing_data:
+                if isinstance(entry, dict) and entry.get(group_key) == group_value:
+                    target_group = entry
+                    break
+
+            if not target_group:
+                target_group = {group_key: group_value, group_items_key: []}
+                if group_title_key and group_title_value:
+                    target_group[group_title_key] = group_title_value
+                existing_data.append(target_group)
+
+            items = target_group.get(group_items_key)
+            if not isinstance(items, list):
+                items = []
+                target_group[group_items_key] = items
+            items.append(item)
+
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(existing_data, ensure_ascii=False, indent=4))
+
     async def generate_wordcloud_from_comments(self):
         """
         Generate wordcloud from comments data
@@ -103,10 +148,18 @@ class AsyncFileWriter:
             filtered_data = []
             for comment in comments_data:
                 if isinstance(comment, dict):
-                    # Try different possible content field names
-                    content_text = comment.get('content') or comment.get('comment_text') or comment.get('text') or ''
-                    if content_text:
-                        filtered_data.append({'content': content_text})
+                    if isinstance(comment.get("comments"), list):
+                        for sub_comment in comment.get("comments", []):
+                            if not isinstance(sub_comment, dict):
+                                continue
+                            content_text = sub_comment.get('content') or sub_comment.get('comment_text') or sub_comment.get('text') or ''
+                            if content_text:
+                                filtered_data.append({'content': content_text})
+                    else:
+                        # Try different possible content field names
+                        content_text = comment.get('content') or comment.get('comment_text') or comment.get('text') or ''
+                        if content_text:
+                            filtered_data.append({'content': content_text})
 
             if not filtered_data:
                 utils.logger.info(f"[AsyncFileWriter.generate_wordcloud_from_comments] No valid comment content found")

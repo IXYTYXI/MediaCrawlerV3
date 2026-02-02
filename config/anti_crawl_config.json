@@ -1,0 +1,90 @@
+{
+  "_说明": "反反爬策略配置文件 - 每次爬取前会自动读取此文件",
+  
+  "随机等待策略": {
+    "enabled": true,
+    "min_sec": 5.0,
+    "max_sec": 10.0,
+    "distribution": "lognormal",
+    "_distribution_options": ["uniform", "normal", "lognormal"],
+    "_说明": "distribution: uniform=均匀分布, normal=正态分布, lognormal=对数正态分布(推荐)"
+  },
+  
+  "评论随机等待": {
+    "min_sec": 3.0,
+    "max_sec": 6.0,
+    "distribution": "lognormal"
+  },
+  
+  "情境化等待": {
+    "enabled": true,
+    "page_load_sec": [5.0, 10.0],
+    "user_interaction_sec": [1.0, 3.0],
+    "api_retry_sec": [0.3, 0.8],
+    "_说明": "根据不同操作类型使用不同等待时间"
+  },
+  
+  "批次暂停策略": {
+    "enabled": true,
+    "every_n_min": 8,
+    "every_n_max": 12,
+    "min_sec": 30.0,
+    "max_sec": 60.0,
+    "_说明": "every_n 现在是随机范围，每 8-12 条触发一次暂停"
+  },
+  
+  "动态调整策略": {
+    "enabled": true,
+    "success_threshold": 10,
+    "speed_up_factor": 0.8,
+    "slow_down_factor": 2.0,
+    "super_sleep_on_block": true,
+    "super_sleep_min_sec": 300,
+    "super_sleep_max_sec": 600,
+    "_说明": "连续成功N次后加速，遇到限流则减速，遇到验证码触发超级休眠(5-10分钟)"
+  },
+  
+  "假动作策略": {
+    "enabled": true,
+    "probability": 0.15,
+    "min_sec": 2.0,
+    "max_sec": 5.0,
+    "keywords": ["美食", "旅行", "穿搭", "护肤", "健身", "摄影", "宠物", "家居", "数码", "音乐", "电影", "书籍", "咖啡", "甜点", "打卡", "探店"],
+    "enable_scroll": true,
+    "enable_mouse_move": true,
+    "enable_click_profile": true,
+    "enable_input_simulation": true,
+    "_说明": "增加滚动、鼠标移动、点击头像、模拟输入等行为"
+  },
+  
+  "并发控制": {
+    "max_concurrency": 1,
+    "_说明": "高安全场景保持单线程"
+  },
+  
+  "分批爬取": {
+    "max_notes_count": 50
+  },
+  
+  "浏览器控制": {
+    "auto_close_browser": false,
+    "browser_launch_timeout": 120,
+    "remove_webdriver_flag": true,
+    "spoof_canvas_fingerprint": true,
+    "spoof_webgl_fingerprint": true,
+    "_说明": "消除自动化痕迹，伪装浏览器指纹"
+  },
+  
+  "容错机制": {
+    "exponential_backoff": {
+      "enabled": true,
+      "initial_delay_sec": 2.0,
+      "max_delay_sec": 120.0,
+      "multiplier": 2.0,
+      "max_retries": 5
+    },
+    "recoverable_errors": [408, 429, 500, 502, 503, 504],
+    "unrecoverable_errors": [401, 403],
+    "_说明": "可恢复错误使用指数退避重试，不可恢复错误立即停止"
+  }
+}

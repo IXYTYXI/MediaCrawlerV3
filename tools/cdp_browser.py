@@ -54,8 +54,12 @@ class CDPBrowserManager:
         def sync_cleanup():
             """Synchronous cleanup function for atexit"""
             if self.launcher and self.launcher.browser_process:
-                utils.logger.info("[CDPBrowserManager] atexit: Cleaning up browser process")
-                self.launcher.cleanup()
+                # 遵守 AUTO_CLOSE_BROWSER 配置
+                if config.AUTO_CLOSE_BROWSER:
+                    utils.logger.info("[CDPBrowserManager] atexit: Cleaning up browser process")
+                    self.launcher.cleanup()
+                else:
+                    utils.logger.info("[CDPBrowserManager] atexit: Browser process kept running (AUTO_CLOSE_BROWSER=False)")
 
         # Register atexit cleanup
         atexit.register(sync_cleanup)
@@ -66,9 +70,13 @@ class CDPBrowserManager:
 
         def signal_handler(signum, frame):
             """Signal handler"""
-            utils.logger.info(f"[CDPBrowserManager] Received signal {signum}, cleaning up browser process")
+            utils.logger.info(f"[CDPBrowserManager] Received signal {signum}")
             if self.launcher and self.launcher.browser_process:
-                self.launcher.cleanup()
+                if config.AUTO_CLOSE_BROWSER:
+                    utils.logger.info("[CDPBrowserManager] Cleaning up browser process")
+                    self.launcher.cleanup()
+                else:
+                    utils.logger.info("[CDPBrowserManager] Browser process kept running (AUTO_CLOSE_BROWSER=False)")
 
             if signum == signal.SIGINT:
                 if prev_sigint == signal.default_int_handler:
@@ -103,24 +111,36 @@ class CDPBrowserManager:
     ) -> BrowserContext:
         """
         Launch browser and connect via CDP
+        优先连接已有浏览器，连不上再启动新的
         """
         try:
-            # 1. Detect browser path
-            browser_path = await self._get_browser_path()
+            # 1. 先尝试连接已有浏览器（用户可能已手动启动）
+            self.debug_port = config.CDP_DEBUG_PORT
+            existing_browser = await self._test_cdp_connection(self.debug_port)
+            
+            if existing_browser:
+                utils.logger.info(f"[CDPBrowserManager] Found existing browser on port {self.debug_port}, connecting...")
+                # 直接连接已有浏览器，不启动新的
+                self._register_cleanup_handlers()
+                await self._connect_via_cdp(playwright)
+            else:
+                utils.logger.info("[CDPBrowserManager] No existing browser found, launching new one...")
+                # 2. Detect browser path
+                browser_path = await self._get_browser_path()
 
-            # 2. Get available port
-            self.debug_port = self.launcher.find_available_port(config.CDP_DEBUG_PORT)
+                # 3. Get available port
+                self.debug_port = self.launcher.find_available_port(config.CDP_DEBUG_PORT)
 
-            # 3. Launch browser
-            await self._launch_browser(browser_path, headless)
+                # 4. Launch browser
+                await self._launch_browser(browser_path, headless)
 
-            # 4. Register cleanup handlers (ensure cleanup on abnormal exit)
-            self._register_cleanup_handlers()
+                # 5. Register cleanup handlers (ensure cleanup on abnormal exit)
+                self._register_cleanup_handlers()
 
-            # 5. Connect via CDP
-            await self._connect_via_cdp(playwright)
+                # 6. Connect via CDP
+                await self._connect_via_cdp(playwright)
 
-            # 6. Create browser context
+            # 7. Create browser context
             browser_context = await self._create_browser_context(
                 playwright_proxy, user_agent
             )

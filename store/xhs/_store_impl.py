@@ -72,6 +72,7 @@ class XhsJsonStoreImplement(AbstractStore):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.writer = AsyncFileWriter(platform="xhs", crawler_type=crawler_type_var.get())
+        self.note_title_cache: Dict[str, str] = {}
 
     async def store_content(self, content_item: Dict):
         """
@@ -80,6 +81,10 @@ class XhsJsonStoreImplement(AbstractStore):
         :return:
         """
         await self.writer.write_single_item_to_json(item_type="contents", item=content_item)
+        note_id = content_item.get("note_id")
+        title = content_item.get("title") or content_item.get("desc")
+        if note_id and title:
+            self.note_title_cache[str(note_id)] = str(title)
 
     async def store_comment(self, comment_item: Dict):
         """
@@ -87,7 +92,21 @@ class XhsJsonStoreImplement(AbstractStore):
         :param comment_item:
         :return:
         """
-        await self.writer.write_single_item_to_json(item_type="comments", item=comment_item)
+        note_id = str(comment_item.get("note_id") or "")
+        if not note_id:
+            return
+        note_title = self.note_title_cache.get(note_id, "")
+        if note_title:
+            comment_item = {**comment_item, "note_title": note_title}
+        await self.writer.write_grouped_items_to_json(
+            item=comment_item,
+            item_type="comments",
+            group_key="note_id",
+            group_value=note_id,
+            group_title_key="note_title",
+            group_title_value=note_title or None,
+            group_items_key="comments",
+        )
 
     async def store_creator(self, creator_item: Dict):
         pass

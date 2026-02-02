@@ -32,6 +32,7 @@ XHS_SPECIFIED_NOTE_URL_LIST = [
 # 指定创作者URL列表，需要携带xsec_token和xsec_source参数
 
 XHS_CREATOR_ID_LIST = [
-    "https://www.xiaohongshu.com/user/profile/5f58bd990000000001003753?xsec_token=ABYVg1evluJZZzpMX-VWzchxQ1qSNVW3r-jOEnKqMcgZw=&xsec_source=pc_search"
+    # 洋葱学园：作者主页URL（已包含 xsec_token 与 xsec_source）
+    "https://www.xiaohongshu.com/user/profile/5745477582ec393f39fb658c?xsec_token=ABzqQsrZEJwDG8R0Xf--d3LwcYBqQmkaeRQ3VRVKNbsYc%3D&xsec_source=pc_search"
     # ........................
 ]

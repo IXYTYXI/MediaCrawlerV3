@@ -150,6 +150,91 @@ uv run main.py --platform xhs --lt qrcode --type detail
 uv run main.py --help
 ```
 
+## 🧭 如何控制爬取内容（配置速查）
+
+> 这一节专门告诉你：**爬什么、爬多少、保存哪些字段**分别改哪里，自己就能完全掌控。
+
+### 1) 入口配置：默认用配置文件，命令行可覆盖
+
+- 默认配置在 `config/base_config.py`，运行时可被命令行覆盖（见 `cmd_arg/arg.py` 的覆盖逻辑）。
+- 常用命令行覆盖参数：
+  - `--platform`：平台
+  - `--type`：爬取类型（`search` | `detail` | `creator`）
+  - `--keywords`：关键词（search 模式）
+  - `--specified_id`：指定帖子/视频列表（detail 模式，仅支持 xhs/bili/dy/wb/ks）
+  - `--creator_id`：指定作者列表（creator 模式，仅支持 xhs/bili/dy/wb/ks）
+  - `--start`：起始页
+  - `--get_comment` / `--get_sub_comment`：评论开关
+  - `--max_comments_count_singlenotes`：单条评论数量上限
+  - `--save_data_option`：保存类型
+  - `--headless`：无头模式
+
+### 2) 选择“爬什么内容”
+
+- **关键词搜索（search）**
+  - `config/base_config.py`
+    - `CRAWLER_TYPE = "search"`
+    - `KEYWORDS = "关键词1,关键词2"`
+
+- **指定帖子/视频（detail）**
+  - `config/base_config.py`：`CRAWLER_TYPE = "detail"`
+  - 各平台列表（写在对应配置文件里）：
+    - 小红书：`config/xhs_config.py` → `XHS_SPECIFIED_NOTE_URL_LIST`（必须带 `xsec_token`）
+    - 抖音：`config/dy_config.py` → `DY_SPECIFIED_ID_LIST`
+    - 快手：`config/ks_config.py` → `KS_SPECIFIED_ID_LIST`
+    - B站：`config/bilibili_config.py` → `BILI_SPECIFIED_ID_LIST`
+    - 微博：`config/weibo_config.py` → `WEIBO_SPECIFIED_ID_LIST`
+    - 贴吧：`config/tieba_config.py` → `TIEBA_SPECIFIED_ID_LIST`
+    - 知乎：`config/zhihu_config.py` → `ZHIHU_SPECIFIED_ID_LIST`
+
+- **指定作者主页（creator）**
+  - `config/base_config.py`：`CRAWLER_TYPE = "creator"`
+  - 各平台列表：
+    - 小红书：`config/xhs_config.py` → `XHS_CREATOR_ID_LIST`（需带 `xsec_token`）
+    - 抖音：`config/dy_config.py` → `DY_CREATOR_ID_LIST`
+    - 快手：`config/ks_config.py` → `KS_CREATOR_ID_LIST`
+    - B站：`config/bilibili_config.py` → `BILI_CREATOR_ID_LIST`
+    - 微博：`config/weibo_config.py` → `WEIBO_CREATOR_ID_LIST`
+    - 贴吧：`config/tieba_config.py` → `TIEBA_CREATOR_URL_LIST`
+    - 知乎：`config/zhihu_config.py` → `ZHIHU_CREATOR_URL_LIST`
+
+> 说明：`--specified_id` 和 `--creator_id` 命令行覆盖只支持 xhs/bili/dy/wb/ks，贴吧/知乎请直接改配置文件。
+
+### 3) 选择“爬多少、爬多快”
+
+在 `config/base_config.py` 中常用控制项：
+
+- `START_PAGE`：从第几页开始
+- `CRAWLER_MAX_NOTES_COUNT`：最多爬多少条帖子/视频
+- `MAX_CONCURRENCY_NUM`：并发数量
+- `CRAWLER_MAX_SLEEP_SEC`：每次请求间隔
+
+### 4) 评论与媒体开关
+
+- 评论：
+  - `ENABLE_GET_COMMENTS`：是否爬一级评论
+  - `CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES`：单条评论上限
+  - `ENABLE_GET_SUB_COMMENTS`：是否爬二级评论
+- 媒体（图/视频）：
+  - `ENABLE_GET_MEIDAS`：是否下载媒体文件
+
+### 5) 控制“保存哪些字段”（最关键）
+
+每个平台的“帖子字段映射”都在各自的 `store/<platform>/__init__.py` 中，你需要改这些函数里的 `local_db_item`（或同类字典）：
+
+- 小红书：`store/xhs/__init__.py` → `update_xhs_note`
+- 抖音：`store/douyin/__init__.py` → `update_douyin_aweme`
+- 快手：`store/kuaishou/__init__.py` → `update_kuaishou_video`
+- B站：`store/bilibili/__init__.py` → `update_bilibili_video`
+- 微博：`store/weibo/__init__.py` → `update_weibo_note`
+- 贴吧：`store/tieba/__init__.py` → `update_tieba_note`
+- 知乎：`store/zhihu/__init__.py` → `update_zhihu_content`
+
+评论字段在对应的 `update_*_comment` 函数中。
+
+> 如果你使用 `db/sqlite/postgres` 保存，还需要同步修改表结构/模型和对应的 `_store_impl.py` 写入逻辑；  
+> 如果使用 `csv/json/excel`，只需要改字段映射和写入即可。
+
 ## WebUI支持
 
 <details>
@@ -330,3 +415,4 @@ Thordata：可靠且经济高效的代理服务提供商。为企业和开发者
 ## 6. 最终解释权
 关于本项目的最终解释权归开发者所有。开发者保留随时更改或更新本免责声明的权利，恕不另行通知。
 </div>
+# onion-develop-spyder-redbook-v2
