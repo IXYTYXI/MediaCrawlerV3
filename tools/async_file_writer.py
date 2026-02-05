@@ -28,6 +28,22 @@ from tools.utils import utils
 from tools.words import AsyncWordCloudGenerator
 
 class AsyncFileWriter:
+    # 类变量：存储本次运行的唯一时间戳（所有实例共享）
+    _session_timestamp: str = None
+    
+    @classmethod
+    def get_session_timestamp(cls) -> str:
+        """获取本次运行的时间戳，确保同一次运行使用相同的时间戳"""
+        if cls._session_timestamp is None:
+            from datetime import datetime
+            cls._session_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        return cls._session_timestamp
+    
+    @classmethod
+    def reset_session_timestamp(cls):
+        """重置时间戳（用于新的运行会话）"""
+        cls._session_timestamp = None
+    
     def __init__(self, platform: str, crawler_type: str):
         self.lock = asyncio.Lock()
         self.platform = platform
@@ -37,7 +53,9 @@ class AsyncFileWriter:
     def _get_file_path(self, file_type: str, item_type: str) -> str:
         base_path = f"data/{self.platform}/{file_type}"
         pathlib.Path(base_path).mkdir(parents=True, exist_ok=True)
-        file_name = f"{self.crawler_type}_{item_type}_{utils.get_current_date()}.{file_type}"
+        # 使用会话时间戳，确保每次运行生成新文件
+        session_ts = self.get_session_timestamp()
+        file_name = f"{self.crawler_type}_{item_type}_{session_ts}.{file_type}"
         return f"{base_path}/{file_name}"
 
     async def write_to_csv(self, item: Dict, item_type: str):

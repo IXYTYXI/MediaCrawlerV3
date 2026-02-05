@@ -256,16 +256,23 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     break
 
     async def get_creators_and_notes(self) -> None:
-        """Get creator's notes and retrieve their comment information."""
-        utils.logger.info("[XiaoHongShuCrawler.get_creators_and_notes] Begin get Xiaohongshu creators")
+        """
+        获取作者的作品和评论信息
+        流程：
+        1. 获取所有作品列表
+        2. 获取所有作品详情（保存到作品文件）
+        3. 获取所有评论（保存到评论文件）
+        """
+        utils.logger.info("[XiaoHongShuCrawler.get_creators_and_notes] 开始爬取作者信息")
+        
         for creator_url in config.XHS_CREATOR_ID_LIST:
             try:
-                # Parse creator URL to get user_id and security tokens
+                # 解析作者URL
                 creator_info: CreatorUrlInfo = parse_creator_info_from_url(creator_url)
-                utils.logger.info(f"[XiaoHongShuCrawler.get_creators_and_notes] Parse creator URL info: {creator_info}")
+                utils.logger.info(f"[XiaoHongShuCrawler] 解析作者URL: {creator_info}")
                 user_id = creator_info.user_id
 
-                # get creator detail info from web html content
+                # 获取作者基本信息
                 createor_info: Dict = await self.xhs_client.get_creator_info(
                     user_id=user_id,
                     xsec_token=creator_info.xsec_token,
@@ -274,44 +281,173 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 if createor_info:
                     await xhs_store.save_creator(user_id, creator=createor_info)
             except ValueError as e:
-                utils.logger.error(f"[XiaoHongShuCrawler.get_creators_and_notes] Failed to parse creator URL: {e}")
+                utils.logger.error(f"[XiaoHongShuCrawler] 解析作者URL失败: {e}")
                 continue
 
-            # Use fixed crawling interval
+            # ========== 阶段1：获取所有作品列表并保存详情 ==========
+            utils.logger.info("=" * 50)
+            utils.logger.info("[阶段1] 开始获取作品列表并获取详情（边获取边保存）...")
+            
             crawl_interval = self._get_sleep_seconds()
-            # Get all note information of the creator
             all_notes_list = await self.xhs_client.get_all_notes_by_creator(
                 user_id=user_id,
                 crawl_interval=crawl_interval,
-                callback=self.fetch_creator_notes_detail,
+                callback=self._fetch_all_notes_detail,  # 边获取列表边保存详情
                 xsec_token=creator_info.xsec_token,
                 xsec_source=creator_info.xsec_source,
             )
+            
+            utils.logger.info(f"[阶段1] 完成！共获取 {len(all_notes_list)} 条作品")
+            
+            # ========== 阶段2：补爬失败的详情 ==========
+            utils.logger.info("=" * 50)
+            utils.logger.info("[阶段2] 开始补爬失败的详情...")
+            
+            await self._refetch_failed_details(all_notes_list)
+            
+            utils.logger.info(f"[阶段2] 完成！补爬结束")
+            
+            # ========== 阶段3：获取所有评论 ==========
+            if config.ENABLE_GET_COMMENTS:
+                utils.logger.info("=" * 50)
+                utils.logger.info("[阶段3] 开始获取评论...")
+                
+                note_ids = [note.get("note_id") for note in all_notes_list]
+                xsec_tokens = [note.get("xsec_token") for note in all_notes_list]
+                await self.batch_get_note_comments(note_ids, xsec_tokens)
+                
+                utils.logger.info(f"[阶段3] 完成！评论已保存")
+            else:
+                utils.logger.info("[阶段3] 跳过评论获取（未开启）")
+            
+            utils.logger.info("=" * 50)
+            utils.logger.info(f"[完成] 作者 {user_id} 爬取完成")
 
-            note_ids = []
-            xsec_tokens = []
-            for note_item in all_notes_list:
-                note_ids.append(note_item.get("note_id"))
-                xsec_tokens.append(note_item.get("xsec_token"))
-            await self.batch_get_note_comments(note_ids, xsec_tokens)
+    async def _fetch_all_notes_detail(self, note_list: List[Dict]):
+        """
+        获取所有作品详情并保存
+        Args:
+            note_list: 作品列表
+        """
+        if not note_list:
+            return
+        
+        # 初始化失败记录集合
+        if not hasattr(self, '_failed_note_ids'):
+            self._failed_note_ids = set()
+            
+        total = len(note_list)
+        success_count = 0
+        fail_count = 0
+        
+        utils.logger.info(f"[详情获取] 共 {total} 条作品待处理")
+        
+        for idx, post_item in enumerate(note_list, 1):
+            note_id = post_item.get("note_id")
+            display_title = post_item.get("display_title", "")[:20]
+            
+            try:
+                # 获取详情
+                note_detail = await self.xhs_client.get_note_by_id(
+                    note_id, 
+                    post_item.get("xsec_source", "pc_feed"),
+                    post_item.get("xsec_token", "")
+                )
+                
+                if note_detail:
+                    note_detail.update({
+                        "xsec_token": post_item.get("xsec_token", ""),
+                        "xsec_source": post_item.get("xsec_source", "")
+                    })
+                    # 保存完整详情
+                    await xhs_store.update_xhs_note(note_detail)
+                    await self.get_notice_media(note_detail)
+                    success_count += 1
+                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}...")
+                else:
+                    # 详情获取失败，保存基本信息，记录到失败列表
+                    await xhs_store.update_xhs_note_basic(post_item)
+                    self._failed_note_ids.add(note_id)
+                    fail_count += 1
+                    utils.logger.warning(f"[详情获取] ({idx}/{total}) ✗ {display_title}... (保存基本信息)")
+                    
+            except Exception as e:
+                # 异常时尝试保存基本信息，记录到失败列表
+                self._failed_note_ids.add(note_id)
+                fail_count += 1
+                utils.logger.warning(f"[详情获取] ({idx}/{total}) ✗ {display_title}... 错误: {e}")
+                try:
+                    await xhs_store.update_xhs_note_basic(post_item)
+                except Exception as save_err:
+                    utils.logger.error(f"[详情获取] 保存基本信息也失败: {save_err}")
+            
+            # 等待
+            sleep_seconds = self._get_sleep_seconds()
+            await asyncio.sleep(sleep_seconds)
+            
+            # 随机假动作
+            await self._maybe_do_fake_action()
+        
+        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 总计 {total}")
 
-    async def fetch_creator_notes_detail(self, note_list: List[Dict]):
-        """Concurrently obtain the specified post list and save the data"""
-        semaphore = asyncio.Semaphore(config.MAX_CONCURRENCY_NUM)
-        task_list = [
-            self.get_note_detail_async_task(
-                note_id=post_item.get("note_id"),
-                xsec_source=post_item.get("xsec_source"),
-                xsec_token=post_item.get("xsec_token"),
-                semaphore=semaphore,
-            ) for post_item in note_list
-        ]
-
-        note_details = await asyncio.gather(*task_list)
-        for note_detail in note_details:
-            if note_detail:
-                await xhs_store.update_xhs_note(note_detail)
-                await self.get_notice_media(note_detail)
+    async def _refetch_failed_details(self, all_notes_list: List[Dict]):
+        """
+        补爬失败的详情
+        找出没有成功获取详情的记录，重新尝试获取
+        """
+        # 找出需要补爬的记录
+        failed_notes = []
+        for note in all_notes_list:
+            note_id = note.get("note_id")
+            # 检查这个 note 是否在失败列表中，或者通过其他方式判断
+            if note_id in getattr(self, '_failed_note_ids', set()):
+                failed_notes.append(note)
+        
+        if not failed_notes:
+            utils.logger.info("[补爬] 没有需要补爬的记录")
+            return
+        
+        utils.logger.info(f"[补爬] 发现 {len(failed_notes)} 条记录需要补爬")
+        utils.logger.info("[补爬] 等待 60 秒后开始补爬（让反爬冷却）...")
+        await asyncio.sleep(60)
+        
+        success_count = 0
+        fail_count = 0
+        
+        for idx, post_item in enumerate(failed_notes, 1):
+            note_id = post_item.get("note_id")
+            display_title = post_item.get("display_title", "")[:20]
+            
+            utils.logger.info(f"[补爬] ({idx}/{len(failed_notes)}) {display_title}...")
+            
+            try:
+                note_detail = await self.xhs_client.get_note_by_id(
+                    note_id, 
+                    post_item.get("xsec_source", "pc_feed"),
+                    post_item.get("xsec_token", "")
+                )
+                
+                if note_detail:
+                    note_detail.update({
+                        "xsec_token": post_item.get("xsec_token", ""),
+                        "xsec_source": post_item.get("xsec_source", "")
+                    })
+                    await xhs_store.update_xhs_note(note_detail)
+                    success_count += 1
+                    utils.logger.info(f"[补爬] ({idx}/{len(failed_notes)}) ✓ 成功")
+                else:
+                    fail_count += 1
+                    utils.logger.warning(f"[补爬] ({idx}/{len(failed_notes)}) ✗ 返回空")
+                    
+            except Exception as e:
+                fail_count += 1
+                utils.logger.warning(f"[补爬] ({idx}/{len(failed_notes)}) ✗ 错误: {e}")
+            
+            # 补爬时使用更长的等待时间
+            sleep_seconds = self._get_sleep_seconds() * 2
+            await asyncio.sleep(sleep_seconds)
+        
+        utils.logger.info(f"[补爬] 汇总: 成功 {success_count}, 失败 {fail_count}")
 
     async def get_specified_notes(self):
         """Get the information and comments of the specified post
@@ -416,22 +552,26 @@ class XiaoHongShuCrawler(AbstractCrawler):
         """Get note comments with keyword filtering and quantity limitation"""
         async with semaphore:
             utils.logger.info(f"[XiaoHongShuCrawler.get_comments] Begin get note id comments {note_id}")
-            # Use fixed crawling interval
-            crawl_interval = self._get_sleep_seconds(for_comments=True)
-            await self.xhs_client.get_note_all_comments(
-                note_id=note_id,
-                xsec_token=xsec_token,
-                crawl_interval=crawl_interval,
-                callback=xhs_store.batch_update_xhs_note_comments,
-                max_count=config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES,
-            )
+            try:
+                # Use fixed crawling interval
+                crawl_interval = self._get_sleep_seconds(for_comments=True)
+                await self.xhs_client.get_note_all_comments(
+                    note_id=note_id,
+                    xsec_token=xsec_token,
+                    crawl_interval=crawl_interval,
+                    callback=xhs_store.batch_update_xhs_note_comments,
+                    max_count=config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES,
+                )
 
-            # Sleep after fetching comments
-            await asyncio.sleep(crawl_interval)
-            utils.logger.info(f"[XiaoHongShuCrawler.get_comments] Sleeping for {crawl_interval} seconds after fetching comments for note {note_id}")
+                # Sleep after fetching comments
+                await asyncio.sleep(crawl_interval)
+                utils.logger.info(f"[XiaoHongShuCrawler.get_comments] Sleeping for {crawl_interval} seconds after fetching comments for note {note_id}")
 
-            # 随机执行假动作
-            await self._maybe_do_fake_action()
+                # 随机执行假动作
+                await self._maybe_do_fake_action()
+                
+            except Exception as e:
+                utils.logger.warning(f"[XiaoHongShuCrawler.get_comments] 获取评论失败 note_id={note_id}: {e}")
 
     async def create_xhs_client(self, httpx_proxy: Optional[str]) -> XiaoHongShuClient:
         """Create Xiaohongshu client"""

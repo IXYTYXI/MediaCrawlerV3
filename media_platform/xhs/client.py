@@ -132,11 +132,11 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
 
         if response.status_code == 471 or response.status_code == 461:
             # someday someone maybe will bypass captcha
-            verify_type = response.headers["Verifytype"]
-            verify_uuid = response.headers["Verifyuuid"]
-            msg = f"CAPTCHA appeared, request failed, Verifytype: {verify_type}, Verifyuuid: {verify_uuid}, Response: {response}"
+            verify_type = response.headers.get("Verifytype", "unknown")
+            verify_uuid = response.headers.get("Verifyuuid", "unknown")
+            msg = f"CAPTCHA appeared, request failed, Verifytype: {verify_type}, Verifyuuid: {verify_uuid}, Response: {response.text[:200]}"
             utils.logger.error(msg)
-            raise Exception(msg)
+            raise DataFetchError(msg)
 
         if return_response:
             return response.text
@@ -580,10 +580,34 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         result = []
         notes_has_more = True
         notes_cursor = ""
+        consecutive_errors = 0
+        max_consecutive_errors = 3
+        
         while notes_has_more and len(result) < config.CRAWLER_MAX_NOTES_COUNT:
-            notes_res = await self.get_notes_by_creator(
-                user_id, notes_cursor, xsec_token=xsec_token, xsec_source=xsec_source
-            )
+            try:
+                notes_res = await self.get_notes_by_creator(
+                    user_id, notes_cursor, xsec_token=xsec_token, xsec_source=xsec_source
+                )
+                consecutive_errors = 0  # 成功后重置错误计数
+                
+            except Exception as e:
+                consecutive_errors += 1
+                utils.logger.error(
+                    f"[XiaoHongShuClient.get_all_notes_by_creator] 获取作品列表出错 ({consecutive_errors}/{max_consecutive_errors}): {e}"
+                )
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    utils.logger.warning(
+                        f"[XiaoHongShuClient.get_all_notes_by_creator] 连续错误达到上限，停止获取。已获取 {len(result)} 条"
+                    )
+                    break
+                
+                # 遇到错误后等待更长时间再重试
+                wait_time = 60 * consecutive_errors  # 第1次60秒，第2次120秒
+                utils.logger.info(f"[XiaoHongShuClient] 等待 {wait_time} 秒后重试...")
+                await asyncio.sleep(wait_time)
+                continue
+                
             if not notes_res:
                 utils.logger.error(
                     f"[XiaoHongShuClient.get_notes_by_creator] The current creator may have been banned by xhs, so they cannot access the data."

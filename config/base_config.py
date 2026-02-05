@@ -79,24 +79,27 @@ USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
 # 爬取开始页数 默认从第一页开始
 START_PAGE = 1
 
-# 爬取视频/帖子的数量控制（分批爬取，每批较少）
-CRAWLER_MAX_NOTES_COUNT = 50
+# 爬取视频/帖子的数量控制（总数量上限）
+CRAWLER_MAX_NOTES_COUNT = 3000
 
-# 并发爬虫数量控制
-MAX_CONCURRENCY_NUM = 1
+# 并发爬虫数量控制（建议 2-3，太高容易触发反爬）
+MAX_CONCURRENCY_NUM = 3
 
 # 是否开启爬媒体模式（包含图片或视频资源），默认不开启爬媒体
 ENABLE_GET_MEIDAS = False
+
+# 是否获取作品详情（点赞数、收藏数等），关闭则只获取基本信息
+ENABLE_GET_NOTE_DETAIL = True
 
 # 是否开启爬评论模式, 默认开启爬评论
 ENABLE_GET_COMMENTS = True
 
 # 爬取一级评论的数量控制(单视频/帖子)
-CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 500
+CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 8000
 
 # 是否开启爬二级评论模式, 默认不开启爬二级评论
 # 老版本项目使用了 db, 则需参考 schema/tables.sql line 287 增加表字段
-ENABLE_GET_SUB_COMMENTS = True
+ENABLE_GET_SUB_COMMENTS = False
 
 # 词云相关
 # 是否开启生成评论词云图

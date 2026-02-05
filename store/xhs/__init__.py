@@ -83,6 +83,43 @@ def get_video_url_arr(note_item: Dict) -> List:
     return videoArr
 
 
+async def update_xhs_note_basic(note_item: Dict):
+    """
+    保存作品基本信息（从列表获取，不需要请求详情）
+    Args:
+        note_item: 作品列表中的单个项目
+
+    Returns:
+
+    """
+    from tools.crawl_statistics import get_statistics
+    
+    note_id = note_item.get("note_id")
+    display_title = note_item.get("display_title", "")
+    
+    # 从列表数据中提取可用字段
+    local_db_item = {
+        "note_id": note_id,
+        "type": note_item.get("type", ""),
+        "title": display_title or note_item.get("title", ""),
+        "desc": note_item.get("desc", ""),
+        "cover": note_item.get("cover", {}).get("url", ""),
+        "liked_count": note_item.get("liked_count", 0),  # 列表中可能有
+        "user_id": note_item.get("user", {}).get("user_id", ""),
+        "nickname": note_item.get("user", {}).get("nickname", ""),
+        "note_url": f"https://www.xiaohongshu.com/explore/{note_id}",
+        "xsec_token": note_item.get("xsec_token", ""),
+        "xsec_source": note_item.get("xsec_source", ""),
+        "last_modify_ts": utils.get_current_timestamp(),
+    }
+    
+    utils.logger.info(f"[store.xhs.update_xhs_note_basic] 保存基本信息: {local_db_item.get('title', '')[:30]}")
+    await XhsStoreFactory.create_store().store_content(local_db_item)
+    
+    # 添加到统计（基本信息模式）
+    get_statistics().add_note(note_item)
+
+
 async def update_xhs_note(note_item: Dict):
     """
     Update Xiaohongshu note
@@ -92,6 +129,8 @@ async def update_xhs_note(note_item: Dict):
     Returns:
 
     """
+    from tools.crawl_statistics import get_statistics
+    
     note_id = note_item.get("note_id")
     user_info = note_item.get("user", {})
     interact_info = note_item.get("interact_info", {})
@@ -129,6 +168,9 @@ async def update_xhs_note(note_item: Dict):
     }
     utils.logger.info(f"[store.xhs.update_xhs_note] xhs note: {local_db_item}")
     await XhsStoreFactory.create_store().store_content(local_db_item)
+    
+    # 添加到统计
+    get_statistics().add_note(note_item)
 
 
 async def batch_update_xhs_note_comments(note_id: str, comments: List[Dict]):
@@ -141,10 +183,15 @@ async def batch_update_xhs_note_comments(note_id: str, comments: List[Dict]):
     Returns:
 
     """
+    from tools.crawl_statistics import get_statistics
+    
     if not comments:
         return
     for comment_item in comments:
         await update_xhs_note_comment(note_id, comment_item)
+    
+    # 添加评论计数到统计
+    get_statistics().add_comments_count(len(comments))
 
 
 async def update_xhs_note_comment(note_id: str, comment_item: Dict):

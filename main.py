@@ -36,6 +36,7 @@ import cmd_arg
 import config
 from config.anti_crawl_loader import apply_anti_crawl_config
 from database import db
+from tools.crawl_statistics import reset_statistics, get_statistics
 from base.base_crawler import AbstractCrawler
 from media_platform.bilibili import BilibiliCrawler
 from media_platform.douyin import DouYinCrawler
@@ -107,8 +108,15 @@ async def main() -> None:
         print(f"Database {args.init_db} initialized successfully.")
         return
 
+    # 重置文件写入器的会话时间戳，确保新运行生成新文件
+    from tools.async_file_writer import AsyncFileWriter
+    AsyncFileWriter.reset_session_timestamp()
+
     # 加载反反爬配置（从 config/anti_crawl_config.json 读取）
     apply_anti_crawl_config(config)
+
+    # 重置统计（新的爬取任务）
+    reset_statistics(platform=config.PLATFORM)
 
     crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
     await crawler.start()
@@ -118,6 +126,14 @@ async def main() -> None:
     # Generate wordcloud after crawling is complete
     # Only for JSON save mode
     await _generate_wordcloud_if_needed()
+
+    # 生成并保存爬取统计摘要
+    try:
+        stats = get_statistics()
+        if stats.notes_data:
+            stats.save_summary(output_dir="data")
+    except Exception as e:
+        print(f"[Main] Error generating statistics: {e}")
 
 
 async def async_cleanup() -> None:

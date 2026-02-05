@@ -181,6 +181,15 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Basic Configuration",
             ),
         ] = config.KEYWORDS,
+        get_detail: Annotated[
+            str,
+            typer.Option(
+                "--get_detail",
+                help="Whether to get note details (likes, collects, etc.), supports yes/true/t/y/1 or no/false/f/n/0",
+                rich_help_panel="Content Configuration",
+                show_default=True,
+            ),
+        ] = str(config.ENABLE_GET_NOTE_DETAIL),
         get_comment: Annotated[
             str,
             typer.Option(
@@ -261,6 +270,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
+        enable_detail = _to_bool(get_detail)
         enable_comment = _to_bool(get_comment)
         enable_sub_comment = _to_bool(get_sub_comment)
         enable_headless = _to_bool(headless)
@@ -276,6 +286,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.CRAWLER_TYPE = crawler_type.value
         config.START_PAGE = start
         config.KEYWORDS = keywords
+        config.ENABLE_GET_NOTE_DETAIL = enable_detail
         config.ENABLE_GET_COMMENTS = enable_comment
         config.ENABLE_GET_SUB_COMMENTS = enable_sub_comment
         config.HEADLESS = enable_headless

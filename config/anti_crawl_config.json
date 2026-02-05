@@ -1,5 +1,17 @@
 {
-  "_说明": "反反爬策略配置文件 - 每次爬取前会自动读取此文件",
+  "_说明": "爬虫配置文件 - 每次爬取前会自动读取此文件",
+  
+  "爬取设置": {
+    "platform": "xhs",
+    "crawler_type": "search",
+    "keywords": "初中数学,学习",
+    "creator_ids": [],
+    "max_notes_count": 3000,
+    "enable_get_comments": true,
+    "enable_get_sub_comments": false,
+    "_crawler_type_options": ["search", "creator", "detail"],
+    "_说明": "platform=平台, crawler_type=爬取类型, keywords=搜索关键词(逗号分隔)"
+  },
   
   "随机等待策略": {
     "enabled": true,
@@ -26,11 +38,11 @@
   
   "批次暂停策略": {
     "enabled": true,
-    "every_n_min": 8,
-    "every_n_max": 12,
+    "every_n_min": 16,
+    "every_n_max": 30,
     "min_sec": 30.0,
     "max_sec": 60.0,
-    "_说明": "every_n 现在是随机范围，每 8-12 条触发一次暂停"
+    "_说明": "every_n 现在是随机范围，每 16-30 条触发一次暂停"
   },
   
   "动态调整策略": {
@@ -58,12 +70,12 @@
   },
   
   "并发控制": {
-    "max_concurrency": 1,
-    "_说明": "高安全场景保持单线程"
+    "max_concurrency": 3,
+    "_说明": "建议 2-3，太高容易触发反爬"
   },
   
   "分批爬取": {
-    "max_notes_count": 50
+    "_说明": "最大作品数量已移至'爬取设置'中"
   },
   
   "浏览器控制": {

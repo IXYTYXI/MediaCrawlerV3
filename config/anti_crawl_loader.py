@@ -133,7 +133,36 @@ def apply_anti_crawl_config(target_config) -> None:
         target_config.RECOVERABLE_ERRORS = error_handling.get("recoverable_errors", [408, 429, 500, 502, 503, 504])
         target_config.UNRECOVERABLE_ERRORS = error_handling.get("unrecoverable_errors", [401, 403])
     
-    utils.logger.info("[AntiCrawlLoader] Anti-crawl config applied successfully")
+    # ==================== 爬取设置 ====================
+    crawl_settings = config_data.get("爬取设置", {})
+    if crawl_settings:
+        # 平台
+        if crawl_settings.get("platform"):
+            target_config.PLATFORM = crawl_settings.get("platform")
+        # 爬取类型
+        if crawl_settings.get("crawler_type"):
+            target_config.CRAWLER_TYPE = crawl_settings.get("crawler_type")
+        # 关键词
+        if crawl_settings.get("keywords"):
+            target_config.KEYWORDS = crawl_settings.get("keywords")
+        # 作者 ID 列表
+        if crawl_settings.get("creator_ids"):
+            # 支持字符串或列表格式
+            creator_ids = crawl_settings.get("creator_ids")
+            if isinstance(creator_ids, str):
+                target_config.XHS_CREATOR_ID_LIST = [id.strip() for id in creator_ids.split(",") if id.strip()]
+            elif isinstance(creator_ids, list):
+                target_config.XHS_CREATOR_ID_LIST = creator_ids
+        # 最大作品数
+        if crawl_settings.get("max_notes_count"):
+            target_config.CRAWLER_MAX_NOTES_COUNT = crawl_settings.get("max_notes_count")
+        # 评论设置
+        if "enable_get_comments" in crawl_settings:
+            target_config.ENABLE_GET_COMMENTS = crawl_settings.get("enable_get_comments")
+        if "enable_get_sub_comments" in crawl_settings:
+            target_config.ENABLE_GET_SUB_COMMENTS = crawl_settings.get("enable_get_sub_comments")
+    
+    utils.logger.info("[AntiCrawlLoader] Config applied successfully")
     _log_current_config(target_config)
 
 
