@@ -134,7 +134,7 @@ def apply_anti_crawl_config(target_config) -> None:
         target_config.UNRECOVERABLE_ERRORS = error_handling.get("unrecoverable_errors", [401, 403])
     
     # ==================== 爬取设置 ====================
-    crawl_settings = config_data.get("爬取设置", {})
+    crawl_settings = config_data.get("crawl_settings", {}) or config_data.get("爬取设置", {})
     if crawl_settings:
         # 平台
         if crawl_settings.get("platform"):

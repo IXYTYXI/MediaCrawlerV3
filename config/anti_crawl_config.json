@@ -1,16 +1,27 @@
 {
-  "_说明": "爬虫配置文件 - 每次爬取前会自动读取此文件",
+  "_desc": "Config file - auto loaded before each crawl",
   
-  "爬取设置": {
+  "crawl_settings": {
     "platform": "xhs",
+    "_platform_desc": "xhs=xiaohongshu, dy=douyin, ks=kuaishou, bili=bilibili, wb=weibo",
+    
     "crawler_type": "search",
+    "_crawler_type_desc": "search=keyword search, creator=author page, detail=specific post",
+    
     "keywords": "初中数学,学习",
+    "_keywords_desc": "search keywords, comma separated, only works when crawler_type=search",
+    
     "creator_ids": [],
+    "_creator_ids_desc": "author page URLs, only works when crawler_type=creator",
+    
     "max_notes_count": 3000,
+    "_max_notes_count_desc": "max number of posts to crawl",
+    
     "enable_get_comments": true,
+    "_enable_get_comments_desc": "whether to get comments: true/false",
+    
     "enable_get_sub_comments": false,
-    "_crawler_type_options": ["search", "creator", "detail"],
-    "_说明": "platform=平台, crawler_type=爬取类型, keywords=搜索关键词(逗号分隔)"
+    "_enable_get_sub_comments_desc": "whether to get sub-comments (replies): true/false"
   },
   
   "随机等待策略": {
