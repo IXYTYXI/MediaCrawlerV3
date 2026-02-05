@@ -97,6 +97,15 @@ ENABLE_GET_COMMENTS = True
 # 爬取一级评论的数量控制(单视频/帖子)
 CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 8000
 
+# 评论获取模式: "parallel" = 边爬作品边爬评论, "sequential" = 先爬完作品再爬评论
+COMMENTS_FETCH_MODE = "parallel"
+
+# 并行模式下，获取作品详情后延迟多少秒再获取评论
+COMMENTS_DELAY_SEC = 1.0
+
+# 评论获取的并发数（建议1-3）
+COMMENTS_CONCURRENCY = 2
+
 # 是否开启爬二级评论模式, 默认不开启爬二级评论
 # 老版本项目使用了 db, 则需参考 schema/tables.sql line 287 增加表字段
 ENABLE_GET_SUB_COMMENTS = False

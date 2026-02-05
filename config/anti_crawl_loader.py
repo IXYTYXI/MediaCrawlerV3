@@ -161,6 +161,15 @@ def apply_anti_crawl_config(target_config) -> None:
             target_config.ENABLE_GET_COMMENTS = crawl_settings.get("enable_get_comments")
         if "enable_get_sub_comments" in crawl_settings:
             target_config.ENABLE_GET_SUB_COMMENTS = crawl_settings.get("enable_get_sub_comments")
+        # 评论获取模式配置
+        if crawl_settings.get("comments_fetch_mode"):
+            target_config.COMMENTS_FETCH_MODE = crawl_settings.get("comments_fetch_mode")
+        if crawl_settings.get("comments_delay_sec") is not None:
+            target_config.COMMENTS_DELAY_SEC = crawl_settings.get("comments_delay_sec")
+        if crawl_settings.get("max_comments_per_note") is not None:
+            target_config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = crawl_settings.get("max_comments_per_note")
+        if crawl_settings.get("comments_concurrency") is not None:
+            target_config.COMMENTS_CONCURRENCY = crawl_settings.get("comments_concurrency")
     
     utils.logger.info("[AntiCrawlLoader] Config applied successfully")
     _log_current_config(target_config)

@@ -5,13 +5,13 @@
     "platform": "xhs",
     "_platform_desc": "xhs=xiaohongshu, dy=douyin, ks=kuaishou, bili=bilibili, wb=weibo",
     
-    "crawler_type": "search",
+    "crawler_type": "creator",
     "_crawler_type_desc": "search=keyword search, creator=author page, detail=specific post",
     
-    "keywords": "初中数学,学习",
+    "keywords": "",
     "_keywords_desc": "search keywords, comma separated, only works when crawler_type=search",
     
-    "creator_ids": [],
+    "creator_ids": ["https://www.xiaohongshu.com/user/profile/64e332aa000000000201059a?xsec_token=ABBQOfkiE0qXK8e-mj4j-DpQJRUM6_5VRO94f92UEPSqQ%3D&xsec_source=pc_search"],
     "_creator_ids_desc": "author page URLs, only works when crawler_type=creator",
     
     "max_notes_count": 3000,
@@ -21,7 +21,19 @@
     "_enable_get_comments_desc": "whether to get comments: true/false",
     
     "enable_get_sub_comments": false,
-    "_enable_get_sub_comments_desc": "whether to get sub-comments (replies): true/false"
+    "_enable_get_sub_comments_desc": "whether to get sub-comments (replies): true/false",
+    
+    "comments_fetch_mode": "parallel",
+    "_comments_fetch_mode_desc": "parallel=边爬作品边爬评论, sequential=先爬完作品再爬评论",
+    
+    "comments_delay_sec": 1.0,
+    "_comments_delay_sec_desc": "并行模式下，获取作品详情后延迟多少秒再获取评论",
+    
+    "max_comments_per_note": 500,
+    "_max_comments_per_note_desc": "每个作品最多获取多少条评论",
+    
+    "comments_concurrency": 2,
+    "_comments_concurrency_desc": "评论获取的并发数（建议1-3）"
   },
   
   "随机等待策略": {
@@ -109,5 +121,17 @@
     "recoverable_errors": [408, 429, 500, 502, 503, 504],
     "unrecoverable_errors": [401, 403],
     "_说明": "可恢复错误使用指数退避重试，不可恢复错误立即停止"
+  },
+  
+  "断点续爬": {
+    "enabled": true,
+    "auto_save_interval": 10,
+    "retry_failed": true,
+    "use_sqlite": false,
+    "_enabled_desc": "是否启用断点续爬功能",
+    "_auto_save_interval_desc": "每爬取N条自动保存一次进度",
+    "_retry_failed_desc": "是否自动重试之前失败的记录",
+    "_use_sqlite_desc": "使用SQLite存储进度(适合>10万条数据)，false则用JSON",
+    "_性能说明": "查找使用Set哈希集合，复杂度O(1)，比二分法O(log n)更快"
   }
 }

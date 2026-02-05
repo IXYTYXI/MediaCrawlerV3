@@ -47,6 +47,9 @@ from .field import SearchSortType
 from .help import parse_note_info_from_note_url, parse_creator_info_from_url, get_search_id
 from .login import XiaoHongShuLogin
 
+# 断点续爬模块
+from tools.crawl_progress import get_progress_manager, CrawlProgressManager
+
 
 class XiaoHongShuCrawler(AbstractCrawler):
     context_page: Page
@@ -262,6 +265,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
         1. 获取所有作品列表
         2. 获取所有作品详情（保存到作品文件）
         3. 获取所有评论（保存到评论文件）
+        
+        支持断点续爬：自动跳过已爬取的内容
         """
         utils.logger.info("[XiaoHongShuCrawler.get_creators_and_notes] 开始爬取作者信息")
         
@@ -271,6 +276,16 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 creator_info: CreatorUrlInfo = parse_creator_info_from_url(creator_url)
                 utils.logger.info(f"[XiaoHongShuCrawler] 解析作者URL: {creator_info}")
                 user_id = creator_info.user_id
+                
+                # ========== 断点续爬：初始化进度管理器 ==========
+                self._progress_manager: CrawlProgressManager = get_progress_manager("xhs", "creator")
+                self._crawled_note_ids = self._progress_manager.load_progress(user_id)
+                self._comment_crawled_ids = self._progress_manager.get_comment_crawled_ids()
+                
+                if self._crawled_note_ids:
+                    utils.logger.info(f"[断点续爬] 作品: 跳过 {len(self._crawled_note_ids)} 条已爬取")
+                if self._comment_crawled_ids:
+                    utils.logger.info(f"[断点续爬] 评论: 跳过 {len(self._comment_crawled_ids)} 条已获取")
 
                 # 获取作者基本信息
                 createor_info: Dict = await self.xhs_client.get_creator_info(
@@ -284,96 +299,195 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 utils.logger.error(f"[XiaoHongShuCrawler] 解析作者URL失败: {e}")
                 continue
 
-            # ========== 阶段1：获取所有作品列表并保存详情 ==========
-            utils.logger.info("=" * 50)
-            utils.logger.info("[阶段1] 开始获取作品列表并获取详情（边获取边保存）...")
-            
-            crawl_interval = self._get_sleep_seconds()
-            all_notes_list = await self.xhs_client.get_all_notes_by_creator(
-                user_id=user_id,
-                crawl_interval=crawl_interval,
-                callback=self._fetch_all_notes_detail,  # 边获取列表边保存详情
-                xsec_token=creator_info.xsec_token,
-                xsec_source=creator_info.xsec_source,
-            )
-            
-            utils.logger.info(f"[阶段1] 完成！共获取 {len(all_notes_list)} 条作品")
-            
-            # ========== 阶段2：补爬失败的详情 ==========
-            utils.logger.info("=" * 50)
-            utils.logger.info("[阶段2] 开始补爬失败的详情...")
-            
-            await self._refetch_failed_details(all_notes_list)
-            
-            utils.logger.info(f"[阶段2] 完成！补爬结束")
-            
-            # ========== 阶段3：获取所有评论 ==========
-            if config.ENABLE_GET_COMMENTS:
+            try:
+                # ========== 阶段1：获取所有作品列表并保存详情 ==========
                 utils.logger.info("=" * 50)
-                utils.logger.info("[阶段3] 开始获取评论...")
+                utils.logger.info("[阶段1] 开始获取作品列表并获取详情（边获取边保存）...")
                 
-                note_ids = [note.get("note_id") for note in all_notes_list]
-                xsec_tokens = [note.get("xsec_token") for note in all_notes_list]
-                await self.batch_get_note_comments(note_ids, xsec_tokens)
+                crawl_interval = self._get_sleep_seconds()
+                all_notes_list = await self.xhs_client.get_all_notes_by_creator(
+                    user_id=user_id,
+                    crawl_interval=crawl_interval,
+                    callback=self._fetch_all_notes_detail,  # 边获取列表边保存详情
+                    xsec_token=creator_info.xsec_token,
+                    xsec_source=creator_info.xsec_source,
+                )
                 
-                utils.logger.info(f"[阶段3] 完成！评论已保存")
-            else:
-                utils.logger.info("[阶段3] 跳过评论获取（未开启）")
-            
-            utils.logger.info("=" * 50)
-            utils.logger.info(f"[完成] 作者 {user_id} 爬取完成")
+                utils.logger.info(f"[阶段1] 完成！共获取 {len(all_notes_list)} 条作品")
+                
+                # ========== 阶段2：补爬失败的详情 ==========
+                utils.logger.info("=" * 50)
+                utils.logger.info("[阶段2] 开始补爬失败的详情...")
+                
+                await self._refetch_failed_details(all_notes_list)
+                
+                utils.logger.info(f"[阶段2] 完成！补爬结束")
+                
+                # ========== 阶段3：获取所有评论 ==========
+                comments_mode = getattr(config, 'COMMENTS_FETCH_MODE', 'parallel')
+                
+                if config.ENABLE_GET_COMMENTS:
+                    if comments_mode == 'parallel':
+                        # 并行模式：评论已在阶段1中获取
+                        comment_crawled = getattr(self, '_comment_crawled_ids', set())
+                        utils.logger.info("=" * 50)
+                        utils.logger.info(f"[阶段3] 并行模式 - 评论已在阶段1获取 ({len(comment_crawled)} 条)")
+                        
+                        # 检查是否有遗漏的评论需要补爬
+                        new_crawled = getattr(self, '_new_crawled_ids', set())
+                        missing_comments = new_crawled - comment_crawled
+                        
+                        if missing_comments:
+                            utils.logger.info(f"[阶段3] 补爬 {len(missing_comments)} 条遗漏的评论...")
+                            for note in all_notes_list:
+                                note_id = note.get("note_id")
+                                if note_id in missing_comments:
+                                    try:
+                                        await self.get_comments(note_id, note.get("xsec_token", ""))
+                                    except Exception as e:
+                                        utils.logger.warning(f"[阶段3] 补爬评论失败: {note_id}, 错误: {e}")
+                        
+                        utils.logger.info(f"[阶段3] 完成！")
+                    else:
+                        # 顺序模式：在阶段3获取所有评论
+                        utils.logger.info("=" * 50)
+                        utils.logger.info("[阶段3] 顺序模式 - 开始获取评论...")
+                        
+                        # 断点续爬：只获取未爬取评论的作品
+                        notes_for_comments = []
+                        comment_crawled = getattr(self, '_comment_crawled_ids', set())
+                        
+                        for note in all_notes_list:
+                            note_id = note.get("note_id")
+                            # 只有新爬取的作品且评论未爬取才获取评论
+                            if note_id in getattr(self, '_new_crawled_ids', set()) and note_id not in comment_crawled:
+                                notes_for_comments.append(note)
+                        
+                        if notes_for_comments:
+                            note_ids = [note.get("note_id") for note in notes_for_comments]
+                            xsec_tokens = [note.get("xsec_token") for note in notes_for_comments]
+                            await self.batch_get_note_comments(note_ids, xsec_tokens)
+                            utils.logger.info(f"[阶段3] 完成！评论已保存（{len(notes_for_comments)} 条作品）")
+                        else:
+                            utils.logger.info("[阶段3] 所有作品评论已获取，跳过")
+                else:
+                    utils.logger.info("[阶段3] 跳过评论获取（未开启）")
+                
+                utils.logger.info("=" * 50)
+                utils.logger.info(f"[完成] 作者 {user_id} 爬取完成")
+                
+            except Exception as e:
+                utils.logger.error(f"[爬取异常] {e}")
+                raise
+            finally:
+                # ========== 断点续爬：保存进度 ==========
+                if hasattr(self, '_progress_manager'):
+                    self._progress_manager.save_progress()
+                    stats = self._progress_manager.get_stats()
+                    utils.logger.info(f"[断点续爬] 进度已保存: 成功 {stats['crawled_count']} 条")
 
     async def _fetch_all_notes_detail(self, note_list: List[Dict]):
         """
-        获取所有作品详情并保存
+        获取所有作品详情并保存（支持断点续爬 + 并行评论获取）
         Args:
             note_list: 作品列表
         """
         if not note_list:
             return
         
-        # 初始化失败记录集合
+        # 初始化失败记录集合和新爬取集合
         if not hasattr(self, '_failed_note_ids'):
             self._failed_note_ids = set()
-            
+        if not hasattr(self, '_new_crawled_ids'):
+            self._new_crawled_ids = set()
+        if not hasattr(self, '_comment_crawled_ids'):
+            self._comment_crawled_ids = set()  # 评论已爬取的 note_id
+        
+        # 获取已爬取的 note_id 集合（断点续爬）
+        crawled_ids = getattr(self, '_crawled_note_ids', set())
+        progress_manager = getattr(self, '_progress_manager', None)
+        
+        # 获取评论配置
+        comments_mode = getattr(config, 'COMMENTS_FETCH_MODE', 'parallel')
+        comments_delay = getattr(config, 'COMMENTS_DELAY_SEC', 1.0)
+        comments_concurrency = getattr(config, 'COMMENTS_CONCURRENCY', 2)
+        enable_comments = getattr(config, 'ENABLE_GET_COMMENTS', True)
+        
+        # 并行评论任务管理
+        comment_tasks: List[Task] = []
+        comment_semaphore = asyncio.Semaphore(comments_concurrency)
+        
         total = len(note_list)
         success_count = 0
         fail_count = 0
+        skip_count = 0
+        save_interval = 10  # 每10条保存一次进度
         
-        utils.logger.info(f"[详情获取] 共 {total} 条作品待处理")
+        is_parallel_mode = comments_mode == 'parallel' and enable_comments
+        
+        if is_parallel_mode:
+            utils.logger.info(f"[详情获取] 共 {total} 条作品待处理（并行获取评论，延迟 {comments_delay}s，并发 {comments_concurrency}）")
+        else:
+            utils.logger.info(f"[详情获取] 共 {total} 条作品待处理")
         
         for idx, post_item in enumerate(note_list, 1):
             note_id = post_item.get("note_id")
+            xsec_token = post_item.get("xsec_token", "")
             display_title = post_item.get("display_title", "")[:20]
+            
+            # ========== 断点续爬：跳过已爬取的 ==========
+            if note_id in crawled_ids:
+                skip_count += 1
+                utils.logger.debug(f"[详情获取] ({idx}/{total}) ⏭ 跳过（已爬取）: {display_title}...")
+                continue
             
             try:
                 # 获取详情
                 note_detail = await self.xhs_client.get_note_by_id(
                     note_id, 
                     post_item.get("xsec_source", "pc_feed"),
-                    post_item.get("xsec_token", "")
+                    xsec_token
                 )
                 
                 if note_detail:
                     note_detail.update({
-                        "xsec_token": post_item.get("xsec_token", ""),
+                        "xsec_token": xsec_token,
                         "xsec_source": post_item.get("xsec_source", "")
                     })
                     # 保存完整详情
                     await xhs_store.update_xhs_note(note_detail)
                     await self.get_notice_media(note_detail)
                     success_count += 1
+                    
+                    # 断点续爬：记录成功
+                    if progress_manager:
+                        progress_manager.add_crawled(note_id)
+                    self._new_crawled_ids.add(note_id)
+                    
                     utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}...")
+                    
+                    # ========== 并行模式：启动评论获取任务 ==========
+                    if is_parallel_mode and note_id not in self._comment_crawled_ids:
+                        task = asyncio.create_task(
+                            self._fetch_comments_with_delay(
+                                note_id, xsec_token, comments_delay, comment_semaphore, display_title
+                            )
+                        )
+                        comment_tasks.append(task)
                 else:
                     # 详情获取失败，保存基本信息，记录到失败列表
                     await xhs_store.update_xhs_note_basic(post_item)
                     self._failed_note_ids.add(note_id)
+                    if progress_manager:
+                        progress_manager.add_failed(note_id)
                     fail_count += 1
                     utils.logger.warning(f"[详情获取] ({idx}/{total}) ✗ {display_title}... (保存基本信息)")
                     
             except Exception as e:
                 # 异常时尝试保存基本信息，记录到失败列表
                 self._failed_note_ids.add(note_id)
+                if progress_manager:
+                    progress_manager.add_failed(note_id)
                 fail_count += 1
                 utils.logger.warning(f"[详情获取] ({idx}/{total}) ✗ {display_title}... 错误: {e}")
                 try:
@@ -387,8 +501,61 @@ class XiaoHongShuCrawler(AbstractCrawler):
             
             # 随机假动作
             await self._maybe_do_fake_action()
+            
+            # ========== 断点续爬：定期保存进度 ==========
+            if progress_manager and (success_count + fail_count) % save_interval == 0:
+                progress_manager.save_progress()
         
-        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 总计 {total}")
+        # ========== 等待所有评论任务完成 ==========
+        if comment_tasks:
+            utils.logger.info(f"[评论获取] 等待 {len(comment_tasks)} 个评论任务完成...")
+            await asyncio.gather(*comment_tasks, return_exceptions=True)
+            utils.logger.info(f"[评论获取] 所有评论任务已完成")
+        
+        # 最终保存一次进度
+        if progress_manager:
+            progress_manager.save_progress()
+        
+        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}, 总计 {total}")
+    
+    async def _fetch_comments_with_delay(
+        self, 
+        note_id: str, 
+        xsec_token: str, 
+        delay_sec: float, 
+        semaphore: asyncio.Semaphore,
+        display_title: str = ""
+    ):
+        """
+        延迟后获取单个作品的评论（带信号量控制并发）
+        """
+        async with semaphore:
+            try:
+                # 延迟执行
+                await asyncio.sleep(delay_sec)
+                
+                utils.logger.info(f"[评论获取] 开始: {display_title}... (note_id: {note_id[:8]}...)")
+                
+                # 获取评论
+                await self.xhs_client.get_note_all_comments(
+                    note_id=note_id,
+                    xsec_token=xsec_token,
+                    callback=xhs_store.batch_update_xhs_note_comments,
+                    max_count=config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES
+                )
+                
+                # 记录评论已爬取
+                self._comment_crawled_ids.add(note_id)
+                
+                # 更新断点续爬进度（评论）
+                progress_manager = getattr(self, '_progress_manager', None)
+                if progress_manager:
+                    progress_manager.add_comment_crawled(note_id)
+                
+                utils.logger.info(f"[评论获取] 完成: {display_title}...")
+                
+            except Exception as e:
+                utils.logger.warning(f"[评论获取] 失败: {display_title}... 错误: {e}")
 
     async def _refetch_failed_details(self, all_notes_list: List[Dict]):
         """
