@@ -11,13 +11,13 @@
     "keywords": "",
     "_keywords_desc": "search keywords, comma separated, only works when crawler_type=search",
     
-    "creator_ids": ["https://www.xiaohongshu.com/user/profile/64e332aa000000000201059a?xsec_token=ABBQOfkiE0qXK8e-mj4j-DpQJRUM6_5VRO94f92UEPSqQ%3D&xsec_source=pc_search"],
+    "creator_ids": ["https://www.xiaohongshu.com/user/profile/62b114a100000000190287f0?xsec_token=ABX8KxypB1alFmwrxytkd8t-M2Ey8I0dMudU3GCnS7OMk%3D&xsec_source=pc_search"],
     "_creator_ids_desc": "author page URLs, only works when crawler_type=creator",
     
     "max_notes_count": 3000,
     "_max_notes_count_desc": "max number of posts to crawl",
     
-    "enable_get_comments": true,
+    "enable_get_comments": false,
     "_enable_get_comments_desc": "whether to get comments: true/false",
     
     "enable_get_sub_comments": false,

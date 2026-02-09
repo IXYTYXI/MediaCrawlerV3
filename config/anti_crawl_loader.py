@@ -143,7 +143,21 @@ def apply_anti_crawl_config(target_config) -> None:
         if crawl_settings.get("crawler_type"):
             target_config.CRAWLER_TYPE = crawl_settings.get("crawler_type")
         # 关键词
-        if crawl_settings.get("keywords"):
+        keywords_source = crawl_settings.get("keywords_source", "manual")
+        
+        if keywords_source == "config":
+            # 从关键词配置文件加载
+            try:
+                from tools.keywords_loader import get_keywords_string
+                keywords_mode = crawl_settings.get("keywords_mode", "single")
+                keywords_limit = crawl_settings.get("keywords_limit", 10)
+                target_config.KEYWORDS = get_keywords_string(mode=keywords_mode, limit=keywords_limit)
+                utils.logger.info(f"[AntiCrawlLoader] 从配置文件加载关键词: {target_config.KEYWORDS[:50]}...")
+            except Exception as e:
+                utils.logger.warning(f"[AntiCrawlLoader] 加载关键词配置失败: {e}")
+                if crawl_settings.get("keywords"):
+                    target_config.KEYWORDS = crawl_settings.get("keywords")
+        elif crawl_settings.get("keywords"):
             target_config.KEYWORDS = crawl_settings.get("keywords")
         # 作者 ID 列表
         if crawl_settings.get("creator_ids"):
