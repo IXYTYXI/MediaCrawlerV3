@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediaCrawler Dashboard</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    [v-cloak] { display: none; }
+    
+    /* 自定义滚动条 */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+    
+    /* 日志容器 */
+    .log-container { max-height: 420px; overflow-y: auto; font-family: 'JetBrains Mono', 'Menlo', 'Consolas', monospace; font-size: 11.5px; line-height: 1.6; }
+    
+    /* 卡片悬浮效果 */
+    .card { background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(55, 65, 81, 0.5); transition: all 0.25s ease; }
+    .card:hover { border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 0 20px rgba(59, 130, 246, 0.05); }
+    
+    /* 输入框聚焦 */
+    .input-field { background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(55, 65, 81, 0.6); transition: all 0.2s; }
+    .input-field:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); outline: none; }
+    
+    /* 按钮光泽 */
+    .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); transition: all 0.2s; }
+    .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #2563eb, #1d4ed8); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4); }
+    .btn-success { background: linear-gradient(135deg, #10b981, #059669); }
+    .btn-success:hover:not(:disabled) { background: linear-gradient(135deg, #059669, #047857); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4); }
+    .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .btn-danger:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4); }
+    
+    /* 侧边栏高亮 */
+    .nav-active { background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05)); border-left: 3px solid #3b82f6; color: #60a5fa; }
+    
+    /* 脉冲动画 */
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+    
+    /* 渐入动画 */
+    @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeSlideIn 0.3s ease-out; }
+    
+    /* Toggle 开关 */
+    .toggle { position: relative; width: 44px; height: 24px; background: #374151; border-radius: 12px; cursor: pointer; transition: background 0.3s; }
+    .toggle.active { background: #3b82f6; }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .toggle.active::after { transform: translateX(20px); }
+    
+    /* 渐变背景 */
+    .bg-mesh { background: #0f172a; background-image: radial-gradient(at 20% 50%, rgba(59, 130, 246, 0.08) 0, transparent 50%), radial-gradient(at 80% 20%, rgba(139, 92, 246, 0.06) 0, transparent 50%), radial-gradient(at 50% 80%, rgba(16, 185, 129, 0.05) 0, transparent 50%); }
+    
+    /* 表格行 */
+    .table-row { transition: background 0.15s; }
+    .table-row:hover { background: rgba(59, 130, 246, 0.05); }
+    
+    /* Slider */
+    input[type="range"] { -webkit-appearance: none; height: 4px; background: #374151; border-radius: 2px; outline: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer; box-shadow: 0 0 6px rgba(59, 130, 246, 0.5); }
+    
+    /* Checkbox */
+    input[type="checkbox"] { accent-color: #3b82f6; }
+  </style>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { surface: { DEFAULT: '#111827', light: '#1f2937', lighter: '#374151' }}}}}
+  </script>
+</head>
+<body class="bg-mesh text-gray-200 min-h-screen">
+
+<div id="app" v-cloak>
+  <!-- 顶部导航 -->
+  <header class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/60 px-6 py-3.5 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <div>
+        <h1 class="text-base font-semibold text-white tracking-tight">MediaCrawler</h1>
+        <p class="text-[10px] text-gray-500 -mt-0.5">Dashboard Control Panel</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-5">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full" 
+        :class="batchStatus.status === 'running' ? 'bg-green-500/10 text-green-400' : batchStatus.status === 'completed' ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-800 text-gray-500'">
+        <span class="w-1.5 h-1.5 rounded-full" :class="batchStatus.status === 'running' ? 'bg-green-400 pulse-dot' : batchStatus.status === 'completed' ? 'bg-blue-400' : 'bg-gray-600'"></span>
+        <span class="text-xs font-medium">{{ batchStatus.status === 'running' ? '爬取中' : batchStatus.status === 'completed' ? '已完成' : '空闲' }}</span>
+      </div>
+      <button @click="saveConfig" :disabled="!configDirty"
+        class="px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200"
+        :class="configDirty ? 'btn-primary text-white shadow-lg' : 'bg-gray-800 text-gray-500 cursor-default'">
+        <span v-if="saving" class="inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          保存中
+        </span>
+        <span v-else>{{ configDirty ? '保存配置' : '已保存' }}</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex">
+    <!-- 侧边栏 -->
+    <nav class="w-52 min-h-screen border-r border-gray-800/40 py-5 px-3 space-y-0.5 sticky top-[52px] h-[calc(100vh-52px)] bg-gray-900/40">
+      <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
+        class="w-full text-left px-3 py-2.5 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-2.5"
+        :class="activeTab === tab.id ? 'nav-active font-medium' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40 border-l-3 border-transparent'">
+        <span class="text-base">{{ tab.icon }}</span>
+        {{ tab.name }}
+      </button>
+      
+      <div class="!mt-6 px-3 pt-4 border-t border-gray-800/40">
+        <p class="text-[10px] text-gray-600 uppercase tracking-wider mb-2">快捷操作</p>
+        <button @click="activeTab = 'batch'; startBatch()" :disabled="batchStatus.status === 'running'"
+          class="w-full px-3 py-2 rounded-lg text-xs btn-success text-white disabled:opacity-40 disabled:cursor-not-allowed mb-1.5">
+          开始爬取
+        </button>
+        <button @click="triggerExport"
+          class="w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition">
+          导出数据
+        </button>
+      </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 p-8 max-w-5xl animate-in">
+
+      <!-- ========== 爬取设置 ========== -->
+      <section v-show="activeTab === 'crawl'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">🔍</span>
+          <div><h2 class="text-lg font-semibold text-white">爬取设置</h2><p class="text-xs text-gray-500">配置爬取平台、模式和目标</p></div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">平台</label>
+            <select v-model="config.crawl_settings.platform" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+              <option value="xhs">🔖 小红书</option><option value="dy">🎵 抖音</option><option value="ks">⚡ 快手</option><option value="bili">📺 B站</option><option value="wb">💬 微博</option>
+            </select>
+          </div>
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">爬取模式</label>
+            <select v-model="config.crawl_settings.crawler_type" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+              <option value="search">🔎 关键词搜索</option><option value="creator">👤 作者主页</option><option value="detail">📄 指定帖子</option>
+            </select>
+          </div>
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">最大作品数</label>
+            <input type="number" v-model.number="config.crawl_settings.max_notes_count" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+          </div>
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">搜索关键词</label>
+            <input type="text" v-model="config.crawl_settings.keywords" placeholder="逗号分隔，如：新东方,好未来" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+          </div>
+        </div>
+        
+        <div class="card rounded-xl p-4">
+          <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">作者主页链接</label>
+          <textarea v-model="creatorIdsText" rows="3" placeholder="每行一个，如：https://www.xiaohongshu.com/user/profile/..." class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-none"></textarea>
+        </div>
+
+        <div class="flex items-center gap-3 mt-8 mb-4">
+          <span class="text-lg">💬</span>
+          <h3 class="text-sm font-semibold text-white">评论设置</h3>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="card rounded-xl p-4 flex items-center justify-between">
+            <div><label class="text-sm text-gray-300">爬取评论</label><p class="text-[11px] text-gray-600">开启后会获取作品评论</p></div>
+            <div class="toggle" :class="{ active: config.crawl_settings.enable_get_comments }" @click="config.crawl_settings.enable_get_comments = !config.crawl_settings.enable_get_comments"></div>
+          </div>
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">评论模式</label>
+            <select v-model="config.crawl_settings.comments_fetch_mode" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+              <option value="parallel">⚡ 并行（边爬作品边爬评论）</option><option value="sequential">📋 顺序（先作品后评论）</option>
+            </select>
+          </div>
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">评论延迟 (秒)</label>
+            <input type="number" v-model.number="config.crawl_settings.comments_delay_sec" step="0.5" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+          </div>
+          <div class="card rounded-xl p-4">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">评论并发数</label>
+            <input type="number" v-model.number="config.crawl_settings.comments_concurrency" min="1" max="5" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 反爬策略 ========== -->
+      <section v-show="activeTab === 'anti'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">🛡️</span>
+          <div><h2 class="text-lg font-semibold text-white">反爬策略</h2><p class="text-xs text-gray-500">调整等待时间、伪装行为等防检测参数</p></div>
+        </div>
+
+        <!-- 随机等待 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2"><span>⏱️</span><h3 class="text-sm font-semibold text-white">随机等待</h3></div>
+            <div class="toggle" :class="{ active: config['随机等待策略'].enabled }" @click="config['随机等待策略'].enabled = !config['随机等待策略'].enabled"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div><label class="text-[11px] text-gray-500">最小 (秒)</label><input type="number" v-model.number="config['随机等待策略'].min_sec" step="0.5" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">最大 (秒)</label><input type="number" v-model.number="config['随机等待策略'].max_sec" step="0.5" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">分布类型</label>
+              <select v-model="config['随机等待策略'].distribution" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="uniform">均匀</option><option value="normal">正态</option><option value="lognormal">对数正态</option>
+              </select></div>
+          </div>
+        </div>
+
+        <!-- 批次暂停 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2"><span>⏸️</span><h3 class="text-sm font-semibold text-white">批次暂停</h3></div>
+            <div class="toggle" :class="{ active: config['批次暂停策略'].enabled }" @click="config['批次暂停策略'].enabled = !config['批次暂停策略'].enabled"></div>
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div><label class="text-[11px] text-gray-500">触发条数 (min)</label><input type="number" v-model.number="config['批次暂停策略'].every_n_min" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">触发条数 (max)</label><input type="number" v-model.number="config['批次暂停策略'].every_n_max" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">暂停 (min秒)</label><input type="number" v-model.number="config['批次暂停策略'].min_sec" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">暂停 (max秒)</label><input type="number" v-model.number="config['批次暂停策略'].max_sec" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+          </div>
+        </div>
+
+        <!-- 动态调整 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2"><span>📈</span><h3 class="text-sm font-semibold text-white">动态调整</h3></div>
+            <div class="toggle" :class="{ active: config['动态调整策略'].enabled }" @click="config['动态调整策略'].enabled = !config['动态调整策略'].enabled"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <div><label class="text-[11px] text-gray-500">成功阈值</label><input type="number" v-model.number="config['动态调整策略'].success_threshold" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">加速因子</label><input type="number" v-model.number="config['动态调整策略'].speed_up_factor" step="0.1" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">减速因子</label><input type="number" v-model.number="config['动态调整策略'].slow_down_factor" step="0.1" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+          </div>
+          <div class="flex items-center gap-3 mt-2 p-2.5 rounded-lg bg-gray-800/30">
+            <div class="toggle" :class="{ active: config['动态调整策略'].super_sleep_on_block }" @click="config['动态调整策略'].super_sleep_on_block = !config['动态调整策略'].super_sleep_on_block" style="min-width:44px"></div>
+            <span class="text-xs text-gray-400">封禁时超级休眠 ({{ (config['动态调整策略'].super_sleep_min_sec/60).toFixed(0) }}~{{ (config['动态调整策略'].super_sleep_max_sec/60).toFixed(0) }} 分钟)</span>
+          </div>
+        </div>
+
+        <!-- 假动作 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2"><span>🎭</span><h3 class="text-sm font-semibold text-white">假动作</h3></div>
+            <div class="toggle" :class="{ active: config['假动作策略'].enabled }" @click="config['假动作策略'].enabled = !config['假动作策略'].enabled"></div>
+          </div>
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-[11px] text-gray-500">触发概率</label>
+              <span class="text-sm font-semibold text-blue-400">{{ (config['假动作策略'].probability * 100).toFixed(0) }}%</span>
+            </div>
+            <input type="range" v-model.number="config['假动作策略'].probability" min="0" max="0.5" step="0.05" class="w-full">
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div><label class="text-[11px] text-gray-500">等待 (min秒)</label><input type="number" v-model.number="config['假动作策略'].min_sec" step="0.5" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">等待 (max秒)</label><input type="number" v-model.number="config['假动作策略'].max_sec" step="0.5" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+          </div>
+          <div class="flex flex-wrap gap-4">
+            <label v-for="(label, key) in { enable_scroll: '滚动页面', enable_mouse_move: '移动鼠标', enable_click_profile: '点击头像', enable_input_simulation: '模拟输入' }" :key="key"
+              class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none hover:text-gray-200 transition">
+              <input type="checkbox" v-model="config['假动作策略'][key]" class="w-3.5 h-3.5 rounded"> {{ label }}
+            </label>
+          </div>
+        </div>
+
+        <!-- 并发 & 浏览器 -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="card rounded-xl p-5">
+            <div class="flex items-center gap-2 mb-3"><span>🔄</span><h3 class="text-sm font-semibold text-white">并发控制</h3></div>
+            <input type="number" v-model.number="config['并发控制'].max_concurrency" min="1" max="10" class="input-field w-full rounded-lg px-3 py-2.5 text-sm text-white">
+            <p class="text-[10px] text-gray-600 mt-1.5">建议 2~3，过高触发反爬</p>
+          </div>
+          <div class="card rounded-xl p-5">
+            <div class="flex items-center gap-2 mb-3"><span>🌐</span><h3 class="text-sm font-semibold text-white">浏览器指纹</h3></div>
+            <div class="space-y-2.5">
+              <label v-for="(label, key) in { remove_webdriver_flag: '移除 WebDriver 标记', spoof_canvas_fingerprint: '伪装 Canvas 指纹', spoof_webgl_fingerprint: '伪装 WebGL 指纹' }" :key="key"
+                class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none hover:text-gray-200 transition">
+                <input type="checkbox" v-model="config['浏览器控制'][key]" class="w-3.5 h-3.5 rounded"> {{ label }}
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 批量爬取 ========== -->
+      <section v-show="activeTab === 'batch'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">📦</span>
+          <div><h2 class="text-lg font-semibold text-white">批量爬取</h2><p class="text-xs text-gray-500">从 Excel 读取作者列表，逐个爬取并导出</p></div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">Excel 路径</label>
+            <input type="text" v-model="config.batch_crawl.excel_path" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">每作者最多作品</label>
+            <input type="number" v-model.number="config.batch_crawl.max_notes_per_creator" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">互动量阈值</label>
+            <input type="number" v-model.number="config.batch_crawl.min_interaction" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+            <p class="text-[10px] text-gray-600 mt-1">点赞+评论+收藏，0=不过滤</p></div>
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">导出格式</label>
+            <select v-model="config.batch_crawl.export_format" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+              <option value="excel">Excel</option><option value="json">JSON</option><option value="csv">CSV</option>
+            </select></div>
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">导出目录</label>
+            <input type="text" v-model="config.batch_crawl.export_dir" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">作者间等待 (秒)</label>
+            <input type="number" v-model.number="config.batch_crawl.wait_between_creators_sec" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+        </div>
+
+        <!-- 作者列表 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2"><span>👥</span><h3 class="text-sm font-semibold text-white">Excel 作者列表</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium">{{ creators.length }} 个</span></div>
+            <button @click="loadCreators" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-[11px] text-gray-400 transition">刷新</button>
+          </div>
+          <div v-if="creators.length" class="overflow-x-auto rounded-lg border border-gray-800/50">
+            <table class="w-full text-xs">
+              <thead><tr class="text-gray-500 bg-gray-800/30 uppercase text-[10px] tracking-wider">
+                <th class="text-left py-2.5 px-3 font-medium">#</th><th class="text-left py-2.5 px-3 font-medium">名称</th><th class="text-left py-2.5 px-3 font-medium">ID</th><th class="text-left py-2.5 px-3 font-medium">链接</th>
+              </tr></thead>
+              <tbody><tr v-for="(c, i) in creators" :key="i" class="table-row border-t border-gray-800/30">
+                <td class="py-2.5 px-3 text-gray-600">{{ i + 1 }}</td>
+                <td class="py-2.5 px-3 text-gray-200 font-medium">{{ c.name }}</td>
+                <td class="py-2.5 px-3 text-gray-500 font-mono text-[10px]">{{ c.id }}</td>
+                <td class="py-2.5 px-3"><a :href="c.url" target="_blank" class="text-blue-400/70 hover:text-blue-400 hover:underline">{{ c.url.substring(0, 55) }}...</a></td>
+              </tr></tbody>
+            </table>
+          </div>
+          <div v-else class="text-center py-8 text-gray-600 text-sm">点击刷新加载作者列表</div>
+        </div>
+
+        <!-- 执行面板 -->
+        <div class="card rounded-xl p-5 border-blue-500/20">
+          <div class="flex items-center gap-2 mb-4"><span>🚀</span><h3 class="text-sm font-semibold text-white">执行控制</h3></div>
+          <div class="grid grid-cols-3 gap-4 mb-5">
+            <div><label class="text-[11px] text-gray-500">限制作者数 <span class="text-gray-600">(0=全部)</span></label>
+              <input type="number" v-model.number="batchForm.limit" min="0" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="text-[11px] text-gray-500">互动量过滤</label>
+              <input type="number" v-model.number="batchForm.min_interaction" min="0" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div class="flex items-end pb-1">
+              <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+                <input type="checkbox" v-model="batchForm.enable_comments" class="w-3.5 h-3.5 rounded"> 爬取评论
+              </label>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button @click="startBatch" :disabled="batchStatus.status === 'running'"
+              class="px-6 py-2.5 btn-success text-white rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none">
+              {{ batchStatus.status === 'running' ? '运行中...' : '开始批量爬取' }}
+            </button>
+            <button @click="stopBatch" :disabled="batchStatus.status !== 'running'"
+              class="px-5 py-2.5 btn-danger text-white rounded-lg text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed disabled:transform-none">停止</button>
+            <button @click="triggerExport"
+              class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-purple-600/30">导出 Excel</button>
+            <button @click="resetProgress"
+              class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg text-[11px] transition ml-auto">重置进度</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 飞书配置 ========== -->
+      <section v-show="activeTab === 'feishu'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">📊</span>
+          <div><h2 class="text-lg font-semibold text-white">飞书多维表格</h2><p class="text-xs text-gray-500">爬取完成后自动写入飞书 Bitable</p></div>
+        </div>
+        <div class="card rounded-xl p-5 flex items-center justify-between">
+          <div><label class="text-sm text-gray-300 font-medium">启用飞书写入</label><p class="text-[11px] text-gray-600 mt-0.5">爬取完成后自动创建并写入多维表格</p></div>
+          <div class="toggle" :class="{ active: config.feishu.enabled }" @click="config.feishu.enabled = !config.feishu.enabled"></div>
+        </div>
+        <div class="card rounded-xl p-5 space-y-4">
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">App ID</label>
+            <input type="text" v-model="config.feishu.app_id" placeholder="cli_xxxxxxxx" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">App Secret</label>
+            <input type="password" v-model="config.feishu.app_secret" placeholder="••••••••" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">文件夹 Token <span class="text-gray-600">(可选)</span></label>
+            <input type="text" v-model="config.feishu.folder_token" placeholder="留空则创建在根目录" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
+        </div>
+      </section>
+
+      <!-- ========== 断点续爬 ========== -->
+      <section v-show="activeTab === 'resume'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">💾</span>
+          <div><h2 class="text-lg font-semibold text-white">断点续爬</h2><p class="text-xs text-gray-500">中断后自动从上次位置继续</p></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="card rounded-xl p-5 flex items-center justify-between">
+            <div><label class="text-sm text-gray-300 font-medium">启用断点续爬</label><p class="text-[11px] text-gray-600 mt-0.5">记录已爬取的内容，下次自动跳过</p></div>
+            <div class="toggle" :class="{ active: config['断点续爬'].enabled }" @click="config['断点续爬'].enabled = !config['断点续爬'].enabled"></div>
+          </div>
+          <div class="card rounded-xl p-5">
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">自动保存间隔</label>
+            <input type="number" v-model.number="config['断点续爬'].auto_save_interval" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+            <p class="text-[10px] text-gray-600 mt-1.5">每爬取 N 条自动保存进度</p>
+          </div>
+          <div class="card rounded-xl p-5 flex items-center justify-between">
+            <div><label class="text-sm text-gray-300 font-medium">重试失败记录</label><p class="text-[11px] text-gray-600 mt-0.5">自动重试上次失败的请求</p></div>
+            <div class="toggle" :class="{ active: config['断点续爬'].retry_failed }" @click="config['断点续爬'].retry_failed = !config['断点续爬'].retry_failed"></div>
+          </div>
+          <div class="card rounded-xl p-5 flex items-center justify-between">
+            <div><label class="text-sm text-gray-300 font-medium">SQLite 存储</label><p class="text-[11px] text-gray-600 mt-0.5">适合 10 万+ 条数据</p></div>
+            <div class="toggle" :class="{ active: config['断点续爬'].use_sqlite }" @click="config['断点续爬'].use_sqlite = !config['断点续爬'].use_sqlite"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 日志/文件 ========== -->
+      <section v-show="activeTab === 'logs'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">📋</span>
+          <div><h2 class="text-lg font-semibold text-white">运行日志 & 数据文件</h2><p class="text-xs text-gray-500">查看爬取进度和导出文件</p></div>
+        </div>
+
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-gray-300">批量爬取日志</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 font-mono">{{ batchLogs.length }}</span>
+            </div>
+            <button @click="refreshLogs" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-[11px] text-gray-400 transition">刷新</button>
+          </div>
+          <div class="log-container bg-black/30 rounded-lg p-3 border border-gray-800/50" ref="logContainer">
+            <div v-for="(log, i) in batchLogs" :key="i" class="py-0.5 leading-relaxed"
+              :class="log.message.includes('ERROR') ? 'text-red-400/90' : log.message.includes('WARNING') ? 'text-amber-400/80' : log.message.includes('完成') || log.message.includes('成功') || log.message.includes('✓') ? 'text-emerald-400/80' : 'text-gray-400'">
+              <span class="text-gray-600 select-none">{{ log.time }} </span>{{ log.message }}
+            </div>
+            <div v-if="!batchLogs.length" class="text-center py-12 text-gray-700">
+              <p class="text-sm">暂无日志</p>
+              <p class="text-[11px] mt-1">启动爬取后日志将在此显示</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-gray-300">数据文件</span>
+            <button @click="loadFiles" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-[11px] text-gray-400 transition">刷新</button>
+          </div>
+          <div v-if="files.length" class="space-y-0 rounded-lg border border-gray-800/50 overflow-hidden">
+            <div v-for="f in files" :key="f.name" class="flex items-center justify-between py-3 px-4 table-row border-b border-gray-800/30 last:border-0">
+              <div class="flex items-center gap-3">
+                <span :class="f.type === 'excel' ? 'text-emerald-400' : 'text-blue-400'" class="text-lg">{{ f.type === 'excel' ? '📗' : '📄' }}</span>
+                <div>
+                  <span class="text-sm text-gray-200">{{ f.name }}</span>
+                  <span class="text-[10px] text-gray-600 ml-2">{{ (f.size / 1024).toFixed(1) }} KB</span>
+                </div>
+              </div>
+              <span class="text-[11px] text-gray-600">{{ f.modified }}</span>
+            </div>
+          </div>
+          <div v-else class="text-center py-8 text-gray-700 text-sm">暂无文件</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <transition name="toast">
+    <div v-if="toast.show" class="fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2"
+      :class="toast.type === 'success' ? 'bg-emerald-600 shadow-emerald-600/30' : toast.type === 'error' ? 'bg-red-600 shadow-red-600/30' : 'bg-blue-600 shadow-blue-600/30'">
+      <span>{{ toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ' }}</span>
+      {{ toast.message }}
+    </div>
+  </transition>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue
+
+createApp({
+  setup() {
+    const API = '/api/dashboard'
+    const defaultConfig = {
+      crawl_settings: { platform: 'xhs', crawler_type: 'creator', keywords: '', creator_ids: [], max_notes_count: 3000, enable_get_comments: false, enable_get_sub_comments: false, comments_fetch_mode: 'parallel', comments_delay_sec: 1.0, max_comments_per_note: 500, comments_concurrency: 2 },
+      '随机等待策略': { enabled: true, min_sec: 5, max_sec: 10, distribution: 'lognormal' },
+      '批次暂停策略': { enabled: true, every_n_min: 16, every_n_max: 30, min_sec: 30, max_sec: 60 },
+      '动态调整策略': { enabled: true, success_threshold: 10, speed_up_factor: 0.8, slow_down_factor: 2.0, super_sleep_on_block: true, super_sleep_min_sec: 300, super_sleep_max_sec: 600 },
+      '假动作策略': { enabled: true, probability: 0.15, min_sec: 2, max_sec: 5, keywords: [], enable_scroll: true, enable_mouse_move: true, enable_click_profile: true, enable_input_simulation: true },
+      '并发控制': { max_concurrency: 3 },
+      '浏览器控制': { auto_close_browser: false, remove_webdriver_flag: true, spoof_canvas_fingerprint: true, spoof_webgl_fingerprint: true },
+      '断点续爬': { enabled: true, auto_save_interval: 10, retry_failed: true, use_sqlite: false },
+      batch_crawl: { enabled: false, excel_path: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '' },
+      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '' },
+    }
+
+    const config = reactive(JSON.parse(JSON.stringify(defaultConfig)))
+    const configOriginal = ref('')
+    const configDirty = computed(() => JSON.stringify(config) !== configOriginal.value)
+    const saving = ref(false)
+    const activeTab = ref('crawl')
+    const tabs = [
+      { id: 'crawl', name: '爬取设置', icon: '🔍' },
+      { id: 'anti', name: '反爬策略', icon: '🛡️' },
+      { id: 'batch', name: '批量爬取', icon: '📦' },
+      { id: 'feishu', name: '飞书配置', icon: '📊' },
+      { id: 'resume', name: '断点续爬', icon: '💾' },
+      { id: 'logs', name: '日志/文件', icon: '📋' },
+    ]
+    const creators = ref([])
+    const batchStatus = reactive({ status: 'idle', started_at: null, message: '' })
+    const batchLogs = ref([])
+    const batchForm = reactive({ limit: 5, min_interaction: 0, enable_comments: false })
+    const files = ref([])
+    const toast = reactive({ show: false, message: '', type: 'info' })
+    const logContainer = ref(null)
+
+    const creatorIdsText = computed({
+      get: () => (config.crawl_settings.creator_ids || []).join('\n'),
+      set: (val) => { config.crawl_settings.creator_ids = val.split('\n').map(s => s.trim()).filter(Boolean) }
+    })
+
+    function showToast(msg, type = 'info') { toast.message = msg; toast.type = type; toast.show = true; setTimeout(() => { toast.show = false }, 3000) }
+
+    async function api(url, opts = {}) {
+      try { const r = await fetch(API + url, { headers: { 'Content-Type': 'application/json' }, ...opts }); return await r.json() }
+      catch (e) { showToast(`请求失败: ${e.message}`, 'error'); return null }
+    }
+
+    async function loadConfig() {
+      const res = await api('/config')
+      if (res?.success) {
+        function merge(t, s) { for (const k in s) { if (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k]) && k in t) merge(t[k], s[k]); else t[k] = s[k] } }
+        merge(config, res.data)
+        configOriginal.value = JSON.stringify(config)
+      }
+    }
+
+    async function saveConfig() {
+      saving.value = true
+      const res = await api('/config', { method: 'PUT', body: JSON.stringify(config) })
+      setTimeout(() => { saving.value = false }, 500)
+      if (res?.success) { configOriginal.value = JSON.stringify(config); showToast('配置已保存', 'success') }
+    }
+
+    async function loadCreators() {
+      const res = await api('/creators')
+      if (res?.success) creators.value = res.data.creators || []
+    }
+
+    async function startBatch() {
+      await saveConfig()
+      const res = await api('/batch/start', { method: 'POST', body: JSON.stringify(batchForm) })
+      if (res?.success) { showToast('批量爬取已启动', 'success'); pollStatus() }
+      else showToast(res?.detail || '启动失败', 'error')
+    }
+
+    async function stopBatch() {
+      const res = await api('/batch/stop', { method: 'POST' })
+      if (res?.success) showToast('已停止', 'info')
+    }
+
+    async function pollStatus() {
+      const poll = async () => {
+        const res = await api('/batch/status')
+        if (res?.success) { Object.assign(batchStatus, res.data); if (batchStatus.status === 'running') setTimeout(poll, 3000) }
+      }; poll()
+    }
+
+    async function refreshLogs() {
+      const res = await api('/batch/logs?limit=500')
+      if (res?.success) { batchLogs.value = res.data; nextTick(() => { if (logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight }) }
+    }
+
+    async function triggerExport() {
+      showToast('正在导出...', 'info')
+      const res = await api(`/export?min_interaction=${batchForm.min_interaction}`, { method: 'POST' })
+      if (res?.success) { showToast('导出完成', 'success'); loadFiles() } else showToast('导出失败', 'error')
+    }
+
+    async function resetProgress() {
+      if (!confirm('确定重置进度？下次将从头开始爬取。')) return
+      const res = await api('/batch/progress', { method: 'DELETE' })
+      if (res?.success) showToast('进度已重置', 'success')
+    }
+
+    async function loadFiles() { const res = await api('/files'); if (res?.success) files.value = res.data }
+
+    onMounted(() => {
+      loadConfig(); loadCreators(); loadFiles()
+      setInterval(async () => {
+        const res = await api('/batch/status')
+        if (res?.success) Object.assign(batchStatus, res.data)
+        if (batchStatus.status === 'running') refreshLogs()
+      }, 5000)
+    })
+
+    return { config, configDirty, saving, activeTab, tabs, creators, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles }
+  }
+}).mount('#app')
+</script>
+</body>
+</html>
