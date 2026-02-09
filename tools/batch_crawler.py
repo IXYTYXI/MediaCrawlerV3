@@ -621,8 +621,9 @@ async def run_batch_crawl(
             creator_names[uid] = c["name"]
 
     # 读取所有 creator_contents JSON，只匹配 Excel 中的作者
+    # 去重：同一个 note_id 保留最完整的记录（有详情的优先于只有基本信息的）
     data_dir = os.path.join("data", "xhs", "json")
-    all_export_notes = []
+    notes_by_id: Dict[str, Dict] = {}  # note_id → 最完整的记录
     if os.path.exists(data_dir):
         for filename in sorted(os.listdir(data_dir)):
             if not filename.endswith(".json") or not filename.startswith("creator_contents"):
@@ -638,13 +639,41 @@ async def run_batch_crawl(
                     if user_id not in creator_names:
                         continue
                     item["_creator_name"] = creator_names[user_id]
-                    if min_interaction > 0:
-                        interaction = get_interaction_count(item)
-                        if interaction < min_interaction:
-                            continue
-                    all_export_notes.append(item)
+                    
+                    note_id = item.get("note_id", "")
+                    if not note_id:
+                        continue
+                    
+                    # 判断记录完整度：有 desc 且有互动数据的更完整
+                    def _completeness(n):
+                        score = 0
+                        if n.get("desc"):
+                            score += 10
+                        if n.get("title") and len(str(n.get("title", ""))) > 10:
+                            score += 5
+                        score += _safe_int(n.get("liked_count", 0))
+                        score += _safe_int(n.get("collected_count", 0))
+                        score += _safe_int(n.get("comment_count", 0))
+                        if n.get("tag_list"):
+                            score += 3
+                        if n.get("image_list") and len(str(n.get("image_list", ""))) > 20:
+                            score += 2
+                        return score
+                    
+                    # 保留更完整的记录
+                    if note_id not in notes_by_id or _completeness(item) > _completeness(notes_by_id[note_id]):
+                        notes_by_id[note_id] = item
             except Exception:
                 pass
+
+    # 互动量过滤
+    all_export_notes = []
+    for item in notes_by_id.values():
+        if min_interaction > 0:
+            interaction = get_interaction_count(item)
+            if interaction < min_interaction:
+                continue
+        all_export_notes.append(item)
 
     utils.logger.info(f"  汇总结果: {len(all_export_notes)} 条符合条件 (互动量>={min_interaction})")
 
@@ -718,14 +747,15 @@ def _run_export_only(excel_path: str, min_interaction: int = 50,
     valid_user_ids = set(creator_names.keys())
     print(f"  Excel 中共 {len(valid_user_ids)} 个作者 user_id")
 
-    all_notes = []
+    # 去重：同一个 note_id 保留最完整的记录
+    notes_by_id: Dict[str, Dict] = {}
     filtered_count = 0
     skipped_not_in_excel = 0
+    duplicates = 0
 
     for filename in sorted(os.listdir(data_dir)):
         if not filename.endswith(".json"):
             continue
-        # 只读 creator_contents 文件，排除 search/comments 等
         if not filename.startswith("creator_contents"):
             continue
 
@@ -738,7 +768,6 @@ def _run_export_only(excel_path: str, min_interaction: int = 50,
 
             file_added = 0
             for item in data:
-                # 只保留 Excel 作者列表中的用户
                 user_id = item.get("user_id", "")
                 if valid_user_ids and user_id not in creator_names:
                     skipped_not_in_excel += 1
@@ -746,21 +775,44 @@ def _run_export_only(excel_path: str, min_interaction: int = 50,
 
                 item["_creator_name"] = creator_names.get(user_id, item.get("nickname", "未知"))
 
-                # 互动量过滤
-                if min_interaction > 0:
-                    interaction = get_interaction_count(item)
-                    if interaction < min_interaction:
-                        filtered_count += 1
-                        continue
+                note_id = item.get("note_id", "")
+                if not note_id:
+                    continue
 
-                all_notes.append(item)
-                file_added += 1
+                # 完整度评分：有详情的优先于只有基本信息的
+                def _score(n):
+                    s = 0
+                    if n.get("desc"): s += 10
+                    if n.get("title") and len(str(n.get("title", ""))) > 10: s += 5
+                    s += _safe_int(n.get("liked_count", 0))
+                    s += _safe_int(n.get("collected_count", 0))
+                    s += _safe_int(n.get("comment_count", 0))
+                    if n.get("tag_list"): s += 3
+                    return s
 
-            print(f"  读取: {filename} ({file_added}/{len(data)} 条匹配)")
+                if note_id in notes_by_id:
+                    if _score(item) > _score(notes_by_id[note_id]):
+                        notes_by_id[note_id] = item
+                    duplicates += 1
+                else:
+                    notes_by_id[note_id] = item
+                    file_added += 1
+
+            print(f"  读取: {filename} ({file_added} 条新增)")
         except Exception as e:
             print(f"  读取失败: {filename} - {e}")
 
-    print(f"\n[ExportOnly] 共 {len(all_notes)} 条符合条件")
+    # 互动量过滤
+    all_notes = []
+    for item in notes_by_id.values():
+        if min_interaction > 0:
+            interaction = get_interaction_count(item)
+            if interaction < min_interaction:
+                filtered_count += 1
+                continue
+        all_notes.append(item)
+
+    print(f"\n[ExportOnly] 共 {len(all_notes)} 条符合条件 (去重 {duplicates} 条)")
     print(f"  互动量过滤掉: {filtered_count} 条")
     print(f"  非Excel作者跳过: {skipped_not_in_excel} 条")
 
