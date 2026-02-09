@@ -185,6 +185,24 @@ def apply_anti_crawl_config(target_config) -> None:
         if crawl_settings.get("comments_concurrency") is not None:
             target_config.COMMENTS_CONCURRENCY = crawl_settings.get("comments_concurrency")
     
+    # ==================== 批量爬取配置 ====================
+    batch_cfg = config_data.get("batch_crawl", {})
+    if batch_cfg:
+        target_config.BATCH_CRAWL_ENABLED = batch_cfg.get("enabled", False)
+        target_config.BATCH_CRAWL_EXCEL_PATH = batch_cfg.get("excel_path", "redbookaccontidandresult.xlsx")
+        target_config.BATCH_CRAWL_MAX_NOTES = batch_cfg.get("max_notes_per_creator", 3000)
+        target_config.BATCH_CRAWL_ENABLE_COMMENTS = batch_cfg.get("enable_comments", False)
+        target_config.BATCH_CRAWL_WAIT_SEC = batch_cfg.get("wait_between_creators_sec", 10)
+        target_config.BATCH_CRAWL_RESUME = batch_cfg.get("resume", True)
+
+    # ==================== 飞书多维表格配置 ====================
+    feishu_cfg = config_data.get("feishu", {})
+    if feishu_cfg:
+        target_config.FEISHU_ENABLED = feishu_cfg.get("enabled", False)
+        target_config.FEISHU_APP_ID = feishu_cfg.get("app_id", "")
+        target_config.FEISHU_APP_SECRET = feishu_cfg.get("app_secret", "")
+        target_config.FEISHU_FOLDER_TOKEN = feishu_cfg.get("folder_token", "")
+    
     utils.logger.info("[AntiCrawlLoader] Config applied successfully")
     _log_current_config(target_config)
 

@@ -141,6 +141,21 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         if return_response:
             return response.text
         data: Dict = response.json()
+
+        # 访问频繁 / 反爬限流（code=300013 等）
+        rate_limit_codes = {300013, 300012, 300014}
+        if data.get("code") in rate_limit_codes:
+            wait_sec = 300  # 等待 5 分钟
+            msg = data.get("msg", "访问频繁")
+            utils.logger.warning(
+                f"[XiaoHongShuClient] 触发反爬限流 (code={data['code']}): {msg}, "
+                f"等待 {wait_sec} 秒后继续..."
+            )
+            import asyncio
+            await asyncio.sleep(wait_sec)
+            utils.logger.info("[XiaoHongShuClient] 限流等待结束，继续爬取")
+            raise DataFetchError(f"Rate limited: {msg}")
+
         if data["success"]:
             return data.get("data", data.get("success", {}))
         elif data["code"] == self.IP_ERROR_CODE:

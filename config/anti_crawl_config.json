@@ -133,5 +133,35 @@
     "_retry_failed_desc": "是否自动重试之前失败的记录",
     "_use_sqlite_desc": "使用SQLite存储进度(适合>10万条数据)，false则用JSON",
     "_性能说明": "查找使用Set哈希集合，复杂度O(1)，比二分法O(log n)更快"
+  },
+
+  "batch_crawl": {
+    "enabled": false,
+    "excel_path": "/Users/yc/Desktop/program/python/MediaCrawler/redbookaccontidandresult.xlsx",
+    "max_notes_per_creator": 3000,
+    "enable_comments": false,
+    "wait_between_creators_sec": 10,
+    "resume": true,
+    "min_interaction": 50,
+    "export_format": "excel",
+    "export_dir": "/Users/yc/Desktop/program/python/MediaCrawler/data/xiaohongshu/excel",
+    "_enabled_desc": "是否启用批量爬取模式",
+    "_excel_path_desc": "excel作者链接路径",
+    "_max_notes_per_creator_desc": "每个作者最多爬取多少条笔记",
+    "_wait_between_creators_sec_desc": "作者之间的等待时间（秒）",
+    "_min_interaction_desc": "互动量过滤阈值（点赞+评论+收藏），低于此值不保存，0=不过滤",
+    "_export_format_desc": "导出格式: excel/json/csv",
+    "_export_dir_desc": "导出文件保存目录"
+  },
+
+  "feishu": {
+    "enabled": false,
+    "app_id": "",
+    "app_secret": "",
+    "folder_token": "",
+    "_enabled_desc": "是否在爬取完成后自动写入飞书多维表格",
+    "_app_id_desc": "飞书开放平台 App ID",
+    "_app_secret_desc": "飞书开放平台 App Secret",
+    "_folder_token_desc": "飞书文件夹 token（可选，为空则创建在根目录）"
   }
 }
