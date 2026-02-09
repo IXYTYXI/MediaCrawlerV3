@@ -107,6 +107,23 @@ def get_interaction_count(note: Dict) -> int:
     return liked + comment + collected
 
 
+def _note_completeness(n: Dict) -> int:
+    """评估记录完整度：有详情的 > 只有基本信息的"""
+    score = 0
+    if n.get("desc"):
+        score += 10
+    if n.get("title") and len(str(n.get("title", ""))) > 10:
+        score += 5
+    score += _safe_int(n.get("liked_count", 0))
+    score += _safe_int(n.get("collected_count", 0))
+    score += _safe_int(n.get("comment_count", 0))
+    if n.get("tag_list"):
+        score += 3
+    if n.get("image_list") and len(str(n.get("image_list", ""))) > 20:
+        score += 2
+    return score
+
+
 def collect_crawled_data(data_dir: str, session_timestamp: str,
                          creator_name: str = "",
                          min_interaction: int = 0) -> List[Dict]:
@@ -644,24 +661,8 @@ async def run_batch_crawl(
                     if not note_id:
                         continue
                     
-                    # 判断记录完整度：有 desc 且有互动数据的更完整
-                    def _completeness(n):
-                        score = 0
-                        if n.get("desc"):
-                            score += 10
-                        if n.get("title") and len(str(n.get("title", ""))) > 10:
-                            score += 5
-                        score += _safe_int(n.get("liked_count", 0))
-                        score += _safe_int(n.get("collected_count", 0))
-                        score += _safe_int(n.get("comment_count", 0))
-                        if n.get("tag_list"):
-                            score += 3
-                        if n.get("image_list") and len(str(n.get("image_list", ""))) > 20:
-                            score += 2
-                        return score
-                    
                     # 保留更完整的记录
-                    if note_id not in notes_by_id or _completeness(item) > _completeness(notes_by_id[note_id]):
+                    if note_id not in notes_by_id or _note_completeness(item) > _note_completeness(notes_by_id[note_id]):
                         notes_by_id[note_id] = item
             except Exception:
                 pass
@@ -779,19 +780,8 @@ def _run_export_only(excel_path: str, min_interaction: int = 50,
                 if not note_id:
                     continue
 
-                # 完整度评分：有详情的优先于只有基本信息的
-                def _score(n):
-                    s = 0
-                    if n.get("desc"): s += 10
-                    if n.get("title") and len(str(n.get("title", ""))) > 10: s += 5
-                    s += _safe_int(n.get("liked_count", 0))
-                    s += _safe_int(n.get("collected_count", 0))
-                    s += _safe_int(n.get("comment_count", 0))
-                    if n.get("tag_list"): s += 3
-                    return s
-
                 if note_id in notes_by_id:
-                    if _score(item) > _score(notes_by_id[note_id]):
+                    if _note_completeness(item) > _note_completeness(notes_by_id[note_id]):
                         notes_by_id[note_id] = item
                     duplicates += 1
                 else:
@@ -910,10 +900,23 @@ def main():
     except Exception:
         pass
 
+    # 从配置文件读取 Excel 路径（命令行优先）
+    excel_path = args.excel
+    try:
+        if excel_path == "redbookaccontidandresult.xlsx":
+            config_path = os.path.join("config", "anti_crawl_config.json")
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg_data = json.load(f)
+            config_excel = cfg_data.get("batch_crawl", {}).get("excel_path", "")
+            if config_excel and os.path.exists(config_excel):
+                excel_path = config_excel
+    except Exception:
+        pass
+
     # --export-only 模式：只导出已有数据，不爬取
     if args.export_only:
         _run_export_only(
-            excel_path=args.excel,
+            excel_path=excel_path,
             min_interaction=min_interaction,
             export_format=export_format,
             export_dir=export_dir,
@@ -922,7 +925,7 @@ def main():
 
     async def _run():
         await run_batch_crawl(
-            excel_path=args.excel,
+            excel_path=excel_path,
             skip_feishu=args.skip_feishu,
             feishu_app_id=feishu_app_id,
             feishu_app_secret=feishu_app_secret,

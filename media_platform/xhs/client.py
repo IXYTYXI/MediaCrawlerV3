@@ -110,6 +110,29 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         self.headers.update(headers)
         return self.headers
 
+    async def _handle_rate_limit(self):
+        """处理访问频繁限流：递增等待"""
+        import random
+        if not hasattr(self, '_rate_limit_count'):
+            self._rate_limit_count = 0
+        self._rate_limit_count += 1
+
+        wait_ranges = {1: (240, 300), 2: (480, 600), 3: (900, 1200)}
+        low, high = wait_ranges.get(self._rate_limit_count, (1500, 1800))
+        wait_sec = random.uniform(low, high)
+
+        utils.logger.warning(
+            f"[XiaoHongShuClient] 触发访问频繁限流 (第{self._rate_limit_count}次)，"
+            f"等待 {wait_sec:.0f} 秒（约{wait_sec/60:.1f}分钟）后继续..."
+        )
+        await asyncio.sleep(wait_sec)
+        utils.logger.info("[XiaoHongShuClient] 限流等待结束，继续爬取")
+
+    def _reset_rate_limit(self):
+        """请求成功后重置限流计数"""
+        if hasattr(self, '_rate_limit_count') and self._rate_limit_count > 0:
+            self._rate_limit_count = 0
+
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     async def request(self, method, url, **kwargs) -> Union[str, Any]:
         """
@@ -139,29 +162,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
 
             # 检测"访问频繁"类限流，递增等待后重试
             if "300013" in resp_text or "访问频繁" in resp_text or "300012" in resp_text:
-                import asyncio
-                import random
-
-                # 递增等待：第1次 4~5分钟，第2次 8~10分钟，第3次 15~20分钟，最多30分钟
-                if not hasattr(self, '_rate_limit_count'):
-                    self._rate_limit_count = 0
-                self._rate_limit_count += 1
-
-                if self._rate_limit_count == 1:
-                    wait_sec = random.uniform(240, 300)   # 4~5 分钟
-                elif self._rate_limit_count == 2:
-                    wait_sec = random.uniform(480, 600)   # 8~10 分钟
-                elif self._rate_limit_count == 3:
-                    wait_sec = random.uniform(900, 1200)  # 15~20 分钟
-                else:
-                    wait_sec = random.uniform(1500, 1800)  # 25~30 分钟
-
-                utils.logger.warning(
-                    f"[XiaoHongShuClient] 触发访问频繁限流 (第{self._rate_limit_count}次)，"
-                    f"等待 {wait_sec:.0f} 秒（约{wait_sec/60:.1f}分钟）后继续..."
-                )
-                await asyncio.sleep(wait_sec)
-                utils.logger.info("[XiaoHongShuClient] 限流等待结束，继续爬取")
+                await self._handle_rate_limit()
 
             raise DataFetchError(msg)
 
@@ -172,34 +173,12 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         # 访问频繁 / 反爬限流（code=300013 等）
         rate_limit_codes = {300013, 300012, 300014}
         if data.get("code") in rate_limit_codes:
-            import asyncio
-            import random
-            if not hasattr(self, '_rate_limit_count'):
-                self._rate_limit_count = 0
-            self._rate_limit_count += 1
-
-            if self._rate_limit_count == 1:
-                wait_sec = random.uniform(240, 300)
-            elif self._rate_limit_count == 2:
-                wait_sec = random.uniform(480, 600)
-            elif self._rate_limit_count == 3:
-                wait_sec = random.uniform(900, 1200)
-            else:
-                wait_sec = random.uniform(1500, 1800)
-
             msg = data.get("msg", "访问频繁")
-            utils.logger.warning(
-                f"[XiaoHongShuClient] 触发反爬限流 (code={data['code']}, 第{self._rate_limit_count}次): {msg}, "
-                f"等待 {wait_sec:.0f} 秒（约{wait_sec/60:.1f}分钟）后继续..."
-            )
-            await asyncio.sleep(wait_sec)
-            utils.logger.info("[XiaoHongShuClient] 限流等待结束，继续爬取")
+            await self._handle_rate_limit()
             raise DataFetchError(f"Rate limited: {msg}")
 
         if data["success"]:
-            # 请求成功，重置限流计数
-            if hasattr(self, '_rate_limit_count') and self._rate_limit_count > 0:
-                self._rate_limit_count = 0
+            self._reset_rate_limit()
             return data.get("data", data.get("success", {}))
         elif data["code"] == self.IP_ERROR_CODE:
             raise IPBlockError(self.IP_ERROR_STR)

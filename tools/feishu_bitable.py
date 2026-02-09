@@ -308,11 +308,21 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     if isinstance(image_list, list):
         image_list = ", ".join(image_list)
 
-    # 视频脚本：视频类型取正文内容
-    video_script = note_data.get("desc", "") if note_type == "video" else ""
+    # 视频脚本：留空（后续通过AI分析视频生成）
+    video_script = ""
 
     # 链接
     note_url = note_data.get("note_url", "")
+
+    # 互动数据
+    def _safe_int(v):
+        if v is None or v == "": return 0
+        try: return int(v)
+        except: return 0
+
+    liked = _safe_int(note_data.get("liked_count", 0))
+    collected = _safe_int(note_data.get("collected_count", 0))
+    comment = _safe_int(note_data.get("comment_count", 0))
 
     fields: Dict[str, Any] = {
         "账号名称": creator_name,
@@ -322,6 +332,10 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         "标签": note_data.get("tag_list", ""),
         "链接": {"link": note_url, "text": note_url} if note_url else "",
         "发布时间": str(time_val),
+        "点赞数": str(liked),
+        "收藏数": str(collected),
+        "评论数": str(comment),
+        "互动量": str(liked + collected + comment),
         "图片": image_list,
         "视频脚本": video_script,
     }
