@@ -28,7 +28,7 @@ from tools.excel_reader import ExcelCreatorReader, load_creators_from_excel
 class BatchProgress:
     """批量爬取进度管理（记录已完成的作者）"""
 
-    def __init__(self, progress_file: str = "data/batch_progress.json"):
+    def __init__(self, progress_file: str = "data/batch_progress.json", task_id: str = ""):
         self.progress_file = progress_file
         self._completed: Set[str] = set()  # 已完成的作者 URL
         self._failed: Dict[str, str] = {}  # 失败记录 {url: error_msg}
@@ -660,8 +660,23 @@ async def run_batch_crawl(
 
     utils.logger.info(f"[BatchCrawler] 共 {len(creators)} 个作者待爬取")
 
-    # 2. 初始化进度管理
-    progress = BatchProgress()
+    # 2. 读取任务ID
+    task_id = ""
+    try:
+        config_path_tid = os.path.join("config", "anti_crawl_config.json")
+        with open(config_path_tid, "r", encoding="utf-8") as f:
+            cfg_tid = json.load(f)
+        task_id = cfg_tid.get("batch_crawl", {}).get("task_id", "")
+    except Exception:
+        pass
+    if not task_id:
+        task_id = datetime.now().strftime("task_%Y%m%d")
+
+    utils.logger.info(f"[BatchCrawler] 任务ID: {task_id}")
+
+    # 初始化进度管理（按任务ID区分）
+    progress_file = f"data/batch_progress_{task_id}.json"
+    progress = BatchProgress(progress_file=progress_file, task_id=task_id)
     if not resume:
         progress.reset()
 

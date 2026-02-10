@@ -137,6 +137,8 @@
 
   "batch_crawl": {
     "enabled": false,
+    "task_id": "task_20260210",
+    "_task_id_desc": "任务ID，不同任务的进度和数据互相独立，新任务改个新ID即可",
     "excel_path": "/Users/yc/Desktop/program/python/MediaCrawler/redbookaccontidandresult.xlsx",
     "max_notes_per_creator": 3000,
     "enable_comments": false,
