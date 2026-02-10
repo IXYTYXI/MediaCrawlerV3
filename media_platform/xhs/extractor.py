@@ -56,7 +56,7 @@ class XiaoHongShuExtractor:
             html (str): HTML string
 
         Returns:
-            Dict: User information dictionary
+            Dict: User information dictionary (with extra _notes_count if available)
         """
         match = re.search(
             r"<script>window.__INITIAL_STATE__=(.+)<\/script>", html, re.M
@@ -66,4 +66,11 @@ class XiaoHongShuExtractor:
         info = json.loads(match.group(1).replace(":undefined", ":null"), strict=False)
         if info is None:
             return None
-        return info.get("user").get("userPageData")
+
+        user_page_data = info.get("user", {}).get("userPageData")
+        if user_page_data is None:
+            return None
+
+        # 注：小红书 HTML 不提供总笔记数，无法获取精确进度
+
+        return user_page_data

@@ -191,11 +191,237 @@ class FeishuBitableClient:
 
         return total_inserted
 
+    def list_fields(self, app_token: str, table_id: str) -> List[Dict]:
+        """列出数据表的所有字段"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields"
+        data = self._request("GET", url)
+        return data.get("items", [])
+
+    def delete_field(self, app_token: str, table_id: str, field_id: str):
+        """删除字段"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}"
+        self._request("DELETE", url)
+
+    def list_records(self, app_token: str, table_id: str, page_size: int = 100) -> List[Dict]:
+        """列出记录"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records"
+        data = self._request("GET", url, params={"page_size": page_size})
+        return data.get("items", [])
+
+    def batch_delete_records(self, app_token: str, table_id: str, record_ids: List[str]):
+        """批量删除记录"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete"
+        self._request("POST", url, json={"records": record_ids})
+
+    def update_field(self, app_token: str, table_id: str, field_id: str,
+                     field_name: str, field_type: int = 1):
+        """更新字段名称/类型"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}"
+        body = {"field_name": field_name, "type": field_type}
+        self._request("PUT", url, json=body)
+
+    def cleanup_default_fields_and_records(self, app_token: str, table_id: str, keep_field_names: set):
+        """清理默认字段和空记录，主字段改为序号"""
+        # 删除默认空记录
+        try:
+            records = self.list_records(app_token, table_id)
+            if records:
+                record_ids = [r["record_id"] for r in records]
+                self.batch_delete_records(app_token, table_id, record_ids)
+                utils.logger.info(f"[FeishuBitable] 删除 {len(record_ids)} 条默认空记录")
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 删除默认记录失败: {e}")
+
+        # 处理默认字段
+        try:
+            fields = self.list_fields(app_token, table_id)
+            for field in fields:
+                if not field or not isinstance(field, dict):
+                    continue
+                fname = field.get("field_name", "")
+                fid = field.get("field_id", "")
+                if not fid:
+                    continue
+                if fname in keep_field_names:
+                    continue
+                # 主字段不能删除，改名为"序号"
+                is_primary = field.get("is_primary", False) or (field.get("property") or {}).get("is_primary", False)
+                if is_primary:
+                    try:
+                        self.update_field(app_token, table_id, fid, "序号", 1)
+                        utils.logger.info(f"[FeishuBitable] 主字段改名: {fname} → 序号")
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.delete_field(app_token, table_id, fid)
+                        utils.logger.info(f"[FeishuBitable] 删除默认字段: {fname}")
+                    except Exception:
+                        pass
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 清理默认字段失败: {e}")
+
+    def create_view(self, app_token: str, table_id: str,
+                    view_name: str, view_type: str = "grid",
+                    filter_conditions: List[Dict] = None,
+                    filter_conjunction: str = "and") -> str:
+        """
+        创建视图并设置筛选条件
+        
+        Args:
+            app_token: 多维表格 token
+            table_id: 数据表 ID
+            view_name: 视图名称
+            view_type: 视图类型 (grid=表格, kanban=看板, gallery=画册)
+            filter_conditions: 筛选条件列表
+            filter_conjunction: 条件关系 (and/or)
+            
+        Returns:
+            view_id
+        """
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/views"
+        body = {"view_name": view_name, "view_type": view_type}
+        data = self._request("POST", url, json=body)
+        view_id = data.get("view", {}).get("view_id", "")
+        utils.logger.info(f"[FeishuBitable] 创建视图: {view_name} (id={view_id})")
+
+        # 设置筛选条件
+        if filter_conditions and view_id:
+            filter_url = f"{url}/{view_id}"
+            filter_body = {
+                "view_name": view_name,
+                "property": {
+                    "filter_info": {
+                        "conjunction": filter_conjunction,
+                        "conditions": filter_conditions,
+                    }
+                }
+            }
+            try:
+                self._request("PATCH", filter_url, json=filter_body)
+                utils.logger.info(f"[FeishuBitable] 视图筛选条件已设置")
+            except Exception as e:
+                utils.logger.warning(f"[FeishuBitable] 设置视图筛选失败: {e}")
+
+        return view_id
+
     def list_tables(self, app_token: str) -> List[Dict]:
         """列出多维表格中的所有数据表"""
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables"
         data = self._request("GET", url)
         return data.get("items", [])
+
+    # ==================== 媒体上传 ====================
+
+    def upload_media(self, app_token: str, file_path: str,
+                     file_name: str = "", parent_type: str = "bitable_file",
+                     ) -> str:
+        """
+        上传文件到飞书，获取 file_token
+        
+        Args:
+            app_token: 多维表格 token（作为 parent_node）
+            file_path: 本地文件路径
+            file_name: 文件名（为空则从路径提取）
+            parent_type: 父节点类型
+            
+        Returns:
+            file_token
+        """
+        import os
+        if not file_name:
+            file_name = os.path.basename(file_path)
+
+        file_size = os.path.getsize(file_path)
+        url = f"{self.BASE_URL}/drive/v1/medias/upload_all"
+        headers = {"Authorization": f"Bearer {self._get_tenant_access_token()}"}
+
+        with open(file_path, "rb") as f:
+            files = {
+                "file_name": (None, file_name),
+                "parent_type": (None, parent_type),
+                "parent_node": (None, app_token),
+                "size": (None, str(file_size)),
+                "file": (file_name, f, "application/octet-stream"),
+            }
+            resp = self._client.post(url, headers=headers, files=files)
+
+        data = resp.json()
+        if data.get("code") != 0:
+            raise Exception(f"上传文件失败: {data.get('msg')}")
+
+        file_token = data.get("data", {}).get("file_token", "")
+        return file_token
+
+    def upload_image_from_url(self, app_token: str, image_url: str,
+                               temp_dir: str = "/tmp/feishu_images") -> str:
+        """
+        从URL下载图片并上传到飞书
+        
+        Args:
+            app_token: 多维表格 token
+            image_url: 图片URL
+            temp_dir: 临时下载目录
+            
+        Returns:
+            file_token（失败返回空字符串）
+        """
+        import os
+        import hashlib
+        os.makedirs(temp_dir, exist_ok=True)
+
+        try:
+            # 下载图片（小红书CDN需要Referer头防403）
+            download_headers = {
+                "Referer": "https://www.xiaohongshu.com/",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            }
+            resp = self._client.get(
+                image_url, timeout=30.0, follow_redirects=True,
+                headers=download_headers
+            )
+            if resp.status_code != 200:
+                utils.logger.warning(
+                    f"[FeishuBitable] 图片下载失败 HTTP {resp.status_code}: {image_url[:80]}"
+                )
+                return ""
+
+            # 用URL hash作文件名
+            url_hash = hashlib.md5(image_url.encode()).hexdigest()[:12]
+            content_type = resp.headers.get("content-type", "image/jpeg")
+            ext = ".jpg"
+            if "png" in content_type:
+                ext = ".png"
+            elif "webp" in content_type:
+                ext = ".webp"
+            elif "gif" in content_type:
+                ext = ".gif"
+
+            file_path = os.path.join(temp_dir, f"{url_hash}{ext}")
+            with open(file_path, "wb") as f:
+                f.write(resp.content)
+
+            # 上传到飞书
+            file_token = self.upload_media(app_token, file_path)
+
+            # 清理临时文件
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+            return file_token
+
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 图片处理失败: {e}")
+            return ""
+
+    def update_record(self, app_token: str, table_id: str,
+                      record_id: str, fields: Dict[str, Any]):
+        """更新单条记录"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
+        body = {"fields": fields}
+        self._request("PUT", url, json=body)
 
     def close(self):
         self._client.close()
@@ -303,16 +529,29 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         except Exception:
             time_val = str(time_val)
 
-    # 图片列表
-    image_list = note_data.get("image_list", "")
-    if isinstance(image_list, list):
-        image_list = ", ".join(image_list)
-
-    # 视频脚本：视频类型取正文内容
-    video_script = note_data.get("desc", "") if note_type == "video" else ""
+    # 图片拆分为独立字段
+    image_raw = note_data.get("image_list", "")
+    if isinstance(image_raw, list):
+        image_urls = [url for url in image_raw if url and str(url).startswith("http")]
+    elif image_raw:
+        image_urls = [url.strip() for url in str(image_raw).split(",") if url.strip().startswith("http")]
+    else:
+        image_urls = []
 
     # 链接
     note_url = note_data.get("note_url", "")
+
+    # 互动数据
+    def _safe_int(v):
+        if v is None or v == "": return 0
+        try: return int(v)
+        except: return 0
+
+    liked = _safe_int(note_data.get("liked_count", 0))
+    collected = _safe_int(note_data.get("collected_count", 0))
+    comment = _safe_int(note_data.get("comment_count", 0))
+    interaction = liked + collected + comment
+    is_hot = "🔥 热门" if interaction >= 50 else ""
 
     fields: Dict[str, Any] = {
         "账号名称": creator_name,
@@ -322,8 +561,22 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         "标签": note_data.get("tag_list", ""),
         "链接": {"link": note_url, "text": note_url} if note_url else "",
         "发布时间": str(time_val),
-        "图片": image_list,
-        "视频脚本": video_script,
+        "点赞数": str(liked),
+        "收藏数": str(collected),
+        "评论数": str(comment),
+        "互动量": str(interaction),
+        "热门": is_hot,
+        "视频脚本": "",
     }
+
+    # 附件字段（预留，后续存视频文件）
+    # 注：附件类型字段不能写字符串，留空不写入
+    
+    # 动态图片字段
+    for i, url in enumerate(image_urls, 1):
+        fields[f"图片{i}"] = url
+
+    # 序号字段（由外部在批量写入时填充）
+    fields["序号"] = ""
 
     return {"fields": fields}

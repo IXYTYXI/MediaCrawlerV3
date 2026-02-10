@@ -38,8 +38,8 @@
   
   "随机等待策略": {
     "enabled": true,
-    "min_sec": 5.0,
-    "max_sec": 10.0,
+    "min_sec": 8.0,
+    "max_sec": 23.0,
     "distribution": "lognormal",
     "_distribution_options": ["uniform", "normal", "lognormal"],
     "_说明": "distribution: uniform=均匀分布, normal=正态分布, lognormal=对数正态分布(推荐)"
@@ -137,14 +137,23 @@
 
   "batch_crawl": {
     "enabled": false,
-    "excel_path": "/Users/yc/Desktop/program/python/MediaCrawler/redbookaccontidandresult.xlsx",
+    "task_id": "task_20260210",
+    "_task_id_desc": "任务ID，不同任务的进度和数据互相独立，新任务改个新ID即可",
+    "reuse_history": true,
+    "_reuse_history_desc": "是否复用历史已爬数据: true=已爬完的作者直接复用不再爬取, false=全部重新爬取",
+    "excel_path": "redbookaccontidandresult.xlsx",
     "max_notes_per_creator": 3000,
     "enable_comments": false,
     "wait_between_creators_sec": 10,
     "resume": true,
     "min_interaction": 50,
+    "crawl_mode": "date_range",
+    "_crawl_mode_desc": "爬取模式: full=全量爬取, date_range=指定日期范围爬取",
+    "date_start": "2025-01-01",
+    "date_end": "2026-02-10",
+    "_date_desc": "日期范围，格式YYYY-MM-DD，仅crawl_mode=date_range时生效，留空=不限制",
     "export_format": "excel",
-    "export_dir": "/Users/yc/Desktop/program/python/MediaCrawler/data/xiaohongshu/excel",
+    "export_dir": "data/xiaohongshu/excel",
     "_enabled_desc": "是否启用批量爬取模式",
     "_excel_path_desc": "excel作者链接路径",
     "_max_notes_per_creator_desc": "每个作者最多爬取多少条笔记",
@@ -154,11 +163,42 @@
     "_export_dir_desc": "导出文件保存目录"
   },
 
+  "parallel": {
+    "mode": "single",
+    "_mode_desc": "运行模式: single=单线程, multi=多线程同IP, multi_proxy=多线程+独立代理",
+    "workers": [
+      {
+        "name": "worker_1",
+        "cookie_dir": "browser_data/cdp_xhs_user_data_dir",
+        "proxy": "",
+        "_desc": "默认worker，无代理，使用当前Cookie"
+      },
+      {
+        "name": "worker_2",
+        "cookie_dir": "browser_data/cdp_xhs_account_2",
+        "proxy": "http://127.0.0.1:7890",
+        "_desc": "第2个账号，走Clash Party代理"
+      },
+      {
+        "name": "worker_3",
+        "cookie_dir": "browser_data/cdp_xhs_account_3",
+        "proxy": "http://127.0.0.1:7891",
+        "_desc": "第3个账号，走Clash Verge代理"
+      }
+    ],
+    "wait_sec_per_worker": 8,
+    "_wait_sec_desc": "每个worker的请求间隔（秒），多线程时可降低"
+  },
+
   "feishu": {
-    "enabled": false,
-    "app_id": "",
-    "app_secret": "",
-    "folder_token": "",
+    "enabled": true,
+    "image_mode": "image",
+    "_image_mode_desc": "图片写入模式: link=写入链接文本, image=下载图片上传为附件显示缩略图",
+    "image_threads": 2,
+    "_image_threads_desc": "图片上传并发线程数(仅image模式)",
+    "app_id": "cli_a9006c0b96395bd3",
+    "app_secret": "tul9PNh3aSjIbcqcoB25vh8HLYP2HmPx",
+    "folder_token": "LLTwf1fRUl3tH9dxr2PcMqplnAh",
     "_enabled_desc": "是否在爬取完成后自动写入飞书多维表格",
     "_app_id_desc": "飞书开放平台 App ID",
     "_app_secret_desc": "飞书开放平台 App Secret",

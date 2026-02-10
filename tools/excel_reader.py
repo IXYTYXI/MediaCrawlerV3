@@ -50,7 +50,7 @@ class ExcelCreatorReader:
         for idx, h in enumerate(headers):
             if "名称" in h or "name" in h.lower():
                 col_map["name"] = idx
-            elif h.upper() == "ID" or "账号" in h and "链接" not in h:
+            elif h.upper() == "ID" or ("账号" in h and "链接" not in h):
                 col_map["id"] = idx
             elif "链接" in h or "url" in h.lower() or "主页" in h:
                 col_map["url"] = idx
