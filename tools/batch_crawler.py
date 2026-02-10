@@ -1299,7 +1299,12 @@ async def run_batch_crawl(
                     utils.logger.warning(f"[BatchCrawler] 关闭浏览器异常: {close_err}")
                 try:
                     import subprocess
-                    subprocess.run(["pkill", "-f", "Google Chrome Dev"], capture_output=True, timeout=5)
+                    import platform
+                    if platform.system() == "Darwin":
+                        subprocess.run(["pkill", "-f", "Google Chrome Dev"], capture_output=True, timeout=5)
+                    else:
+                        # Linux: Playwright 使用的 Chromium 进程
+                        subprocess.run(["pkill", "-f", "chromium"], capture_output=True, timeout=5)
                     await asyncio.sleep(2)
                 except Exception:
                     pass
