@@ -295,6 +295,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 )
                 if createor_info:
                     await xhs_store.save_creator(user_id, creator=createor_info)
+                    nickname = createor_info.get("basicInfo", {}).get("nickname", user_id)
+                    utils.logger.info(f"[作者信息] {nickname}")
             except ValueError as e:
                 utils.logger.error(f"[XiaoHongShuCrawler] 解析作者URL失败: {e}")
                 continue
@@ -464,7 +466,9 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         progress_manager.add_crawled(note_id)
                     self._new_crawled_ids.add(note_id)
                     
-                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}...")
+                    # 进度显示
+                    crawled_so_far = len(getattr(self, '_new_crawled_ids', set())) + len(crawled_ids)
+                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}... [累计: {crawled_so_far}]")
                     
                     # ========== 并行模式：启动评论获取任务 ==========
                     if is_parallel_mode and note_id not in self._comment_crawled_ids:

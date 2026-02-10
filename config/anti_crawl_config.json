@@ -38,8 +38,8 @@
   
   "随机等待策略": {
     "enabled": true,
-    "min_sec": 5.0,
-    "max_sec": 10.0,
+    "min_sec": 8.0,
+    "max_sec": 23.0,
     "distribution": "lognormal",
     "_distribution_options": ["uniform", "normal", "lognormal"],
     "_说明": "distribution: uniform=均匀分布, normal=正态分布, lognormal=对数正态分布(推荐)"

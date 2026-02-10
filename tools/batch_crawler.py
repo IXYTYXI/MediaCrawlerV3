@@ -189,12 +189,22 @@ def collect_crawled_data(data_dir: str, session_timestamp: str,
 
 # ==================== 格式化导出 ====================
 
+def _parse_image_urls(image_list_raw) -> List[str]:
+    """解析图片URL列表"""
+    if not image_list_raw:
+        return []
+    if isinstance(image_list_raw, list):
+        return [url for url in image_list_raw if url and str(url).startswith("http")]
+    # 逗号分隔的字符串
+    return [url.strip() for url in str(image_list_raw).split(",") if url.strip().startswith("http")]
+
+
 def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
     """
     将笔记数据格式化为导出字段格式
     
     输出字段: 账号名称 | 内容类型 | 标题 | 正文 | 标签 | 链接 | 发布时间 |
-              点赞数 | 收藏数 | 评论数 | 互动量 | 图片 | 视频脚本
+              点赞数 | 收藏数 | 评论数 | 互动量 | 视频脚本 | 图片1 | 图片2 | ...
     """
     note_type = note.get("type", "")
     content_type = "视频" if note_type == "video" else "图片"
@@ -207,10 +217,8 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
         except Exception:
             time_val = str(time_val)
 
-    # 图片
-    image_list = note.get("image_list", "")
-    if isinstance(image_list, list):
-        image_list = "\n".join(image_list)
+    # 图片拆分为独立字段
+    image_urls = _parse_image_urls(note.get("image_list", ""))
 
     # 视频脚本：留空（后续通过AI分析视频生成）
     video_script = ""
@@ -221,7 +229,7 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
     comment = _safe_int(note.get("comment_count", 0))
     interaction = liked + collected + comment
 
-    return {
+    result = {
         "账号名称": creator_name or note.get("nickname", ""),
         "内容类型": content_type,
         "标题": note.get("title", ""),
@@ -233,9 +241,24 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
         "收藏数": collected,
         "评论数": comment,
         "互动量": interaction,
-        "图片": image_list,
         "视频脚本": video_script,
     }
+
+    # 动态图片列：图片1, 图片2, ...
+    for i, url in enumerate(image_urls, 1):
+        result[f"图片{i}"] = url
+
+    return result
+
+
+def _get_max_image_count(notes: List[Dict]) -> int:
+    """扫描所有笔记，获取最大图片数"""
+    max_count = 0
+    for note in notes:
+        urls = _parse_image_urls(note.get("image_list", ""))
+        if len(urls) > max_count:
+            max_count = len(urls)
+    return max_count
 
 
 def export_to_local(notes: List[Dict], export_dir: str = "data/export",
@@ -270,9 +293,14 @@ def export_to_local(notes: List[Dict], export_dir: str = "data/export",
             grouped[creator_name] = []
         grouped[creator_name].append(note)
 
-    # 字段顺序（对应 Excel Sheet2 的定义）
+    # 扫描最大图片数，动态生成列
+    max_images = _get_max_image_count(notes)
+    image_columns = [f"图片{i}" for i in range(1, max_images + 1)]
+
+    # 字段顺序：视频脚本在图片列前面
     columns = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
-               "发布时间", "点赞数", "收藏数", "评论数", "互动量", "图片", "视频脚本"]
+               "发布时间", "点赞数", "收藏数", "评论数", "互动量",
+               "视频脚本"] + image_columns
 
     if export_format == "excel":
         filepath = os.path.join(export_dir, f"{filename_prefix}_{timestamp}.xlsx")
@@ -325,8 +353,12 @@ def _export_excel_multi_sheet(grouped: Dict[str, List[Dict]],
         "账号名称": 18, "内容类型": 10, "标题": 30, "正文": 50,
         "标签": 25, "链接": 40, "发布时间": 20,
         "点赞数": 10, "收藏数": 10, "评论数": 10, "互动量": 10,
-        "图片": 40, "视频脚本": 40,
+        "视频脚本": 30,
     }
+    # 图片列统一宽度
+    for c in columns:
+        if c.startswith("图片"):
+            col_widths[c] = 45
 
     for creator_name, creator_notes in grouped.items():
         # Sheet 名称（Excel 限制 31 字符，不能含特殊字符）
