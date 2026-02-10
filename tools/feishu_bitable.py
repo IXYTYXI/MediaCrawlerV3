@@ -236,19 +236,25 @@ class FeishuBitableClient:
         try:
             fields = self.list_fields(app_token, table_id)
             for field in fields:
+                if not field or not isinstance(field, dict):
+                    continue
                 fname = field.get("field_name", "")
+                fid = field.get("field_id", "")
+                if not fid:
+                    continue
                 if fname in keep_field_names:
                     continue
-                if field.get("is_primary") or field.get("property", {}).get("is_primary"):
-                    # 主字段不能删除，改名为"序号"
+                # 主字段不能删除，改名为"序号"
+                is_primary = field.get("is_primary", False) or (field.get("property") or {}).get("is_primary", False)
+                if is_primary:
                     try:
-                        self.update_field(app_token, table_id, field["field_id"], "序号", 1)
+                        self.update_field(app_token, table_id, fid, "序号", 1)
                         utils.logger.info(f"[FeishuBitable] 主字段改名: {fname} → 序号")
                     except Exception:
                         pass
                 else:
                     try:
-                        self.delete_field(app_token, table_id, field["field_id"])
+                        self.delete_field(app_token, table_id, fid)
                         utils.logger.info(f"[FeishuBitable] 删除默认字段: {fname}")
                     except Exception:
                         pass
@@ -407,6 +413,9 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         "视频脚本": "",
     }
 
+    # 附件字段（预留，后续存视频文件）
+    # 注：附件类型字段不能写字符串，留空不写入
+    
     # 动态图片字段
     for i, url in enumerate(image_urls, 1):
         fields[f"图片{i}"] = url
