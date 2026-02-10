@@ -478,30 +478,43 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             bitable_url = result["url"]
             utils.logger.info(f"[BatchCrawler] 创建多维表格: {bitable_name}")
 
-            # 2. 获取默认数据表（创建多维表格时自动创建了一个）
-            tables = client.list_tables(app_token)
-            if tables:
-                table_id = tables[0]["table_id"]
-                # 为默认表添加字段
-                feishu_fields = build_feishu_fields(field_defs)
-                for field in feishu_fields:
-                    try:
-                        client.add_field(app_token, table_id,
-                                         field["field_name"], field["type"])
-                    except Exception as e:
-                        # 字段可能已存在
-                        utils.logger.warning(f"[BatchCrawler] 添加字段失败 ({field['field_name']}): {e}")
-            else:
-                # 创建新数据表
-                feishu_fields = build_feishu_fields(field_defs)
-                table_id = client.create_table(app_token, "爬取数据", feishu_fields)
-
-            # 3. 构建记录
+            # 2. 构建记录（先构建，才能知道需要哪些字段）
             records = []
+            all_field_names = set()
             for note in notes:
                 creator_name = note.get("_creator_name", note.get("nickname", ""))
                 record = map_note_to_feishu_record(creator_name, note)
                 records.append(record)
+                all_field_names.update(record.get("fields", {}).keys())
+
+            # 3. 获取默认数据表，创建所有需要的字段
+            tables = client.list_tables(app_token)
+            if tables:
+                table_id = tables[0]["table_id"]
+            else:
+                table_id = client.create_table(app_token, "爬取数据", [])
+
+            # 按固定顺序创建字段（与Excel导出一致）
+            ordered_fields = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
+                              "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门", "视频脚本"]
+            # 图片字段按数字排序
+            image_fields = sorted(
+                [f for f in all_field_names if f.startswith("图片")],
+                key=lambda x: int(x.replace("图片", "") or "0")
+            )
+            ordered_fields.extend(image_fields)
+            # 补充其他未列出的字段
+            for f in all_field_names:
+                if f not in ordered_fields:
+                    ordered_fields.append(f)
+
+            url_fields = {"链接"}
+            for field_name in ordered_fields:
+                field_type = 15 if field_name in url_fields else 1
+                try:
+                    client.add_field(app_token, table_id, field_name, field_type)
+                except Exception as e:
+                    pass  # 字段可能已存在
 
             # 4. 批量写入
             inserted = client.batch_insert_records(app_token, table_id, records)

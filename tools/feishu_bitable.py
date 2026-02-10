@@ -303,13 +303,14 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         except Exception:
             time_val = str(time_val)
 
-    # 图片列表
-    image_list = note_data.get("image_list", "")
-    if isinstance(image_list, list):
-        image_list = ", ".join(image_list)
-
-    # 视频脚本：留空（后续通过AI分析视频生成）
-    video_script = ""
+    # 图片拆分为独立字段
+    image_raw = note_data.get("image_list", "")
+    if isinstance(image_raw, list):
+        image_urls = [url for url in image_raw if url and str(url).startswith("http")]
+    elif image_raw:
+        image_urls = [url.strip() for url in str(image_raw).split(",") if url.strip().startswith("http")]
+    else:
+        image_urls = []
 
     # 链接
     note_url = note_data.get("note_url", "")
@@ -323,6 +324,8 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     liked = _safe_int(note_data.get("liked_count", 0))
     collected = _safe_int(note_data.get("collected_count", 0))
     comment = _safe_int(note_data.get("comment_count", 0))
+    interaction = liked + collected + comment
+    is_hot = "🔥 热门" if interaction >= 50 else ""
 
     fields: Dict[str, Any] = {
         "账号名称": creator_name,
@@ -335,9 +338,13 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         "点赞数": str(liked),
         "收藏数": str(collected),
         "评论数": str(comment),
-        "互动量": str(liked + collected + comment),
-        "图片": image_list,
-        "视频脚本": video_script,
+        "互动量": str(interaction),
+        "热门": is_hot,
+        "视频脚本": "",
     }
+
+    # 动态图片字段
+    for i, url in enumerate(image_urls, 1):
+        fields[f"图片{i}"] = url
 
     return {"fields": fields}
