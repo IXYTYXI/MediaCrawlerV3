@@ -516,10 +516,15 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 except Exception as e:
                     pass  # 字段可能已存在
 
-            # 清理飞书默认生成的空记录和多余字段
+            # 清理飞书默认生成的空记录和多余字段（主字段改为"序号"）
+            ordered_with_serial = set(ordered_fields) | {"序号"}
             client.cleanup_default_fields_and_records(
-                app_token, table_id, set(ordered_fields)
+                app_token, table_id, ordered_with_serial
             )
+
+            # 填充序号
+            for i, record in enumerate(records, 1):
+                record["fields"]["序号"] = str(i)
 
             # 4. 批量写入
             inserted = client.batch_insert_records(app_token, table_id, records)

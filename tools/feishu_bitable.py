@@ -213,8 +213,15 @@ class FeishuBitableClient:
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete"
         self._request("POST", url, json={"records": record_ids})
 
+    def update_field(self, app_token: str, table_id: str, field_id: str,
+                     field_name: str, field_type: int = 1):
+        """更新字段名称/类型"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}"
+        body = {"field_name": field_name, "type": field_type}
+        self._request("PUT", url, json=body)
+
     def cleanup_default_fields_and_records(self, app_token: str, table_id: str, keep_field_names: set):
-        """清理默认字段和空记录"""
+        """清理默认字段和空记录，主字段改为序号"""
         # 删除默认空记录
         try:
             records = self.list_records(app_token, table_id)
@@ -225,18 +232,28 @@ class FeishuBitableClient:
         except Exception as e:
             utils.logger.warning(f"[FeishuBitable] 删除默认记录失败: {e}")
 
-        # 删除默认字段（不在我们需要的字段列表中的）
+        # 处理默认字段
         try:
             fields = self.list_fields(app_token, table_id)
             for field in fields:
-                if field.get("field_name") not in keep_field_names:
+                fname = field.get("field_name", "")
+                if fname in keep_field_names:
+                    continue
+                if field.get("is_primary") or field.get("property", {}).get("is_primary"):
+                    # 主字段不能删除，改名为"序号"
+                    try:
+                        self.update_field(app_token, table_id, field["field_id"], "序号", 1)
+                        utils.logger.info(f"[FeishuBitable] 主字段改名: {fname} → 序号")
+                    except Exception:
+                        pass
+                else:
                     try:
                         self.delete_field(app_token, table_id, field["field_id"])
-                        utils.logger.info(f"[FeishuBitable] 删除默认字段: {field['field_name']}")
+                        utils.logger.info(f"[FeishuBitable] 删除默认字段: {fname}")
                     except Exception:
-                        pass  # 有些系统字段不能删
+                        pass
         except Exception as e:
-            utils.logger.warning(f"[FeishuBitable] 删除默认字段失败: {e}")
+            utils.logger.warning(f"[FeishuBitable] 清理默认字段失败: {e}")
 
     def list_tables(self, app_token: str) -> List[Dict]:
         """列出多维表格中的所有数据表"""
@@ -393,5 +410,8 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     # 动态图片字段
     for i, url in enumerate(image_urls, 1):
         fields[f"图片{i}"] = url
+
+    # 序号字段（由外部在批量写入时填充）
+    fields["序号"] = ""
 
     return {"fields": fields}
