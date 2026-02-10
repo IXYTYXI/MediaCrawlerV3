@@ -553,7 +553,6 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                         filter_conditions=[{
                             "field_id": hot_field_id,
                             "operator": "isNotEmpty",
-                            "value": [],
                         }]
                     )
 
