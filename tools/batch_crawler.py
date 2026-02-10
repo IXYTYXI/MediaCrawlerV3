@@ -229,6 +229,9 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
     comment = _safe_int(note.get("comment_count", 0))
     interaction = liked + collected + comment
 
+    # 热门标记
+    is_hot = "🔥 热门" if interaction >= 50 else ""
+
     result = {
         "账号名称": creator_name or note.get("nickname", ""),
         "内容类型": content_type,
@@ -241,6 +244,7 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
         "收藏数": collected,
         "评论数": comment,
         "互动量": interaction,
+        "热门": is_hot,
         "视频脚本": video_script,
     }
 
@@ -297,9 +301,9 @@ def export_to_local(notes: List[Dict], export_dir: str = "data/export",
     max_images = _get_max_image_count(notes)
     image_columns = [f"图片{i}" for i in range(1, max_images + 1)]
 
-    # 字段顺序：视频脚本在图片列前面
+    # 字段顺序：热门在互动量后，视频脚本在图片列前面
     columns = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
-               "发布时间", "点赞数", "收藏数", "评论数", "互动量",
+               "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门",
                "视频脚本"] + image_columns
 
     if export_format == "excel":
@@ -348,12 +352,15 @@ def _export_excel_multi_sheet(grouped: Dict[str, List[Dict]],
         top=Side(style="thin"), bottom=Side(style="thin"),
     )
     wrap_align = Alignment(vertical="top", wrap_text=True)
+    # 热门行高亮：浅橙色背景
+    hot_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    hot_font = Font(bold=True, color="D35400")
 
     col_widths = {
         "账号名称": 18, "内容类型": 10, "标题": 30, "正文": 50,
         "标签": 25, "链接": 40, "发布时间": 20,
         "点赞数": 10, "收藏数": 10, "评论数": 10, "互动量": 10,
-        "视频脚本": 30,
+        "热门": 10, "视频脚本": 30,
     }
     # 图片列统一宽度
     for c in columns:
@@ -384,11 +391,17 @@ def _export_excel_multi_sheet(grouped: Dict[str, List[Dict]],
         # 写数据
         for row_idx, note in enumerate(creator_notes, 2):
             formatted = format_note_for_export(creator_name, note)
+            is_hot_row = formatted.get("热门", "") != ""
             for col_idx, col_name in enumerate(columns, 1):
                 value = formatted.get(col_name, "")
                 cell = ws.cell(row=row_idx, column=col_idx, value=value)
                 cell.alignment = wrap_align
                 cell.border = thin_border
+                # 热门行高亮
+                if is_hot_row:
+                    cell.fill = hot_fill
+                    if col_name == "热门":
+                        cell.font = hot_font
 
         # 列宽
         for col_idx, col_name in enumerate(columns, 1):
