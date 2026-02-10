@@ -497,7 +497,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             # 按固定顺序创建字段（与Excel导出一致）
             ordered_fields = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
                               "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门",
-                              "附件", "视频脚本"]
+                              "视频附件", "视频脚本"]
             # 图片字段按数字排序
             image_fields = sorted(
                 [f for f in all_field_names if f.startswith("图片")],
@@ -510,7 +510,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                     ordered_fields.append(f)
 
             url_fields = {"链接"}
-            attachment_fields = {"附件"}
+            attachment_fields = {"视频附件"}
             for field_name in ordered_fields:
                 field_type = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
                 try:
