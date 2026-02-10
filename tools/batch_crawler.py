@@ -107,6 +107,28 @@ def get_interaction_count(note: Dict) -> int:
     return liked + comment + collected
 
 
+def _check_date_range(note: Dict, date_start: str, date_end: str) -> bool:
+    """检查作品发布时间是否在指定日期范围内"""
+    if not date_start and not date_end:
+        return True
+    time_val = note.get("time", 0)
+    if not time_val or not isinstance(time_val, (int, float)):
+        return True
+    try:
+        publish_date = datetime.fromtimestamp(time_val / 1000)
+        if date_start:
+            start = datetime.strptime(date_start, "%Y-%m-%d")
+            if publish_date < start:
+                return False
+        if date_end:
+            end = datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            if publish_date > end:
+                return False
+        return True
+    except Exception:
+        return True
+
+
 def _note_completeness(n: Dict) -> int:
     """评估记录完整度：有详情的 > 只有基本信息的"""
     score = 0
@@ -798,14 +820,36 @@ async def run_batch_crawl(
             except Exception:
                 pass
 
-    # 互动量过滤
+    # 读取日期范围配置
+    crawl_mode = "full"
+    date_start = ""
+    date_end = ""
+    try:
+        config_path_t = os.path.join("config", "anti_crawl_config.json")
+        with open(config_path_t, "r", encoding="utf-8") as f:
+            cfg_t = json.load(f)
+        batch_cfg_t = cfg_t.get("batch_crawl", {})
+        crawl_mode = batch_cfg_t.get("crawl_mode", "full")
+        date_start = batch_cfg_t.get("date_start", "")
+        date_end = batch_cfg_t.get("date_end", "")
+    except Exception:
+        pass
+
+    # 时间范围+互动量过滤
     all_export_notes = []
+    date_filtered = 0
     for item in notes_by_id.values():
+        if crawl_mode == "date_range" and not _check_date_range(item, date_start, date_end):
+            date_filtered += 1
+            continue
         if min_interaction > 0:
             interaction = get_interaction_count(item)
             if interaction < min_interaction:
                 continue
         all_export_notes.append(item)
+
+    if date_filtered > 0:
+        utils.logger.info(f"  日期范围过滤: {date_filtered} 条不在 {date_start} ~ {date_end} 内")
 
     utils.logger.info(f"  汇总结果: {len(all_export_notes)} 条符合条件 (互动量>={min_interaction})")
 
@@ -923,15 +967,37 @@ def _run_export_only(excel_path: str, min_interaction: int = 50,
         except Exception as e:
             print(f"  读取失败: {filename} - {e}")
 
-    # 互动量过滤
+    # 读取日期范围配置
+    crawl_mode = "full"
+    date_start_e = ""
+    date_end_e = ""
+    try:
+        config_path_t = os.path.join("config", "anti_crawl_config.json")
+        with open(config_path_t, "r", encoding="utf-8") as f:
+            cfg_t = json.load(f)
+        batch_cfg_t = cfg_t.get("batch_crawl", {})
+        crawl_mode = batch_cfg_t.get("crawl_mode", "full")
+        date_start_e = batch_cfg_t.get("date_start", "")
+        date_end_e = batch_cfg_t.get("date_end", "")
+    except Exception:
+        pass
+
+    # 时间范围+互动量过滤
     all_notes = []
+    date_filtered = 0
     for item in notes_by_id.values():
+        if crawl_mode == "date_range" and not _check_date_range(item, date_start_e, date_end_e):
+            date_filtered += 1
+            continue
         if min_interaction > 0:
             interaction = get_interaction_count(item)
             if interaction < min_interaction:
                 filtered_count += 1
                 continue
         all_notes.append(item)
+
+    if date_filtered > 0:
+        print(f"  日期范围过滤: {date_filtered} 条不在 {date_start_e} ~ {date_end_e} 内")
 
     print(f"\n[ExportOnly] 共 {len(all_notes)} 条符合条件 (去重 {duplicates} 条)")
     print(f"  互动量过滤掉: {filtered_count} 条")

@@ -470,6 +470,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     crawled_so_far = len(getattr(self, '_new_crawled_ids', set())) + len(crawled_ids)
                     utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}... [累计: {crawled_so_far}]")
                     
+                    
                     # ========== 并行模式：启动评论获取任务 ==========
                     if is_parallel_mode and note_id not in self._comment_crawled_ids:
                         task = asyncio.create_task(
