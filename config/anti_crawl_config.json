@@ -154,6 +154,33 @@
     "_export_dir_desc": "导出文件保存目录"
   },
 
+  "parallel": {
+    "mode": "single",
+    "_mode_desc": "运行模式: single=单线程, multi=多线程同IP, multi_proxy=多线程+独立代理",
+    "workers": [
+      {
+        "name": "worker_1",
+        "cookie_dir": "browser_data/cdp_xhs_user_data_dir",
+        "proxy": "",
+        "_desc": "默认worker，无代理，使用当前Cookie"
+      },
+      {
+        "name": "worker_2",
+        "cookie_dir": "browser_data/cdp_xhs_account_2",
+        "proxy": "http://127.0.0.1:7890",
+        "_desc": "第2个账号，走Clash Party代理"
+      },
+      {
+        "name": "worker_3",
+        "cookie_dir": "browser_data/cdp_xhs_account_3",
+        "proxy": "http://127.0.0.1:7891",
+        "_desc": "第3个账号，走Clash Verge代理"
+      }
+    ],
+    "wait_sec_per_worker": 8,
+    "_wait_sec_desc": "每个worker的请求间隔（秒），多线程时可降低"
+  },
+
   "feishu": {
     "enabled": false,
     "app_id": "",
