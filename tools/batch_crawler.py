@@ -500,100 +500,104 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             bitable_url = result["url"]
             utils.logger.info(f"[BatchCrawler] 创建多维表格: {bitable_name}")
 
-            # 2. 构建记录（先构建，才能知道需要哪些字段）
-            records = []
-            all_field_names = set()
+            # 2. 按作者分组
+            from collections import OrderedDict
+            grouped: OrderedDict[str, List[Dict]] = OrderedDict()
             for note in notes:
-                creator_name = note.get("_creator_name", note.get("nickname", ""))
-                record = map_note_to_feishu_record(creator_name, note)
-                records.append(record)
-                all_field_names.update(record.get("fields", {}).keys())
+                creator_name = note.get("_creator_name", note.get("nickname", "未知"))
+                if creator_name not in grouped:
+                    grouped[creator_name] = []
+                grouped[creator_name].append(note)
 
-            # 3. 获取默认数据表，创建所有需要的字段
-            tables = client.list_tables(app_token)
-            if tables:
-                table_id = tables[0]["table_id"]
-            else:
-                table_id = client.create_table(app_token, "爬取数据", [])
+            # 3. 构建所有记录，确定字段列表
+            all_field_names = set()
+            all_grouped_records: OrderedDict[str, List[Dict]] = OrderedDict()
+            for creator_name, creator_notes in grouped.items():
+                records = []
+                for note in creator_notes:
+                    record = map_note_to_feishu_record(creator_name, note)
+                    records.append(record)
+                    all_field_names.update(record.get("fields", {}).keys())
+                all_grouped_records[creator_name] = records
 
-            # 按固定顺序创建字段（与Excel导出一致）
+            # 4. 确定字段顺序
             ordered_fields = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
                               "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门",
                               "视频附件", "视频脚本"]
-            # 图片字段按数字排序
             image_fields = sorted(
                 [f for f in all_field_names if f.startswith("图片")],
                 key=lambda x: int(x.replace("图片", "") or "0")
             )
             ordered_fields.extend(image_fields)
-            # 补充其他未列出的字段
             for f in all_field_names:
                 if f not in ordered_fields:
                     ordered_fields.append(f)
 
             url_fields = {"链接"}
             attachment_fields = {"视频附件"}
-            for field_name in ordered_fields:
-                field_type = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
-                try:
-                    client.add_field(app_token, table_id, field_name, field_type)
-                except Exception as e:
-                    pass  # 字段可能已存在
-
-            # 清理飞书默认生成的空记录和多余字段（主字段改为"序号"）
             ordered_with_serial = set(ordered_fields) | {"序号"}
-            client.cleanup_default_fields_and_records(
-                app_token, table_id, ordered_with_serial
-            )
+            total_inserted = 0
 
-            # 填充序号
-            for i, record in enumerate(records, 1):
-                record["fields"]["序号"] = str(i)
+            # 5. 处理默认数据表（改为第一个作者的表）
+            first_creator = True
+            for creator_name, records in all_grouped_records.items():
+                safe_name = creator_name[:100]
+                utils.logger.info(f"[飞书] 创建数据表: {safe_name} ({len(records)} 条)")
 
-            # 4. 批量写入
-            inserted = client.batch_insert_records(app_token, table_id, records)
-            utils.logger.info(
-                f"[BatchCrawler] 飞书写入完成: {inserted}/{len(records)} 条, "
-                f"URL: {bitable_url}"
-            )
+                if first_creator:
+                    # 用默认表
+                    tables = client.list_tables(app_token)
+                    table_id = tables[0]["table_id"] if tables else client.create_table(app_token, safe_name, [])
+                    first_creator = False
+                else:
+                    # 创建新数据表
+                    table_id = client.create_table(app_token, safe_name, [])
 
-            # 5. 自动创建视图
-            try:
-                # 获取"热门"字段的 field_id
-                fields = client.list_fields(app_token, table_id)
-                hot_field_id = ""
-                for f in fields:
-                    if f and f.get("field_name") == "热门":
-                        hot_field_id = f.get("field_id", "")
-                        break
+                # 创建字段
+                for field_name in ordered_fields:
+                    if field_name == "序号":
+                        continue
+                    ftype = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
+                    try:
+                        client.add_field(app_token, table_id, field_name, ftype)
+                    except Exception:
+                        pass
 
-                if hot_field_id:
-                    # 创建"热门作品"视图：筛选热门不为空
-                    client.create_view(
-                        app_token, table_id,
-                        view_name="🔥 热门作品",
-                        filter_conditions=[{
-                            "field_id": hot_field_id,
-                            "operator": "isNotEmpty",
-                        }]
-                    )
+                # 清理默认字段和空记录
+                client.cleanup_default_fields_and_records(app_token, table_id, ordered_with_serial)
 
-                    # 创建"按作者分组"视图
-                    author_field_id = ""
+                # 填充序号
+                for i, record in enumerate(records, 1):
+                    record["fields"]["序号"] = str(i)
+
+                # 写入
+                inserted = client.batch_insert_records(app_token, table_id, records)
+                total_inserted += inserted
+
+                # 创建热门视图
+                try:
+                    fields = client.list_fields(app_token, table_id)
+                    hot_field_id = ""
                     for f in fields:
-                        if f and f.get("field_name") == "账号名称":
-                            author_field_id = f.get("field_id", "")
+                        if f and f.get("field_name") == "热门":
+                            hot_field_id = f.get("field_id", "")
                             break
-                    if author_field_id:
+                    if hot_field_id:
                         client.create_view(
                             app_token, table_id,
-                            view_name="📊 按作者分组",
+                            view_name="🔥 热门作品",
+                            filter_conditions=[{
+                                "field_id": hot_field_id,
+                                "operator": "isNotEmpty",
+                            }]
                         )
+                except Exception:
+                    pass
 
-                utils.logger.info("[BatchCrawler] 飞书视图创建完成")
-            except Exception as e:
-                utils.logger.warning(f"[BatchCrawler] 创建视图失败: {e}")
-
+            utils.logger.info(
+                f"[BatchCrawler] 飞书写入完成: {total_inserted}/{len(notes)} 条, "
+                f"{len(all_grouped_records)} 个作者, URL: {bitable_url}"
+            )
             return bitable_url
 
     except Exception as e:
