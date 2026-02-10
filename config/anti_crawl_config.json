@@ -141,7 +141,7 @@
     "_task_id_desc": "任务ID，不同任务的进度和数据互相独立，新任务改个新ID即可",
     "reuse_history": true,
     "_reuse_history_desc": "是否复用历史已爬数据: true=已爬完的作者直接复用不再爬取, false=全部重新爬取",
-    "excel_path": "/Users/yc/Desktop/program/python/MediaCrawler/redbookaccontidandresult.xlsx",
+    "excel_path": "redbookaccontidandresult.xlsx",
     "max_notes_per_creator": 3000,
     "enable_comments": false,
     "wait_between_creators_sec": 10,
@@ -153,7 +153,7 @@
     "date_end": "2026-02-10",
     "_date_desc": "日期范围，格式YYYY-MM-DD，仅crawl_mode=date_range时生效，留空=不限制",
     "export_format": "excel",
-    "export_dir": "/Users/yc/Desktop/program/python/MediaCrawler/data/xiaohongshu/excel",
+    "export_dir": "data/xiaohongshu/excel",
     "_enabled_desc": "是否启用批量爬取模式",
     "_excel_path_desc": "excel作者链接路径",
     "_max_notes_per_creator_desc": "每个作者最多爬取多少条笔记",
@@ -192,7 +192,7 @@
 
   "feishu": {
     "enabled": true,
-    "image_mode": "link",
+    "image_mode": "image",
     "_image_mode_desc": "图片写入模式: link=写入链接文本, image=下载图片上传为附件显示缩略图",
     "image_threads": 2,
     "_image_threads_desc": "图片上传并发线程数(仅image模式)",

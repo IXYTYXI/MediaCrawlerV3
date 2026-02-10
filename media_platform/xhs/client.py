@@ -227,9 +227,14 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         # Check if proxy is expired before request
         await self._refresh_proxy_if_expired()
 
+        # 小红书 CDN 需要 Referer 头，否则可能 403 Forbidden
+        headers = {
+            "Referer": "https://www.xiaohongshu.com/",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        }
         async with httpx.AsyncClient(proxy=self.proxy) as client:
             try:
-                response = await client.request("GET", url, timeout=self.timeout)
+                response = await client.request("GET", url, headers=headers, timeout=self.timeout)
                 response.raise_for_status()
                 if not response.reason_phrase == "OK":
                     utils.logger.error(

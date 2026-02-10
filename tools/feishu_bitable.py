@@ -371,9 +371,19 @@ class FeishuBitableClient:
         os.makedirs(temp_dir, exist_ok=True)
 
         try:
-            # 下载图片
-            resp = self._client.get(image_url, timeout=30.0, follow_redirects=True)
+            # 下载图片（小红书CDN需要Referer头防403）
+            download_headers = {
+                "Referer": "https://www.xiaohongshu.com/",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            }
+            resp = self._client.get(
+                image_url, timeout=30.0, follow_redirects=True,
+                headers=download_headers
+            )
             if resp.status_code != 200:
+                utils.logger.warning(
+                    f"[FeishuBitable] 图片下载失败 HTTP {resp.status_code}: {image_url[:80]}"
+                )
                 return ""
 
             # 用URL hash作文件名

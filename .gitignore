@@ -166,6 +166,7 @@ cython_debug/
 /browser_data/
 /data/
 
+.DS_Store
 */.DS_Store
 .vscode
 /node_modules

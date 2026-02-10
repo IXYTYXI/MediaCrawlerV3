@@ -570,7 +570,113 @@ def _export_json(data: List[Dict], filepath: str):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# ==================== 飞书图片处理 ====================
+# ==================== 本地图片查找 ====================
+
+def _get_local_image_paths(note_id: str, image_dir: str = "data/xhs/images") -> List[str]:
+    """
+    根据 note_id 查找本地已下载的图片文件
+    
+    图片由爬虫下载保存在 data/xhs/images/{note_id}/0.jpg, 1.jpg, ...
+    
+    Args:
+        note_id: 笔记ID
+        image_dir: 图片存储根目录
+        
+    Returns:
+        按序号排列的图片文件路径列表 ["data/xhs/images/{note_id}/0.jpg", ...]
+    """
+    note_dir = os.path.join(image_dir, note_id)
+    if not os.path.exists(note_dir):
+        return []
+    
+    image_files = []
+    for filename in os.listdir(note_dir):
+        filepath = os.path.join(note_dir, filename)
+        if os.path.isfile(filepath) and filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')):
+            image_files.append(filepath)
+    
+    # 按文件名序号排序: 0.jpg, 1.jpg, 2.jpg, ...
+    def sort_key(path):
+        name = os.path.splitext(os.path.basename(path))[0]
+        try:
+            return int(name)
+        except ValueError:
+            return 999
+    
+    image_files.sort(key=sort_key)
+    return image_files
+
+
+def _upload_note_images_to_feishu(
+    client, app_token: str, note_id: str,
+    image_urls: List[str], num_threads: int = 2
+) -> Dict[str, Any]:
+    """
+    上传单个笔记的图片到飞书，优先使用本地文件，URL作为回退
+    
+    Args:
+        client: FeishuBitableClient 实例
+        app_token: 多维表格 token
+        note_id: 笔记ID
+        image_urls: 图片URL列表（作为回退）
+        num_threads: 并发线程数
+        
+    Returns:
+        {field_name: [{"file_token": "xxx"}]} 格式的映射
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    result = {}
+    local_paths = _get_local_image_paths(note_id)
+    
+    # 构建上传任务: [(field_name, local_path_or_url, is_local), ...]
+    tasks = []
+    for i, url in enumerate(image_urls):
+        field_name = f"图片{i + 1}"
+        if i < len(local_paths):
+            # 优先使用本地文件
+            tasks.append((field_name, local_paths[i], True))
+        else:
+            # 回退到URL下载
+            tasks.append((field_name, url, False))
+    
+    if not tasks:
+        return result
+    
+    def upload_one(field_name, path_or_url, is_local):
+        """上传单张图片"""
+        try:
+            if is_local:
+                file_token = client.upload_media(app_token, path_or_url)
+                if file_token:
+                    return field_name, [{"file_token": file_token}]
+            else:
+                # URL回退（可能已过期）
+                file_token = client.upload_image_from_url(app_token, path_or_url)
+                if file_token:
+                    return field_name, [{"file_token": file_token}]
+        except Exception as e:
+            utils.logger.warning(f"[图片上传] {field_name} 失败: {e}")
+        finally:
+            # 飞书上传API有限流(~100次/分)，每次上传后短暂等待
+            time.sleep(0.3)
+        return field_name, None
+    
+    # 多线程上传
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = {
+            executor.submit(upload_one, fn, p, il): fn
+            for fn, p, il in tasks
+        }
+        for future in as_completed(futures):
+            field_name, attachment = future.result()
+            if attachment:
+                result[field_name] = attachment
+    
+    return result
+
+
+# ==================== 飞书图片处理（旧版后处理方式，作为回退） ====================
 
 def process_feishu_images(client, app_token: str, table_id: str,
                           image_field_names: List[str],
@@ -724,6 +830,22 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
     if not bitable_name:
         bitable_name = f"小红书爬取数据_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
+    # 提前读取图片模式配置
+    feishu_image_mode = "link"
+    feishu_image_threads = 2
+    try:
+        config_path_img = os.path.join("config", "anti_crawl_config.json")
+        with open(config_path_img, "r", encoding="utf-8") as f:
+            cfg_img = json.load(f)
+        feishu_cfg = cfg_img.get("feishu", {})
+        feishu_image_mode = feishu_cfg.get("image_mode", "link")
+        feishu_image_threads = feishu_cfg.get("image_threads", 2)
+    except Exception:
+        pass
+
+    is_image_mode = (feishu_image_mode == "image")
+    utils.logger.info(f"[BatchCrawler] 飞书图片模式: {feishu_image_mode}")
+
     try:
         with FeishuBitableClient(app_id, app_secret) as client:
             # 1. 创建多维表格
@@ -732,7 +854,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             bitable_url = result["url"]
             utils.logger.info(f"[BatchCrawler] 创建多维表格: {bitable_name}")
 
-            # 2. 按作者分组
+            # 2. 按作者分组（保留原始note数据用于提取note_id）
             from collections import OrderedDict
             grouped: OrderedDict[str, List[Dict]] = OrderedDict()
             for note in notes:
@@ -743,7 +865,9 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
 
             # 3. 构建所有记录，确定字段列表
             all_field_names = set()
+            # 同时保存 records 和对应的原始 notes（用于图片上传时提取 note_id）
             all_grouped_records: OrderedDict[str, List[Dict]] = OrderedDict()
+            all_grouped_raw_notes: OrderedDict[str, List[Dict]] = OrderedDict()
             for creator_name, creator_notes in grouped.items():
                 records = []
                 for note in creator_notes:
@@ -751,26 +875,105 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                     records.append(record)
                     all_field_names.update(record.get("fields", {}).keys())
                 all_grouped_records[creator_name] = records
+                all_grouped_raw_notes[creator_name] = creator_notes
 
             # 4. 确定字段顺序
             ordered_fields = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
                               "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门",
                               "视频附件", "视频脚本"]
-            image_fields = sorted(
+            image_field_names = sorted(
                 [f for f in all_field_names if f.startswith("图片")],
                 key=lambda x: int(x.replace("图片", "") or "0")
             )
-            ordered_fields.extend(image_fields)
+            ordered_fields.extend(image_field_names)
             for f in all_field_names:
                 if f not in ordered_fields:
                     ordered_fields.append(f)
 
             url_fields = {"链接"}
             attachment_fields = {"视频附件"}
+            # image 模式：图片字段也创建为附件类型
+            if is_image_mode:
+                attachment_fields.update(image_field_names)
+
             ordered_with_serial = set(ordered_fields) | {"序号"}
             total_inserted = 0
+            total_images_uploaded = 0
+            total_images_failed = 0
 
-            # 5. 处理默认数据表（改为第一个作者的表）
+            # 5. image 模式：在插入记录前上传图片
+            if is_image_mode:
+                # 统计总笔记数（有图片的）
+                total_notes_with_images = sum(
+                    1 for raw_notes in all_grouped_raw_notes.values()
+                    for n in raw_notes
+                    if _parse_image_urls(n.get("image_list", ""))
+                )
+                utils.logger.info(
+                    f"[图片上传] 开始上传图片到飞书（{feishu_image_threads} 线程），"
+                    f"{total_notes_with_images} 条笔记有图片，"
+                    f"优先本地文件(data/xhs/images/)，URL作为回退"
+                )
+                note_progress = 0
+                for creator_name, raw_notes in all_grouped_raw_notes.items():
+                    records = all_grouped_records[creator_name]
+                    for idx, (note, record) in enumerate(zip(raw_notes, records)):
+                        note_id = note.get("note_id", "")
+                        if not note_id:
+                            continue
+                        # 提取该笔记的图片URL列表
+                        image_urls = _parse_image_urls(note.get("image_list", ""))
+                        if not image_urls:
+                            continue
+                        note_progress += 1
+                        local_paths = _get_local_image_paths(note_id)
+                        source_desc = f"本地{len(local_paths)}张" if local_paths else "URL回退"
+                        # 上传图片并获取 file_tokens
+                        image_tokens = _upload_note_images_to_feishu(
+                            client, app_token, note_id,
+                            image_urls, feishu_image_threads
+                        )
+                        # 替换记录中的图片字段：URL文本 → 附件格式
+                        for field_name, attachment in image_tokens.items():
+                            record["fields"][field_name] = attachment
+                            total_images_uploaded += 1
+                        # 统计失败的图片
+                        expected = len(image_urls)
+                        uploaded = len(image_tokens)
+                        if uploaded < expected:
+                            total_images_failed += (expected - uploaded)
+                        # 移除没有成功上传的图片字段（附件类型不能写入URL文本）
+                        for i in range(1, len(image_urls) + 1):
+                            fn = f"图片{i}"
+                            if fn not in image_tokens and fn in record["fields"]:
+                                # 未成功上传的，清空字段值（附件类型不接受字符串）
+                                del record["fields"][fn]
+                        # 进度日志（每5条或最后一条）
+                        if note_progress % 5 == 0 or note_progress == total_notes_with_images:
+                            utils.logger.info(
+                                f"[图片上传] 进度: {note_progress}/{total_notes_with_images} 条笔记 "
+                                f"({source_desc}, {uploaded}/{expected}张成功)"
+                            )
+
+                utils.logger.info(
+                    f"[图片上传] 全部完成: {total_images_uploaded} 张成功, "
+                    f"{total_images_failed} 张失败"
+                )
+
+                # 安全清理：移除所有记录中残留的图片URL文本
+                # （附件类型字段不接受字符串，未成功上传的图片必须清空）
+                cleaned = 0
+                for creator_name, records in all_grouped_records.items():
+                    for record in records:
+                        fields = record.get("fields", {})
+                        for key in list(fields.keys()):
+                            if key.startswith("图片") and isinstance(fields[key], str):
+                                del fields[key]
+                                cleaned += 1
+                if cleaned > 0:
+                    utils.logger.info(f"[图片上传] 清理 {cleaned} 个未处理的图片字段（避免附件类型写入错误）")
+
+            # 6. 逐作者创建数据表并写入记录
             first_creator = True
             for creator_name, records in all_grouped_records.items():
                 safe_name = creator_name[:100]
@@ -830,36 +1033,11 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 f"[BatchCrawler] 飞书写入完成: {total_inserted}/{len(notes)} 条, "
                 f"{len(all_grouped_records)} 个作者, URL: {bitable_url}"
             )
-
-            # 6. 图片模式：下载图片并上传为附件
-            feishu_image_mode = "link"
-            feishu_image_threads = 2
-            try:
-                config_path_img = os.path.join("config", "anti_crawl_config.json")
-                with open(config_path_img, "r", encoding="utf-8") as f:
-                    cfg_img = json.load(f)
-                feishu_cfg = cfg_img.get("feishu", {})
-                feishu_image_mode = feishu_cfg.get("image_mode", "link")
-                feishu_image_threads = feishu_cfg.get("image_threads", 2)
-            except Exception:
-                pass
-
-            if feishu_image_mode == "image":
-                utils.logger.info("[BatchCrawler] 图片模式: 开始下载图片并上传飞书...")
-                # 对每个作者的数据表处理图片
-                tables_list = client.list_tables(app_token)
-                for tbl in tables_list:
-                    tbl_id = tbl.get("table_id", "")
-                    tbl_name = tbl.get("name", "")
-                    # 获取该表的图片字段
-                    tbl_fields = client.list_fields(app_token, tbl_id)
-                    img_fields = [f["field_name"] for f in tbl_fields
-                                  if f and f.get("field_name", "").startswith("图片")]
-                    if img_fields:
-                        utils.logger.info(f"[图片处理] 处理数据表: {tbl_name} ({len(img_fields)} 个图片字段)")
-                        process_feishu_images(
-                            client, app_token, tbl_id, img_fields, feishu_image_threads
-                        )
+            if is_image_mode:
+                utils.logger.info(
+                    f"[BatchCrawler] 图片上传: {total_images_uploaded} 张成功, "
+                    f"{total_images_failed} 张失败"
+                )
             else:
                 utils.logger.info("[BatchCrawler] 图片模式: link（链接文本，跳过图片上传）")
 
@@ -867,6 +1045,8 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
 
     except Exception as e:
         utils.logger.error(f"[BatchCrawler] 飞书推送失败: {e}")
+        import traceback
+        utils.logger.error(f"[BatchCrawler] 详细错误: {traceback.format_exc()}")
         return None
 
 
@@ -956,6 +1136,22 @@ async def run_batch_crawl(
     config.CRAWLER_TYPE = "creator"
     config.CRAWLER_MAX_NOTES_COUNT = max_notes_per_creator
     config.ENABLE_GET_COMMENTS = enable_comments
+
+    # 读取飞书图片模式，image模式时自动启用图片下载
+    feishu_image_mode = "link"
+    try:
+        config_path_img = os.path.join("config", "anti_crawl_config.json")
+        with open(config_path_img, "r", encoding="utf-8") as f:
+            cfg_img = json.load(f)
+        feishu_image_mode = cfg_img.get("feishu", {}).get("image_mode", "link")
+    except Exception:
+        pass
+
+    if feishu_image_mode == "image" and not skip_feishu:
+        config.ENABLE_GET_MEIDAS = True
+        utils.logger.info("[BatchCrawler] 飞书图片模式=image，自动启用图片下载(ENABLE_GET_MEIDAS=True)")
+    else:
+        utils.logger.info(f"[BatchCrawler] 飞书图片模式={feishu_image_mode}，不下载图片")
 
     # 4. 读取复用和过滤配置
     reuse_history = True
