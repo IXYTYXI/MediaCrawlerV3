@@ -602,6 +602,7 @@ async def run_batch_crawl(
         utils.logger.info(f"  URL: {creator_url}")
         utils.logger.info("=" * 60)
 
+        crawler = None
         try:
             # 重置会话时间戳（每个作者一个新文件）
             AsyncFileWriter.reset_session_timestamp()
@@ -645,6 +646,28 @@ async def run_batch_crawl(
             utils.logger.error(
                 f"[BatchCrawler] [{idx}/{total}] 失败: {creator_name} - {error_msg}"
             )
+
+        finally:
+            # 关闭浏览器，释放端口，防止下一个作者启动时冲突
+            if crawler:
+                try:
+                    # 关闭 CDP 浏览器
+                    if getattr(crawler, "cdp_manager", None):
+                        await crawler.cdp_manager.cleanup(force=True)
+                        crawler.cdp_manager = None
+                    elif getattr(crawler, "browser_context", None):
+                        await crawler.browser_context.close()
+                    utils.logger.info("[BatchCrawler] 浏览器已关闭")
+                except Exception as close_err:
+                    utils.logger.warning(f"[BatchCrawler] 关闭浏览器异常: {close_err}")
+
+                # 杀掉残留的 Chrome 进程
+                try:
+                    import subprocess
+                    subprocess.run(["pkill", "-f", "Google Chrome Dev"], capture_output=True, timeout=5)
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
 
         # 作者之间休息一下
         if idx < total:
