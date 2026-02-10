@@ -570,6 +570,124 @@ def _export_json(data: List[Dict], filepath: str):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+# ==================== 飞书图片处理 ====================
+
+def process_feishu_images(client, app_token: str, table_id: str,
+                          image_field_names: List[str],
+                          num_threads: int = 2):
+    """
+    多线程处理飞书多维表格中的图片字段：
+    下载图片 → 上传飞书 → 更新记录（链接替换为附件缩略图）
+    
+    Args:
+        client: FeishuBitableClient 实例
+        app_token: 多维表格 token
+        table_id: 数据表 ID
+        image_field_names: 图片字段名列表 ["图片1", "图片2", ...]
+        num_threads: 并发线程数
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not image_field_names:
+        return
+
+    # 1. 把图片字段改为附件类型（type=17）
+    fields = client.list_fields(app_token, table_id)
+    field_id_map = {}  # field_name → field_id
+    for f in fields:
+        if f and f.get("field_name") in image_field_names:
+            fid = f.get("field_id", "")
+            fname = f["field_name"]
+            field_id_map[fname] = fid
+            # 修改字段类型为附件
+            try:
+                client.update_field(app_token, table_id, fid, fname, 17)
+                utils.logger.info(f"[图片处理] 字段 {fname} 改为附件类型")
+            except Exception as e:
+                utils.logger.warning(f"[图片处理] 修改字段类型失败 {fname}: {e}")
+
+    # 2. 获取所有记录
+    all_records = []
+    page_token = ""
+    while True:
+        url = f"{client.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records"
+        params = {"page_size": 100}
+        if page_token:
+            params["page_token"] = page_token
+        try:
+            data = client._request("GET", url, params=params)
+            items = data.get("items", [])
+            all_records.extend(items)
+            if not data.get("has_more", False):
+                break
+            page_token = data.get("page_token", "")
+        except Exception:
+            break
+
+    utils.logger.info(f"[图片处理] 共 {len(all_records)} 条记录, {len(image_field_names)} 个图片字段")
+
+    # 3. 收集需要处理的任务 (record_id, field_name, image_url)
+    tasks = []
+    for record in all_records:
+        record_id = record.get("record_id", "")
+        record_fields = record.get("fields", {})
+        for fname in image_field_names:
+            value = record_fields.get(fname)
+            if not value or not isinstance(value, str) or not value.startswith("http"):
+                continue
+            tasks.append((record_id, fname, value))
+
+    if not tasks:
+        utils.logger.info("[图片处理] 没有需要处理的图片")
+        return
+
+    utils.logger.info(f"[图片处理] 共 {len(tasks)} 张图片需要处理，使用 {num_threads} 线程")
+
+    # 4. 多线程处理
+    processed = 0
+    failed = 0
+
+    def process_one(record_id, field_name, image_url):
+        """单张图片处理：下载→上传→更新"""
+        try:
+            file_token = client.upload_image_from_url(app_token, image_url)
+            if not file_token:
+                return False
+            # 更新记录，把文本替换为附件
+            client.update_record(app_token, table_id, record_id, {
+                field_name: [{"file_token": file_token}]
+            })
+            return True
+        except Exception as e:
+            return False
+
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = {}
+        for record_id, fname, url in tasks:
+            future = executor.submit(process_one, record_id, fname, url)
+            futures[future] = (record_id, fname)
+
+        for future in as_completed(futures):
+            record_id, fname = futures[future]
+            try:
+                if future.result():
+                    processed += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+
+            # 进度日志
+            total_done = processed + failed
+            if total_done % 20 == 0 or total_done == len(tasks):
+                utils.logger.info(
+                    f"[图片处理] 进度: {total_done}/{len(tasks)} "
+                    f"(成功 {processed}, 失败 {failed})"
+                )
+
+    utils.logger.info(f"[图片处理] 完成: 成功 {processed}, 失败 {failed}, 总计 {len(tasks)}")
+
+
 # ==================== 飞书推送 ====================
 
 def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
@@ -712,6 +830,39 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 f"[BatchCrawler] 飞书写入完成: {total_inserted}/{len(notes)} 条, "
                 f"{len(all_grouped_records)} 个作者, URL: {bitable_url}"
             )
+
+            # 6. 图片模式：下载图片并上传为附件
+            feishu_image_mode = "link"
+            feishu_image_threads = 2
+            try:
+                config_path_img = os.path.join("config", "anti_crawl_config.json")
+                with open(config_path_img, "r", encoding="utf-8") as f:
+                    cfg_img = json.load(f)
+                feishu_cfg = cfg_img.get("feishu", {})
+                feishu_image_mode = feishu_cfg.get("image_mode", "link")
+                feishu_image_threads = feishu_cfg.get("image_threads", 2)
+            except Exception:
+                pass
+
+            if feishu_image_mode == "image":
+                utils.logger.info("[BatchCrawler] 图片模式: 开始下载图片并上传飞书...")
+                # 对每个作者的数据表处理图片
+                tables_list = client.list_tables(app_token)
+                for tbl in tables_list:
+                    tbl_id = tbl.get("table_id", "")
+                    tbl_name = tbl.get("name", "")
+                    # 获取该表的图片字段
+                    tbl_fields = client.list_fields(app_token, tbl_id)
+                    img_fields = [f["field_name"] for f in tbl_fields
+                                  if f and f.get("field_name", "").startswith("图片")]
+                    if img_fields:
+                        utils.logger.info(f"[图片处理] 处理数据表: {tbl_name} ({len(img_fields)} 个图片字段)")
+                        process_feishu_images(
+                            client, app_token, tbl_id, img_fields, feishu_image_threads
+                        )
+            else:
+                utils.logger.info("[BatchCrawler] 图片模式: link（链接文本，跳过图片上传）")
+
             return bitable_url
 
     except Exception as e:

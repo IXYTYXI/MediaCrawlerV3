@@ -311,6 +311,108 @@ class FeishuBitableClient:
         data = self._request("GET", url)
         return data.get("items", [])
 
+    # ==================== 媒体上传 ====================
+
+    def upload_media(self, app_token: str, file_path: str,
+                     file_name: str = "", parent_type: str = "bitable_file",
+                     ) -> str:
+        """
+        上传文件到飞书，获取 file_token
+        
+        Args:
+            app_token: 多维表格 token（作为 parent_node）
+            file_path: 本地文件路径
+            file_name: 文件名（为空则从路径提取）
+            parent_type: 父节点类型
+            
+        Returns:
+            file_token
+        """
+        import os
+        if not file_name:
+            file_name = os.path.basename(file_path)
+
+        file_size = os.path.getsize(file_path)
+        url = f"{self.BASE_URL}/drive/v1/medias/upload_all"
+        headers = {"Authorization": f"Bearer {self._get_tenant_access_token()}"}
+
+        with open(file_path, "rb") as f:
+            files = {
+                "file_name": (None, file_name),
+                "parent_type": (None, parent_type),
+                "parent_node": (None, app_token),
+                "size": (None, str(file_size)),
+                "file": (file_name, f, "application/octet-stream"),
+            }
+            resp = self._client.post(url, headers=headers, files=files)
+
+        data = resp.json()
+        if data.get("code") != 0:
+            raise Exception(f"上传文件失败: {data.get('msg')}")
+
+        file_token = data.get("data", {}).get("file_token", "")
+        return file_token
+
+    def upload_image_from_url(self, app_token: str, image_url: str,
+                               temp_dir: str = "/tmp/feishu_images") -> str:
+        """
+        从URL下载图片并上传到飞书
+        
+        Args:
+            app_token: 多维表格 token
+            image_url: 图片URL
+            temp_dir: 临时下载目录
+            
+        Returns:
+            file_token（失败返回空字符串）
+        """
+        import os
+        import hashlib
+        os.makedirs(temp_dir, exist_ok=True)
+
+        try:
+            # 下载图片
+            resp = self._client.get(image_url, timeout=30.0, follow_redirects=True)
+            if resp.status_code != 200:
+                return ""
+
+            # 用URL hash作文件名
+            url_hash = hashlib.md5(image_url.encode()).hexdigest()[:12]
+            content_type = resp.headers.get("content-type", "image/jpeg")
+            ext = ".jpg"
+            if "png" in content_type:
+                ext = ".png"
+            elif "webp" in content_type:
+                ext = ".webp"
+            elif "gif" in content_type:
+                ext = ".gif"
+
+            file_path = os.path.join(temp_dir, f"{url_hash}{ext}")
+            with open(file_path, "wb") as f:
+                f.write(resp.content)
+
+            # 上传到飞书
+            file_token = self.upload_media(app_token, file_path)
+
+            # 清理临时文件
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+            return file_token
+
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 图片处理失败: {e}")
+            return ""
+
+    def update_record(self, app_token: str, table_id: str,
+                      record_id: str, fields: Dict[str, Any]):
+        """更新单条记录"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
+        body = {"fields": fields}
+        self._request("PUT", url, json=body)
+
     def close(self):
         self._client.close()
 

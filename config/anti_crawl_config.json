@@ -192,6 +192,10 @@
 
   "feishu": {
     "enabled": true,
+    "image_mode": "link",
+    "_image_mode_desc": "图片写入模式: link=写入链接文本, image=下载图片上传为附件显示缩略图",
+    "image_threads": 2,
+    "_image_threads_desc": "图片上传并发线程数(仅image模式)",
     "app_id": "cli_a9006c0b96395bd3",
     "app_secret": "tul9PNh3aSjIbcqcoB25vh8HLYP2HmPx",
     "folder_token": "LLTwf1fRUl3tH9dxr2PcMqplnAh",
