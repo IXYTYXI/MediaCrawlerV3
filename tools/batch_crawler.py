@@ -209,6 +209,120 @@ def collect_crawled_data(data_dir: str, session_timestamp: str,
     return notes
 
 
+# ==================== 历史数据复用 ====================
+
+def scan_history_for_creator(user_id: str, creator_name: str,
+                              crawl_mode: str, date_start: str, date_end: str,
+                              min_interaction: int) -> List[Dict]:
+    """
+    扫描历史 JSON 文件，提取指定作者符合条件的数据
+    
+    Returns:
+        符合条件的笔记列表
+    """
+    data_dir = os.path.join("data", "xhs", "json")
+    if not os.path.exists(data_dir):
+        return []
+
+    notes_by_id: Dict[str, Dict] = {}
+
+    for filename in sorted(os.listdir(data_dir)):
+        if not filename.endswith(".json") or not filename.startswith("creator_contents"):
+            continue
+        # 跳过 task 子目录里的文件
+        filepath = os.path.join(data_dir, filename)
+        if not os.path.isfile(filepath):
+            continue
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, list):
+                continue
+            for item in data:
+                if item.get("user_id") != user_id:
+                    continue
+                nid = item.get("note_id", "")
+                if not nid:
+                    continue
+                if nid not in notes_by_id or _note_completeness(item) > _note_completeness(notes_by_id[nid]):
+                    notes_by_id[nid] = item
+        except Exception:
+            pass
+
+    # 过滤
+    result = []
+    for item in notes_by_id.values():
+        item["_creator_name"] = creator_name
+        # 日期过滤
+        if crawl_mode == "date_range" and not _check_date_range(item, date_start, date_end):
+            continue
+        # 互动量过滤
+        if min_interaction > 0:
+            if get_interaction_count(item) < min_interaction:
+                continue
+        result.append(item)
+
+    return result
+
+
+def save_reuse_data(task_dir: str, user_id: str, notes: List[Dict]):
+    """保存复用数据到任务目录"""
+    os.makedirs(task_dir, exist_ok=True)
+    # 标记为已复用数据（导出时不再重复过滤）
+    for note in notes:
+        note["_reused"] = True
+    filepath = os.path.join(task_dir, f"creator_{user_id}_reuse.json")
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(notes, f, ensure_ascii=False, indent=2)
+    utils.logger.info(f"[复用] 保存 {len(notes)} 条到 {filepath}")
+
+
+def check_creator_history_status(user_id: str) -> str:
+    """
+    检查作者在历史爬取中的状态
+    
+    Returns:
+        'completed' - 之前已爬完
+        'partial' - 有部分数据但未完成
+        'none' - 没有数据
+    """
+    # 检查所有历史 batch_progress 文件
+    data_dir = "data"
+    if os.path.exists(data_dir):
+        for filename in os.listdir(data_dir):
+            if filename.startswith("batch_progress") and filename.endswith(".json"):
+                try:
+                    with open(os.path.join(data_dir, filename), "r", encoding="utf-8") as f:
+                        progress = json.load(f)
+                    completed = progress.get("completed", [])
+                    for url in completed:
+                        if user_id in url:
+                            return "completed"
+                except Exception:
+                    pass
+
+    # 检查是否有该作者的数据
+    json_dir = os.path.join("data", "xhs", "json")
+    if os.path.exists(json_dir):
+        for filename in os.listdir(json_dir):
+            if not filename.endswith(".json") or not filename.startswith("creator_contents"):
+                continue
+            filepath = os.path.join(json_dir, filename)
+            if not os.path.isfile(filepath):
+                continue
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    for item in data:
+                        if item.get("user_id") == user_id:
+                            return "partial"
+            except Exception:
+                pass
+
+    return "none"
+
+
 # ==================== 格式化导出 ====================
 
 def _parse_image_urls(image_list_raw) -> List[str]:
@@ -692,19 +806,45 @@ async def run_batch_crawl(
     config.CRAWLER_MAX_NOTES_COUNT = max_notes_per_creator
     config.ENABLE_GET_COMMENTS = enable_comments
 
-    # 4. 统计
+    # 4. 读取复用和过滤配置
+    reuse_history = True
+    crawl_mode = "full"
+    date_start = ""
+    date_end = ""
+    try:
+        config_path_r = os.path.join("config", "anti_crawl_config.json")
+        with open(config_path_r, "r", encoding="utf-8") as f:
+            cfg_r = json.load(f)
+        batch_r = cfg_r.get("batch_crawl", {})
+        reuse_history = batch_r.get("reuse_history", True)
+        crawl_mode = batch_r.get("crawl_mode", "full")
+        date_start = batch_r.get("date_start", "")
+        date_end = batch_r.get("date_end", "")
+    except Exception:
+        pass
+
+    # 任务数据目录
+    task_dir = os.path.join("data", "xhs", "json", task_id)
+    os.makedirs(task_dir, exist_ok=True)
+
+    # 5. 统计
     total = len(creators)
     skipped = 0
+    reused = 0
     success = 0
     failed = 0
-    all_notes: List[Dict] = []
 
-    # 5. 逐个作者爬取
+    # 6. 逐个作者处理
     for idx, creator in enumerate(creators, 1):
         creator_name = creator["name"]
         creator_url = creator["url"]
 
-        # 断点续爬：跳过已完成
+        # 提取 user_id
+        user_id = ""
+        if "/user/profile/" in creator_url:
+            user_id = creator_url.split("/user/profile/")[1].split("?")[0]
+
+        # 断点续爬：跳过当前任务已完成的
         if resume and progress.is_completed(creator_url):
             utils.logger.info(
                 f"[BatchCrawler] [{idx}/{total}] 跳过已完成: {creator_name}"
@@ -712,6 +852,38 @@ async def run_batch_crawl(
             skipped += 1
             continue
 
+        # ========== 复用历史数据检查 ==========
+        if reuse_history and user_id:
+            history_status = check_creator_history_status(user_id)
+
+            if history_status == "completed":
+                # 之前已爬完，直接复用符合条件的数据
+                utils.logger.info(f"[BatchCrawler] [{idx}/{total}] 复用历史数据: {creator_name}")
+                reuse_notes = scan_history_for_creator(
+                    user_id, creator_name, crawl_mode, date_start, date_end, min_interaction
+                )
+                save_reuse_data(task_dir, user_id, reuse_notes)
+                progress.mark_completed(creator_url)
+                reused += 1
+                utils.logger.info(
+                    f"[BatchCrawler] [{idx}/{total}] 复用完成: {creator_name} "
+                    f"({len(reuse_notes)} 条符合条件)"
+                )
+                continue
+
+            elif history_status == "partial":
+                # 有部分数据，先复用再续爬
+                utils.logger.info(f"[BatchCrawler] [{idx}/{total}] 部分复用+续爬: {creator_name}")
+                reuse_notes = scan_history_for_creator(
+                    user_id, creator_name, crawl_mode, date_start, date_end, min_interaction
+                )
+                save_reuse_data(task_dir, user_id, reuse_notes)
+                utils.logger.info(
+                    f"  已复用 {len(reuse_notes)} 条历史数据，继续爬取剩余..."
+                )
+                # 不 continue，继续下面的爬取流程
+
+        # ========== 爬取 ==========
         utils.logger.info("=" * 60)
         utils.logger.info(
             f"[BatchCrawler] [{idx}/{total}] 开始爬取: {creator_name}"
@@ -740,20 +912,22 @@ async def run_batch_crawl(
             crawler = XiaoHongShuCrawler()
             await crawler.start()
 
-            # 收集数据（带互动量过滤）
+            # 新爬取的数据保存到任务目录
             data_dir = os.path.join("data", "xhs", "json")
-            notes = collect_crawled_data(
-                data_dir, session_ts, creator_name,
-                min_interaction=min_interaction
+            new_notes = collect_crawled_data(
+                data_dir, session_ts, creator_name, min_interaction=0
             )
-            all_notes.extend(notes)
+            if new_notes:
+                contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+                with open(contents_file, "w", encoding="utf-8") as f:
+                    json.dump(new_notes, f, ensure_ascii=False, indent=2)
+                utils.logger.info(f"  新爬 {len(new_notes)} 条保存到 {contents_file}")
 
             # 标记完成
             progress.mark_completed(creator_url)
             success += 1
             utils.logger.info(
-                f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name} "
-                f"({len(notes)} 条笔记，互动量>={min_interaction})"
+                f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
             )
 
         except Exception as e:
@@ -765,10 +939,9 @@ async def run_batch_crawl(
             )
 
         finally:
-            # 关闭浏览器，释放端口，防止下一个作者启动时冲突
+            # 关闭浏览器
             if crawler:
                 try:
-                    # 关闭 CDP 浏览器
                     if getattr(crawler, "cdp_manager", None):
                         await crawler.cdp_manager.cleanup(force=True)
                         crawler.cdp_manager = None
@@ -777,8 +950,6 @@ async def run_batch_crawl(
                     utils.logger.info("[BatchCrawler] 浏览器已关闭")
                 except Exception as close_err:
                     utils.logger.warning(f"[BatchCrawler] 关闭浏览器异常: {close_err}")
-
-                # 杀掉残留的 Chrome 进程
                 try:
                     import subprocess
                     subprocess.run(["pkill", "-f", "Google Chrome Dev"], capture_output=True, timeout=5)
@@ -792,83 +963,49 @@ async def run_batch_crawl(
             utils.logger.info(f"[BatchCrawler] 等待 {wait} 秒后继续下一个作者...")
             await asyncio.sleep(wait)
 
-    # 6. 汇总
+    # 7. 汇总
     utils.logger.info("=" * 60)
     utils.logger.info("[BatchCrawler] 批量爬取完成!")
-    utils.logger.info(f"  总计: {total} | 成功: {success} | 失败: {failed} | 跳过: {skipped}")
+    utils.logger.info(f"  总计: {total} | 成功: {success} | 复用: {reused} | 失败: {failed} | 跳过: {skipped}")
     utils.logger.info("=" * 60)
 
-    # 7. 导出到本地文件（读取所有历史JSON，合并导出，支持断点续爬多次累积）
-    utils.logger.info(f"[BatchCrawler] 汇总所有已爬数据并导出...")
-    
-    # 构建作者 user_id → 名称映射
-    creator_names = {}
-    for c in creators:
-        url = c["url"]
-        if "/user/profile/" in url:
-            uid = url.split("/user/profile/")[1].split("?")[0]
-            creator_names[uid] = c["name"]
+    # 8. 从任务目录读取所有数据，合并导出
+    utils.logger.info(f"[BatchCrawler] 从任务目录汇总数据: {task_dir}")
 
-    # 读取所有 creator_contents JSON，只匹配 Excel 中的作者
-    # 去重：同一个 note_id 保留最完整的记录（有详情的优先于只有基本信息的）
-    data_dir = os.path.join("data", "xhs", "json")
-    notes_by_id: Dict[str, Dict] = {}  # note_id → 最完整的记录
-    if os.path.exists(data_dir):
-        for filename in sorted(os.listdir(data_dir)):
-            if not filename.endswith(".json") or not filename.startswith("creator_contents"):
+    notes_by_id: Dict[str, Dict] = {}
+    if os.path.exists(task_dir):
+        for filename in sorted(os.listdir(task_dir)):
+            if not filename.endswith(".json"):
                 continue
-            filepath = os.path.join(data_dir, filename)
+            filepath = os.path.join(task_dir, filename)
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if not isinstance(data, list):
                     continue
                 for item in data:
-                    user_id = item.get("user_id", "")
-                    if user_id not in creator_names:
+                    nid = item.get("note_id", "")
+                    if not nid:
                         continue
-                    item["_creator_name"] = creator_names[user_id]
-                    
-                    note_id = item.get("note_id", "")
-                    if not note_id:
-                        continue
-                    
-                    # 保留更完整的记录
-                    if note_id not in notes_by_id or _note_completeness(item) > _note_completeness(notes_by_id[note_id]):
-                        notes_by_id[note_id] = item
+                    if nid not in notes_by_id or _note_completeness(item) > _note_completeness(notes_by_id[nid]):
+                        notes_by_id[nid] = item
             except Exception:
                 pass
 
-    # 读取日期范围配置
-    crawl_mode = "full"
-    date_start = ""
-    date_end = ""
-    try:
-        config_path_t = os.path.join("config", "anti_crawl_config.json")
-        with open(config_path_t, "r", encoding="utf-8") as f:
-            cfg_t = json.load(f)
-        batch_cfg_t = cfg_t.get("batch_crawl", {})
-        crawl_mode = batch_cfg_t.get("crawl_mode", "full")
-        date_start = batch_cfg_t.get("date_start", "")
-        date_end = batch_cfg_t.get("date_end", "")
-    except Exception:
-        pass
-
-    # 时间范围+互动量过滤
+    # 对新爬取的 _contents 数据做过滤（_reuse 已经过滤过了）
     all_export_notes = []
-    date_filtered = 0
     for item in notes_by_id.values():
+        # reuse 数据已经过滤过，直接保留
+        if item.get("_reused"):
+            all_export_notes.append(item)
+            continue
+        # 新爬取的数据做日期+互动量过滤
         if crawl_mode == "date_range" and not _check_date_range(item, date_start, date_end):
-            date_filtered += 1
             continue
         if min_interaction > 0:
-            interaction = get_interaction_count(item)
-            if interaction < min_interaction:
+            if get_interaction_count(item) < min_interaction:
                 continue
         all_export_notes.append(item)
-
-    if date_filtered > 0:
-        utils.logger.info(f"  日期范围过滤: {date_filtered} 条不在 {date_start} ~ {date_end} 内")
 
     utils.logger.info(f"  汇总结果: {len(all_export_notes)} 条符合条件 (互动量>={min_interaction})")
 
