@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from .routers import crawler_router, data_router, websocket_router
+from .routers import crawler_router, data_router, websocket_router, login_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -59,6 +59,7 @@ app.add_middleware(
 app.include_router(crawler_router, prefix="/api")
 app.include_router(data_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
+app.include_router(login_router, prefix="/api")
 
 
 @app.get("/")
@@ -73,6 +74,15 @@ async def serve_frontend():
         "docs": "/docs",
         "note": "WebUI not found, please build it first: cd webui && npm run build"
     }
+
+
+@app.get("/login")
+async def serve_login_page():
+    """Return remote login page"""
+    login_path = os.path.join(os.path.dirname(__file__), "login.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path, media_type="text/html")
+    return {"message": "Login page not found"}
 
 
 @app.get("/api/health")
