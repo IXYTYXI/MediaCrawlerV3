@@ -182,10 +182,10 @@
   },
 
   "feishu": {
-    "enabled": false,
-    "app_id": "",
-    "app_secret": "",
-    "folder_token": "",
+    "enabled": true,
+    "app_id": "cli_a9006c0b96395bd3",
+    "app_secret": "tul9PNh3aSjIbcqcoB25vh8HLYP2HmPx",
+    "folder_token": "LLTwf1fRUl3tH9dxr2PcMqplnAh",
     "_enabled_desc": "是否在爬取完成后自动写入飞书多维表格",
     "_app_id_desc": "飞书开放平台 App ID",
     "_app_secret_desc": "飞书开放平台 App Secret",
