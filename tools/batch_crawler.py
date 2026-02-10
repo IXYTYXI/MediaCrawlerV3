@@ -534,6 +534,45 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 f"[BatchCrawler] 飞书写入完成: {inserted}/{len(records)} 条, "
                 f"URL: {bitable_url}"
             )
+
+            # 5. 自动创建视图
+            try:
+                # 获取"热门"字段的 field_id
+                fields = client.list_fields(app_token, table_id)
+                hot_field_id = ""
+                for f in fields:
+                    if f and f.get("field_name") == "热门":
+                        hot_field_id = f.get("field_id", "")
+                        break
+
+                if hot_field_id:
+                    # 创建"热门作品"视图：筛选热门不为空
+                    client.create_view(
+                        app_token, table_id,
+                        view_name="🔥 热门作品",
+                        filter_conditions=[{
+                            "field_id": hot_field_id,
+                            "operator": "isNotEmpty",
+                            "value": [],
+                        }]
+                    )
+
+                    # 创建"按作者分组"视图
+                    author_field_id = ""
+                    for f in fields:
+                        if f and f.get("field_name") == "账号名称":
+                            author_field_id = f.get("field_id", "")
+                            break
+                    if author_field_id:
+                        client.create_view(
+                            app_token, table_id,
+                            view_name="📊 按作者分组",
+                        )
+
+                utils.logger.info("[BatchCrawler] 飞书视图创建完成")
+            except Exception as e:
+                utils.logger.warning(f"[BatchCrawler] 创建视图失败: {e}")
+
             return bitable_url
 
     except Exception as e:

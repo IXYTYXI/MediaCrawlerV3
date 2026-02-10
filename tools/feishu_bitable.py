@@ -261,6 +261,50 @@ class FeishuBitableClient:
         except Exception as e:
             utils.logger.warning(f"[FeishuBitable] 清理默认字段失败: {e}")
 
+    def create_view(self, app_token: str, table_id: str,
+                    view_name: str, view_type: str = "grid",
+                    filter_conditions: List[Dict] = None,
+                    filter_conjunction: str = "and") -> str:
+        """
+        创建视图并设置筛选条件
+        
+        Args:
+            app_token: 多维表格 token
+            table_id: 数据表 ID
+            view_name: 视图名称
+            view_type: 视图类型 (grid=表格, kanban=看板, gallery=画册)
+            filter_conditions: 筛选条件列表
+            filter_conjunction: 条件关系 (and/or)
+            
+        Returns:
+            view_id
+        """
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/views"
+        body = {"view_name": view_name, "view_type": view_type}
+        data = self._request("POST", url, json=body)
+        view_id = data.get("view", {}).get("view_id", "")
+        utils.logger.info(f"[FeishuBitable] 创建视图: {view_name} (id={view_id})")
+
+        # 设置筛选条件
+        if filter_conditions and view_id:
+            filter_url = f"{url}/{view_id}"
+            filter_body = {
+                "view_name": view_name,
+                "property": {
+                    "filter_info": {
+                        "conjunction": filter_conjunction,
+                        "conditions": filter_conditions,
+                    }
+                }
+            }
+            try:
+                self._request("PATCH", filter_url, json=filter_body)
+                utils.logger.info(f"[FeishuBitable] 视图筛选条件已设置")
+            except Exception as e:
+                utils.logger.warning(f"[FeishuBitable] 设置视图筛选失败: {e}")
+
+        return view_id
+
     def list_tables(self, app_token: str) -> List[Dict]:
         """列出多维表格中的所有数据表"""
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables"
