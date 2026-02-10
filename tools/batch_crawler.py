@@ -516,6 +516,11 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 except Exception as e:
                     pass  # 字段可能已存在
 
+            # 清理飞书默认生成的空记录和多余字段
+            client.cleanup_default_fields_and_records(
+                app_token, table_id, set(ordered_fields)
+            )
+
             # 4. 批量写入
             inserted = client.batch_insert_records(app_token, table_id, records)
             utils.logger.info(

@@ -191,6 +191,53 @@ class FeishuBitableClient:
 
         return total_inserted
 
+    def list_fields(self, app_token: str, table_id: str) -> List[Dict]:
+        """列出数据表的所有字段"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields"
+        data = self._request("GET", url)
+        return data.get("items", [])
+
+    def delete_field(self, app_token: str, table_id: str, field_id: str):
+        """删除字段"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields/{field_id}"
+        self._request("DELETE", url)
+
+    def list_records(self, app_token: str, table_id: str, page_size: int = 100) -> List[Dict]:
+        """列出记录"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records"
+        data = self._request("GET", url, params={"page_size": page_size})
+        return data.get("items", [])
+
+    def batch_delete_records(self, app_token: str, table_id: str, record_ids: List[str]):
+        """批量删除记录"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete"
+        self._request("POST", url, json={"records": record_ids})
+
+    def cleanup_default_fields_and_records(self, app_token: str, table_id: str, keep_field_names: set):
+        """清理默认字段和空记录"""
+        # 删除默认空记录
+        try:
+            records = self.list_records(app_token, table_id)
+            if records:
+                record_ids = [r["record_id"] for r in records]
+                self.batch_delete_records(app_token, table_id, record_ids)
+                utils.logger.info(f"[FeishuBitable] 删除 {len(record_ids)} 条默认空记录")
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 删除默认记录失败: {e}")
+
+        # 删除默认字段（不在我们需要的字段列表中的）
+        try:
+            fields = self.list_fields(app_token, table_id)
+            for field in fields:
+                if field.get("field_name") not in keep_field_names:
+                    try:
+                        self.delete_field(app_token, table_id, field["field_id"])
+                        utils.logger.info(f"[FeishuBitable] 删除默认字段: {field['field_name']}")
+                    except Exception:
+                        pass  # 有些系统字段不能删
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 删除默认字段失败: {e}")
+
     def list_tables(self, app_token: str) -> List[Dict]:
         """列出多维表格中的所有数据表"""
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables"
