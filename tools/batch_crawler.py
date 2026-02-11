@@ -1584,6 +1584,15 @@ async def run_batch_crawl(
     except Exception:
         pass
 
+    # 5. 注入日期提前停止配置到 config（供 core.py 使用）
+    if crawl_mode == "date_range" and date_start:
+        config.DATE_EARLY_STOP_ENABLED = True
+        config.DATE_EARLY_STOP_THRESHOLD = 5  # 连续5条超出范围后停止
+        config.CRAWL_DATE_START = date_start
+        utils.logger.info(f"[BatchCrawler] 日期提前停止已启用: 连续5条早于 {date_start} 时自动跳过")
+    else:
+        config.DATE_EARLY_STOP_ENABLED = False
+
     # 任务数据目录
     task_dir = os.path.join("data", "xhs", "json", task_id)
     os.makedirs(task_dir, exist_ok=True)

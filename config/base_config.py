@@ -149,6 +149,12 @@ BATCH_PAUSE_EVERY_N = 10  # 每 10 条
 BATCH_PAUSE_MIN_SEC = 30.0  # 暂停 30~60 秒
 BATCH_PAUSE_MAX_SEC = 60.0
 
+# 按日期提前停止：当连续 N 条作品早于 date_start 时，停止爬取该作者剩余作品
+# 由 batch_crawler 在运行时动态设置 DATE_EARLY_STOP_THRESHOLD 和 CRAWL_DATE_START
+DATE_EARLY_STOP_ENABLED = False
+DATE_EARLY_STOP_THRESHOLD = 5  # 连续多少条超出范围后停止
+CRAWL_DATE_START = ""  # 由 batch_crawler 动态注入，格式 "2025-01-01"
+
 # 假动作策略：随机访问无关内容，模拟真实用户浏览
 FAKE_ACTION_ENABLED = True
 FAKE_ACTION_PROBABILITY = 0.15  # 15% 概率触发假动作
