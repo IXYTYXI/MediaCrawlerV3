@@ -32,6 +32,10 @@ _playwright_instance = None
 _browser = None
 _login_task: Optional[asyncio.Task] = None
 
+# 防止并发操作的锁
+_login_lock = asyncio.Lock()
+_cleanup_lock = asyncio.Lock()
+
 
 def _reset_state():
     global _login_state
@@ -57,17 +61,18 @@ async def start_login(platform: str = "xhs"):
     """
     global _login_task
 
-    if _login_state["status"] in ("starting", "waiting_scan"):
-        return {"success": False, "message": "登录流程已在运行中"}
+    async with _login_lock:
+        if _login_state["status"] in ("starting", "waiting_scan"):
+            return {"success": False, "message": "登录流程已在运行中"}
 
-    _reset_state()
-    _login_state["status"] = "starting"
-    _login_state["platform"] = platform
-    _login_state["started_at"] = time.time()
-    _login_state["message"] = "正在启动浏览器..."
+        _reset_state()
+        _login_state["status"] = "starting"
+        _login_state["platform"] = platform
+        _login_state["started_at"] = time.time()
+        _login_state["message"] = "正在启动浏览器..."
 
-    # 异步启动登录流程
-    _login_task = asyncio.create_task(_run_login_flow(platform))
+        # 异步启动登录流程
+        _login_task = asyncio.create_task(_run_login_flow(platform))
 
     return {"success": True, "message": "登录流程已启动"}
 
@@ -98,12 +103,20 @@ async def get_login_status():
 async def cancel_login():
     """取消登录"""
     global _login_task
-    _login_state["status"] = "cancelled"
-    _login_state["message"] = "已取消"
 
-    if _login_task and not _login_task.done():
-        _login_task.cancel()
+    async with _login_lock:
+        _login_state["status"] = "cancelled"
+        _login_state["message"] = "已取消"
 
+        if _login_task and not _login_task.done():
+            _login_task.cancel()
+            # 等待 task 结束（它的 finally 会调 _cleanup_browser）
+            try:
+                await asyncio.wait_for(_login_task, timeout=10)
+            except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                pass
+
+    # task 结束后再兜底清理（幂等安全）
     await _cleanup_browser()
     return {"success": True, "message": "登录已取消"}
 
@@ -111,10 +124,12 @@ async def cancel_login():
 @router.post("/refresh")
 async def refresh_qrcode():
     """刷新二维码（重新截图当前页面）"""
-    global _context_page
-    if _context_page and _login_state["status"] == "waiting_scan":
+    page = _context_page  # 捕获引用，避免竞态
+    if page and _login_state["status"] == "waiting_scan":
         try:
-            await _capture_qrcode(_context_page)
+            if page.is_closed():
+                return {"success": False, "message": "页面已关闭"}
+            await _capture_qrcode(page)
             return {"success": True, "message": "二维码已刷新"}
         except Exception as e:
             return {"success": False, "message": f"刷新失败: {e}"}
@@ -173,8 +188,7 @@ async def _run_login_flow(platform: str):
             _login_state["message"] = "已登录（Cookie有效）"
             await _take_screenshot(_context_page)
             await asyncio.sleep(2)
-            await _cleanup_browser()
-            return
+            return  # finally 会清理
 
         # 5. 尝试触发登录弹窗
         _login_state["message"] = "等待登录页面..."
@@ -197,20 +211,24 @@ async def _run_login_flow(platform: str):
             if _login_state["status"] == "cancelled":
                 return
 
+            # 捕获当前 page 引用（防止被 cleanup 置空）
+            page = _context_page
+            ctx = _browser_context
+            if not page or page.is_closed() or not ctx:
+                return
+
             # 每3秒刷新一次截图
             if i % 3 == 0:
-                await _take_screenshot(_context_page)
-                # 尝试重新提取二维码
-                await _capture_qrcode(_context_page)
+                await _take_screenshot(page)
+                await _capture_qrcode(page)
 
             # 检查登录状态
-            if await _check_already_logged_in(_context_page, _browser_context):
+            if await _check_already_logged_in(page, ctx):
                 _login_state["status"] = "success"
                 _login_state["message"] = "登录成功！Cookie已保存"
-                await _take_screenshot(_context_page)
+                await _take_screenshot(page)
                 await asyncio.sleep(3)
-                await _cleanup_browser()
-                return
+                return  # finally 会清理
 
             await asyncio.sleep(1)
 
@@ -250,6 +268,9 @@ async def _trigger_login_dialog(page):
 async def _capture_qrcode(page):
     """提取二维码图片"""
     try:
+        if page.is_closed():
+            return
+
         # 方法1: 直接获取二维码图片元素
         qr_selector = "xpath=//img[@class='qrcode-img']"
         qr_elem = await page.query_selector(qr_selector)
@@ -287,6 +308,8 @@ async def _capture_qrcode(page):
 async def _take_screenshot(page):
     """截取当前页面"""
     try:
+        if page.is_closed():
+            return
         screenshot = await page.screenshot(type="png")
         _login_state["screenshot_base64"] = base64.b64encode(screenshot).decode()
     except Exception:
@@ -296,6 +319,9 @@ async def _take_screenshot(page):
 async def _check_already_logged_in(page, browser_context) -> bool:
     """检查是否已登录"""
     try:
+        if page.is_closed():
+            return False
+
         from tools import utils
 
         # 方法1: 检查 "我" 按钮
@@ -319,33 +345,34 @@ async def _check_already_logged_in(page, browser_context) -> bool:
 
 
 async def _cleanup_browser():
-    """清理浏览器资源"""
+    """清理浏览器资源（幂等，可重复调用）"""
     global _browser_context, _context_page, _playwright_instance, _browser
 
-    try:
-        if _context_page:
-            await _context_page.close()
-    except Exception:
-        pass
-    _context_page = None
+    async with _cleanup_lock:
+        try:
+            if _context_page and not _context_page.is_closed():
+                await _context_page.close()
+        except Exception:
+            pass
+        _context_page = None
 
-    try:
-        if _browser_context:
-            await _browser_context.close()
-    except Exception:
-        pass
-    _browser_context = None
+        try:
+            if _browser_context:
+                await _browser_context.close()
+        except Exception:
+            pass
+        _browser_context = None
 
-    try:
-        if _browser:
-            await _browser.close()
-    except Exception:
-        pass
-    _browser = None
+        try:
+            if _browser:
+                await _browser.close()
+        except Exception:
+            pass
+        _browser = None
 
-    try:
-        if _playwright_instance:
-            await _playwright_instance.stop()
-    except Exception:
-        pass
-    _playwright_instance = None
+        try:
+            if _playwright_instance:
+                await _playwright_instance.stop()
+        except Exception:
+            pass
+        _playwright_instance = None

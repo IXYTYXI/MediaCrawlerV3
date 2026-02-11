@@ -743,28 +743,33 @@ async def _download_missing_images(notes: List[Dict], max_notes: int = 0) -> int
                 note_image_dir = os.path.join(image_dir, note_id)
                 pathlib.Path(note_image_dir).mkdir(parents=True, exist_ok=True)
                 
-                pic_num = 0
-                for pic in fresh_image_list:
+                pic_downloaded = 0
+                for pic_num, pic in enumerate(fresh_image_list):
                     url = pic.get("url")
                     if not url:
                         continue
                     # 检查是否已有该图片
                     save_path = os.path.join(note_image_dir, f"{pic_num}.jpg")
                     if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-                        pic_num += 1
+                        pic_downloaded += 1
                         continue
                     
-                    content = await xhs_client.get_note_media(url)
-                    if content:
-                        with open(save_path, "wb") as f:
-                            f.write(content)
-                        pic_num += 1
+                    try:
+                        content = await xhs_client.get_note_media(url)
+                        if content:
+                            with open(save_path, "wb") as f:
+                                f.write(content)
+                            pic_downloaded += 1
+                        else:
+                            utils.logger.warning(f"[补图] {note_id} 第{pic_num}张下载返回空")
+                    except Exception as dl_err:
+                        utils.logger.warning(f"[补图] {note_id} 第{pic_num}张下载失败: {dl_err}")
                     await asyncio.sleep(random.random() * 0.5)
                 
                 downloaded_count += 1
                 utils.logger.info(
                     f"[补图] [{i+1}/{len(notes_need_images)}] "
-                    f"{note_id}: 下载 {pic_num} 张图片"
+                    f"{note_id}: 下载 {pic_downloaded}/{len(fresh_image_list)} 张图片"
                 )
                 
                 # 反爬等待（比全量爬取短，因为只是获取详情+下载图片）
@@ -858,9 +863,13 @@ def _upload_note_images_to_feishu(
             for fn, p, il in tasks
         }
         for future in as_completed(futures):
-            field_name, attachment = future.result()
-            if attachment:
-                result[field_name] = attachment
+            try:
+                field_name, attachment = future.result()
+                if attachment:
+                    result[field_name] = attachment
+            except Exception as e:
+                fn = futures[future]
+                utils.logger.warning(f"[图片上传] {fn} 线程异常: {e}")
     
     return result
 
@@ -1488,15 +1497,15 @@ async def run_batch_crawl(
                     utils.logger.warning(f"[BatchCrawler] 关闭浏览器异常: {close_err}")
                 try:
                     import subprocess
-                    import platform
-                    if platform.system() == "Darwin":
+                    import platform as _platform
+                    if _platform.system() == "Darwin":
                         subprocess.run(["pkill", "-f", "Google Chrome Dev"], capture_output=True, timeout=5)
-                    else:
-                        # Linux: Playwright 使用的 Chromium 进程
+                    elif _platform.system() == "Linux":
                         subprocess.run(["pkill", "-f", "chromium"], capture_output=True, timeout=5)
+                    # Windows: 不使用 pkill
                     await asyncio.sleep(2)
-                except Exception:
-                    pass
+                except Exception as kill_err:
+                    utils.logger.debug(f"[BatchCrawler] 清理浏览器进程: {kill_err}")
 
         # 作者之间休息一下
         if idx < total:
