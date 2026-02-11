@@ -674,10 +674,18 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 break
 
             notes_to_add = notes[:remaining]
+            should_stop = False
             if callback:
-                await callback(notes_to_add)
+                callback_result = await callback(notes_to_add)
+                # 回调返回 True 表示需要提前停止（如日期超出范围）
+                if callback_result is True:
+                    should_stop = True
 
             result.extend(notes_to_add)
+            
+            if should_stop:
+                utils.logger.info(f"[XiaoHongShuClient.get_all_notes_by_creator] 回调请求提前停止，已获取 {len(result)} 条")
+                break
             # Dynamic random sleep for each request
             actual_sleep = crawl_interval + random.uniform(0, crawl_interval * 0.5) if crawl_interval > 0 else random.uniform(0.5, 1.5)
             await asyncio.sleep(actual_sleep)

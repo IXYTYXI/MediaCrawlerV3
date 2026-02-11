@@ -63,6 +63,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
         self.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+        self._early_stop_old_count = 0  # 跨批次的日期提前停止计数器
+        self._early_stopped = False  # 是否已触发提前停止
 
     def _get_sleep_seconds(self, *, for_comments: bool = False) -> float:
         """使用高级随机分布生成等待时间"""
@@ -282,6 +284,10 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 self._crawled_note_ids = self._progress_manager.load_progress(user_id)
                 self._comment_crawled_ids = self._progress_manager.get_comment_crawled_ids()
                 
+                # 重置日期提前停止计数器（每个作者独立）
+                self._early_stop_old_count = 0
+                self._early_stopped = False
+                
                 if self._crawled_note_ids:
                     utils.logger.info(f"[断点续爬] 作品: 跳过 {len(self._crawled_note_ids)} 条已爬取")
                 if self._comment_crawled_ids:
@@ -425,12 +431,11 @@ class XiaoHongShuCrawler(AbstractCrawler):
         skip_count = 0
         save_interval = 10  # 每10条保存一次进度
         
-        # 按日期提前停止
+        # 按日期提前停止（使用实例变量，跨批次持久化）
         early_stop_enabled = getattr(config, 'DATE_EARLY_STOP_ENABLED', False)
         early_stop_threshold = getattr(config, 'DATE_EARLY_STOP_THRESHOLD', 5)
         crawl_date_start = getattr(config, 'CRAWL_DATE_START', '')
-        consecutive_old_count = 0  # 连续超出日期范围的计数
-        early_stopped = False
+        early_stopped = self._early_stopped
         
         is_parallel_mode = comments_mode == 'parallel' and enable_comments
         
@@ -490,19 +495,20 @@ class XiaoHongShuCrawler(AbstractCrawler):
                                 publish_date = _dt.fromtimestamp(note_time / 1000)
                                 start_date = _dt.strptime(crawl_date_start, "%Y-%m-%d")
                                 if publish_date < start_date:
-                                    consecutive_old_count += 1
+                                    self._early_stop_old_count += 1
                                     utils.logger.info(
                                         f"[详情获取] 作品日期 {publish_date.strftime('%Y-%m-%d')} "
-                                        f"早于 {crawl_date_start}，连续 {consecutive_old_count}/{early_stop_threshold}"
+                                        f"早于 {crawl_date_start}，连续 {self._early_stop_old_count}/{early_stop_threshold}"
                                     )
-                                    if consecutive_old_count >= early_stop_threshold:
+                                    if self._early_stop_old_count >= early_stop_threshold:
                                         utils.logger.info(
                                             f"[详情获取] ⏹ 连续 {early_stop_threshold} 条作品早于 {crawl_date_start}，"
                                             f"提前停止爬取该作者剩余作品"
                                         )
                                         early_stopped = True
+                                        self._early_stopped = True
                                 else:
-                                    consecutive_old_count = 0  # 重置计数
+                                    self._early_stop_old_count = 0  # 重置计数
                             except Exception:
                                 pass
                     
@@ -558,6 +564,9 @@ class XiaoHongShuCrawler(AbstractCrawler):
         
         early_stop_msg = f", 提前停止(早于{crawl_date_start})" if early_stopped else ""
         utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}, 总计 {total}{early_stop_msg}")
+        
+        # 返回是否需要停止翻页
+        return early_stopped
     
     async def _fetch_comments_with_delay(
         self, 
