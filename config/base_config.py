@@ -23,8 +23,8 @@ _IS_LINUX = _platform.system() == "Linux"
 
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
-LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
-COOKIES = ""
+LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
+COOKIES = "web_session=040069b95f580579a23e7313b93b4b6573011c"
 CRAWLER_TYPE = (
     "creator"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )
@@ -91,13 +91,13 @@ CRAWLER_MAX_NOTES_COUNT = 3000
 MAX_CONCURRENCY_NUM = 3
 
 # 是否开启爬媒体模式（包含图片或视频资源），默认不开启爬媒体
-ENABLE_GET_MEIDAS = False
+ENABLE_GET_MEIDAS = True
 
 # 是否获取作品详情（点赞数、收藏数等），关闭则只获取基本信息
 ENABLE_GET_NOTE_DETAIL = True
 
 # 是否开启爬评论模式, 默认开启爬评论
-ENABLE_GET_COMMENTS = True
+ENABLE_GET_COMMENTS = False
 
 # 爬取一级评论的数量控制(单视频/帖子)
 CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 8000
