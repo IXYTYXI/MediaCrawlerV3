@@ -14,7 +14,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Tuple
 
 # 确保项目根目录在 path 中
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -624,9 +624,12 @@ async def _download_missing_images(notes: List[Dict], max_notes: int = 0) -> int
     """
     import random
     import pathlib
+    import json as _json
+    image_dir = "data/xhs/images"
     
     # 1. 筛选需要补图的笔记
     notes_need_images = []
+    existing_ids = set()
     for note in notes:
         note_id = note.get("note_id", "")
         if not note_id:
@@ -642,6 +645,32 @@ async def _download_missing_images(notes: List[Dict], max_notes: int = 0) -> int
         if len(local_paths) >= len(image_urls):
             continue  # 本地图片已完整
         notes_need_images.append(note)
+        existing_ids.add(note_id)
+    
+    # 1.1 加载历史失败列表（上次运行保存的），合并到待处理队列
+    prev_fail_files = sorted(pathlib.Path(image_dir).glob("failed_notes_*.json"))
+    loaded_from_prev = 0
+    for ff in prev_fail_files:
+        try:
+            with open(ff, "r", encoding="utf-8") as f:
+                prev_fails = _json.load(f)
+            for pf in prev_fails:
+                nid = pf.get("note_id", "")
+                if nid and nid not in existing_ids:
+                    # 检查本地是否已有图片（可能上次之后手动处理了）
+                    local_paths = _get_local_image_paths(nid)
+                    if not local_paths:
+                        notes_need_images.append(pf)
+                        existing_ids.add(nid)
+                        loaded_from_prev += 1
+            # 加载成功后删除旧文件，避免重复
+            ff.unlink()
+            utils.logger.info(f"[补图] 已加载历史失败记录: {ff.name}")
+        except Exception as load_err:
+            utils.logger.warning(f"[补图] 加载历史失败记录出错 {ff}: {load_err}")
+    
+    if loaded_from_prev > 0:
+        utils.logger.info(f"[补图] 从历史失败记录中合并了 {loaded_from_prev} 条笔记")
     
     if not notes_need_images:
         utils.logger.info("[补图] 所有笔记的本地图片已完整，无需补下载")
@@ -704,82 +733,242 @@ async def _download_missing_images(notes: List[Dict], max_notes: int = 0) -> int
             cookie_dict=cookie_dict,
         )
         
-        # 3. 逐笔记获取新鲜图片URL并下载
-        image_dir = "data/xhs/images"
+        # 3. 准备假动作工具（复用主爬虫的反爬工具）
+        from tools.anti_crawl_utils import (
+            generate_random_wait, simulate_scroll, 
+            simulate_mouse_move, simulate_input
+        )
+        from media_platform.xhs.help import get_search_id
         
-        for i, note in enumerate(notes_need_images):
+        fake_action_keywords = ["美食", "旅行", "穿搭", "护肤", "健身", "摄影",
+                                "宠物", "家居", "数码", "音乐", "电影", "书籍",
+                                "咖啡", "甜点", "打卡", "探店", "学习", "考试"]
+        fake_action_probability = getattr(config, "FAKE_ACTION_PROBABILITY", 0.15)
+        
+        async def _maybe_fake_action():
+            """补图阶段的假动作：模拟页面浏览 + 随机搜索关键词"""
+            if random.random() > fake_action_probability:
+                return False
+            try:
+                # 模拟页面滚动和鼠标移动
+                await simulate_scroll(context_page, config)
+                await simulate_mouse_move(context_page, config)
+                
+                # 随机搜索一个热门关键词
+                keyword = random.choice(fake_action_keywords)
+                utils.logger.info(f"[补图-FakeAction] 搜索关键词 '{keyword}'")
+                await xhs_client.get_note_by_keyword(
+                    keyword=keyword,
+                    search_id=get_search_id(),
+                    page=1,
+                    page_size=10
+                )
+                
+                wait = generate_random_wait(2.0, 5.0, "lognormal")
+                utils.logger.info(f"[补图-FakeAction] 完成，等待 {wait:.1f}s")
+                await asyncio.sleep(wait)
+                return True
+            except Exception as e:
+                utils.logger.debug(f"[补图-FakeAction] 执行失败: {e}")
+                return False
+        
+        # 4. 单轮下载逻辑（供首轮和补录轮复用）
+        async def _process_one_note(note: Dict, idx: int, total: int, round_name: str) -> bool:
+            """处理单条笔记的图片下载，返回是否成功"""
             note_id = note.get("note_id", "")
             xsec_token = note.get("xsec_token", "")
             xsec_source = note.get("xsec_source", "pc_search")
             title = note.get("title", "")[:20]
             
-            try:
-                utils.logger.info(
-                    f"[补图] [{i+1}/{len(notes_need_images)}] "
-                    f"获取新鲜图片URL: {note_id} ({title}...)"
-                )
-                
-                # 调API获取新鲜的笔记详情（含新鲜图片URL）
-                note_detail = await xhs_client.get_note_by_id(
-                    note_id, xsec_source, xsec_token
-                )
-                
-                if not note_detail:
-                    utils.logger.warning(f"[补图] {note_id} 获取详情失败，跳过")
+            # 随机执行假动作（混淆 API 调用模式）
+            await _maybe_fake_action()
+            
+            utils.logger.info(
+                f"[{round_name}] [{idx+1}/{total}] "
+                f"获取新鲜图片URL: {note_id} ({title}...)"
+            )
+            
+            # 调API获取新鲜的笔记详情（含新鲜图片URL）
+            note_detail = await xhs_client.get_note_by_id(
+                note_id, xsec_source, xsec_token
+            )
+            
+            if not note_detail:
+                utils.logger.warning(f"[{round_name}] {note_id} 获取详情失败")
+                return False
+            
+            # 提取新鲜的 image_list
+            fresh_image_list = note_detail.get("image_list", [])
+            if not fresh_image_list:
+                utils.logger.warning(f"[{round_name}] {note_id} 无图片")
+                return False
+            
+            # 对URL做默认URL优先
+            for img in fresh_image_list:
+                if img.get("url_default"):
+                    img["url"] = img["url_default"]
+            
+            # 下载每张图片
+            note_image_dir = os.path.join(image_dir, note_id)
+            pathlib.Path(note_image_dir).mkdir(parents=True, exist_ok=True)
+            
+            pic_downloaded = 0
+            for pic_num, pic in enumerate(fresh_image_list):
+                url = pic.get("url")
+                if not url:
+                    continue
+                save_path = os.path.join(note_image_dir, f"{pic_num}.jpg")
+                if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                    pic_downloaded += 1
                     continue
                 
-                # 提取新鲜的 image_list
-                fresh_image_list = note_detail.get("image_list", [])
-                if not fresh_image_list:
-                    utils.logger.warning(f"[补图] {note_id} 无图片，跳过")
-                    continue
-                
-                # 对URL做默认URL优先
-                for img in fresh_image_list:
-                    if img.get("url_default"):
-                        img["url"] = img["url_default"]
-                
-                # 下载每张图片
-                note_image_dir = os.path.join(image_dir, note_id)
-                pathlib.Path(note_image_dir).mkdir(parents=True, exist_ok=True)
-                
-                pic_downloaded = 0
-                for pic_num, pic in enumerate(fresh_image_list):
-                    url = pic.get("url")
-                    if not url:
-                        continue
-                    # 检查是否已有该图片
-                    save_path = os.path.join(note_image_dir, f"{pic_num}.jpg")
-                    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                try:
+                    content = await xhs_client.get_note_media(url)
+                    if content:
+                        with open(save_path, "wb") as f:
+                            f.write(content)
                         pic_downloaded += 1
-                        continue
+                    else:
+                        utils.logger.warning(f"[{round_name}] {note_id} 第{pic_num}张下载返回空")
+                except Exception as dl_err:
+                    utils.logger.warning(f"[{round_name}] {note_id} 第{pic_num}张下载失败: {dl_err}")
+                await asyncio.sleep(random.random() * 0.5)
+            
+            utils.logger.info(
+                f"[{round_name}] [{idx+1}/{total}] "
+                f"{note_id}: 下载 {pic_downloaded}/{len(fresh_image_list)} 张图片"
+            )
+            return True
+        
+        async def _run_download_round(
+            notes_batch: List[Dict], round_name: str, 
+            base_wait_min: float = 5.0, base_wait_max: float = 12.0,
+            max_consecutive_fails: int = 7
+        ) -> Tuple[int, List[Dict]]:
+            """
+            执行一轮下载，返回 (成功数, 失败笔记列表)
+            """
+            success_count = 0
+            failed_notes: List[Dict] = []
+            consecutive_fails = 0
+            stopped_early = False
+            
+            for i, note in enumerate(notes_batch):
+                try:
+                    ok = await _process_one_note(note, i, len(notes_batch), round_name)
+                    if ok:
+                        success_count += 1
+                        consecutive_fails = 0
+                    else:
+                        failed_notes.append(note)
                     
-                    try:
-                        content = await xhs_client.get_note_media(url)
-                        if content:
-                            with open(save_path, "wb") as f:
-                                f.write(content)
-                            pic_downloaded += 1
+                    # 反爬等待
+                    wait_time = random.uniform(base_wait_min, base_wait_max)
+                    await asyncio.sleep(wait_time)
+                    
+                except Exception as e:
+                    err_str = str(e)
+                    note_id = note.get("note_id", "")
+                    utils.logger.warning(f"[{round_name}] {note_id} 异常: {err_str}")
+                    failed_notes.append(note)
+                    consecutive_fails += 1
+                    
+                    # 检测 CAPTCHA / 限流 / 账号异常
+                    is_anti_crawl = any(kw in err_str for kw in [
+                        "CAPTCHA", "Verifytype", "300013", "300011",
+                        "DataFetchError", "RetryError"
+                    ])
+                    
+                    if is_anti_crawl:
+                        if consecutive_fails <= 2:
+                            wait = random.uniform(30, 60)
+                            utils.logger.warning(
+                                f"[{round_name}] 触发反爬(连续{consecutive_fails}次)，"
+                                f"等待 {wait:.0f} 秒..."
+                            )
+                        elif consecutive_fails <= max_consecutive_fails - 1:
+                            wait = random.uniform(60, 120)
+                            utils.logger.warning(
+                                f"[{round_name}] 反爬持续(连续{consecutive_fails}次)，"
+                                f"等待 {wait:.0f} 秒..."
+                            )
                         else:
-                            utils.logger.warning(f"[补图] {note_id} 第{pic_num}张下载返回空")
-                    except Exception as dl_err:
-                        utils.logger.warning(f"[补图] {note_id} 第{pic_num}张下载失败: {dl_err}")
-                    await asyncio.sleep(random.random() * 0.5)
-                
-                downloaded_count += 1
-                utils.logger.info(
-                    f"[补图] [{i+1}/{len(notes_need_images)}] "
-                    f"{note_id}: 下载 {pic_downloaded}/{len(fresh_image_list)} 张图片"
+                            # 剩余的笔记全部加入失败列表
+                            remaining = notes_batch[i+1:]
+                            failed_notes.extend(remaining)
+                            utils.logger.error(
+                                f"[{round_name}] 连续失败{consecutive_fails}次，"
+                                f"停止本轮。已成功 {success_count} 条，"
+                                f"剩余 {len(remaining)} 条移入失败列表。"
+                                f"请重新登录后再运行。"
+                            )
+                            stopped_early = True
+                            break
+                        await asyncio.sleep(wait)
+                        await _maybe_fake_action()
+                    else:
+                        await asyncio.sleep(5)
+                    continue
+            
+            return success_count, failed_notes
+        
+        # ========== 首轮下载 ==========
+        utils.logger.info(f"[补图] ===== 首轮开始: {len(notes_need_images)} 条笔记 =====")
+        round1_ok, round1_failed = await _run_download_round(
+            notes_need_images, "补图", 
+            base_wait_min=5.0, base_wait_max=12.0,
+            max_consecutive_fails=4
+        )
+        downloaded_count += round1_ok
+        
+        # ========== 失败补录（第二轮） ==========
+        if round1_failed:
+            utils.logger.info(
+                f"[补图-补录] ===== 首轮结束: 成功 {round1_ok}, "
+                f"失败 {len(round1_failed)} 条，准备补录... ====="
+            )
+            # 补录前长等待，让反爬冷却
+            cooldown = random.uniform(60, 120)
+            utils.logger.info(f"[补图-补录] 冷却等待 {cooldown:.0f} 秒...")
+            await asyncio.sleep(cooldown)
+            await _maybe_fake_action()
+            
+            # 第二轮使用更长的间隔
+            round2_ok, round2_failed = await _run_download_round(
+                round1_failed, "补图-补录",
+                base_wait_min=10.0, base_wait_max=20.0,
+                max_consecutive_fails=5
+            )
+            downloaded_count += round2_ok
+            
+            # 持久化最终失败列表
+            if round2_failed:
+                fail_record_path = os.path.join(
+                    image_dir, 
+                    f"failed_notes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                 )
-                
-                # 反爬等待（比全量爬取短，因为只是获取详情+下载图片）
-                wait_time = random.uniform(2, 5)
-                await asyncio.sleep(wait_time)
-                
-            except Exception as e:
-                utils.logger.warning(f"[补图] {note_id} 异常: {e}")
-                await asyncio.sleep(3)
-                continue
+                fail_ids = [
+                    {"note_id": n.get("note_id", ""), 
+                     "xsec_token": n.get("xsec_token", ""),
+                     "xsec_source": n.get("xsec_source", "pc_search"),
+                     "title": n.get("title", "")}
+                    for n in round2_failed
+                ]
+                try:
+                    import json as _json
+                    os.makedirs(image_dir, exist_ok=True)
+                    with open(fail_record_path, "w", encoding="utf-8") as f:
+                        _json.dump(fail_ids, f, ensure_ascii=False, indent=2)
+                    utils.logger.warning(
+                        f"[补图-补录] 仍有 {len(round2_failed)} 条失败，"
+                        f"已保存到 {fail_record_path}，下次运行将自动重试。"
+                    )
+                except Exception as save_err:
+                    utils.logger.error(f"[补图-补录] 保存失败列表异常: {save_err}")
+            else:
+                utils.logger.info("[补图-补录] 补录全部成功！")
+        else:
+            utils.logger.info("[补图] 首轮全部成功，无需补录。")
     
     except Exception as e:
         utils.logger.error(f"[补图] 浏览器启动/运行异常: {e}")
@@ -1263,6 +1452,9 @@ async def run_batch_crawl(
     export_format: str = "excel",
     export_dir: str = "data/export",
     limit: int = 0,
+    patch_only: bool = False,
+    patch_limit: int = 0,
+    force_recrawl: bool = False,
 ) -> None:
     """
     批量爬取主流程
@@ -1320,8 +1512,23 @@ async def run_batch_crawl(
     # 初始化进度管理（按任务ID区分）
     progress_file = f"data/batch_progress_{task_id}.json"
     progress = BatchProgress(progress_file=progress_file, task_id=task_id)
-    if not resume:
+    if not resume or force_recrawl:
         progress.reset()
+        if force_recrawl:
+            # 同时清理单个作者的断点续爬进度，确保从头爬取
+            creator_progress_dir = os.path.join("data", "xhs", "progress")
+            if os.path.exists(creator_progress_dir):
+                import glob
+                cleared = 0
+                for pf in glob.glob(os.path.join(creator_progress_dir, "creator_*_progress.json")):
+                    try:
+                        os.remove(pf)
+                        cleared += 1
+                    except Exception:
+                        pass
+                if cleared:
+                    utils.logger.info(f"[BatchCrawler] --force-recrawl: 已清理 {cleared} 个作者的断点续爬进度")
+            utils.logger.info("[BatchCrawler] --force-recrawl: 所有进度已重置，将从头爬取每个作者")
 
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     progress.set_session(session_id)
@@ -1335,6 +1542,13 @@ async def run_batch_crawl(
     config.CRAWLER_MAX_NOTES_COUNT = max_notes_per_creator
     config.ENABLE_GET_COMMENTS = enable_comments
 
+    # force_recrawl 模式：强制启用图片下载，无论飞书配置
+    if force_recrawl:
+        config.ENABLE_GET_MEIDAS = True
+        utils.logger.info(
+            "[BatchCrawler] --force-recrawl: 强制启用图片下载 + 禁用历史复用"
+        )
+
     # 读取飞书图片模式，image模式时自动启用图片下载
     feishu_image_mode = "link"
     try:
@@ -1345,14 +1559,15 @@ async def run_batch_crawl(
     except Exception:
         pass
 
-    if feishu_image_mode == "image" and not skip_feishu:
+    if feishu_image_mode == "image":
         config.ENABLE_GET_MEIDAS = True
         utils.logger.info("[BatchCrawler] 飞书图片模式=image，自动启用图片下载(ENABLE_GET_MEIDAS=True)")
     else:
-        utils.logger.info(f"[BatchCrawler] 飞书图片模式={feishu_image_mode}，不下载图片")
+        if not force_recrawl:
+            utils.logger.info(f"[BatchCrawler] 飞书图片模式={feishu_image_mode}，不下载图片")
 
     # 4. 读取复用和过滤配置
-    reuse_history = True
+    reuse_history = True if not force_recrawl else False
     crawl_mode = "full"
     date_start = ""
     date_end = ""
@@ -1361,7 +1576,8 @@ async def run_batch_crawl(
         with open(config_path_r, "r", encoding="utf-8") as f:
             cfg_r = json.load(f)
         batch_r = cfg_r.get("batch_crawl", {})
-        reuse_history = batch_r.get("reuse_history", True)
+        if not force_recrawl:
+            reuse_history = batch_r.get("reuse_history", True)
         crawl_mode = batch_r.get("crawl_mode", "full")
         date_start = batch_r.get("date_start", "")
         date_end = batch_r.get("date_end", "")
@@ -1378,6 +1594,14 @@ async def run_batch_crawl(
     reused = 0
     success = 0
     failed = 0
+
+    # patch_only 模式：跳过爬取，直接进入汇总+补图
+    if patch_only:
+        utils.logger.info("[BatchCrawler] --patch-only 模式，跳过爬取，直接补图...")
+        total = len(creators)
+        skipped = total
+        # 跳到汇总阶段（下面的 for 循环不会执行）
+        creators = []
 
     # 6. 逐个作者处理
     for idx, creator in enumerate(creators, 1):
@@ -1560,10 +1784,11 @@ async def run_batch_crawl(
     utils.logger.info(f"  汇总结果: {len(all_export_notes)} 条符合条件 (互动量>={min_interaction})")
 
     # 8.5 补下载缺失图片（image 模式下，对复用的历史数据补图）
-    if feishu_image_mode == "image" and not skip_feishu and all_export_notes:
-        utils.logger.info("[BatchCrawler] 检查是否有笔记缺少本地图片...")
+    if feishu_image_mode == "image" and all_export_notes:
+        patch_msg = f"(限制 {patch_limit} 条)" if patch_limit > 0 else "(不限)"
+        utils.logger.info(f"[BatchCrawler] 检查是否有笔记缺少本地图片... {patch_msg}")
         try:
-            img_count = await _download_missing_images(all_export_notes)
+            img_count = await _download_missing_images(all_export_notes, max_notes=patch_limit)
             if img_count > 0:
                 utils.logger.info(f"[BatchCrawler] 补图完成: {img_count} 条笔记的图片已下载")
         except Exception as e:
@@ -1766,6 +1991,12 @@ def main():
                         help="飞书文件夹 token")
     parser.add_argument("--reset-progress", action="store_true",
                         help="重置批量爬取进度")
+    parser.add_argument("--patch-only", action="store_true",
+                        help="仅补图模式：跳过爬取，只对已有数据补下载缺失图片")
+    parser.add_argument("--patch-limit", type=int, default=0,
+                        help="每次补图最多处理 N 条笔记 (默认0=不限制，建议30~50)")
+    parser.add_argument("--force-recrawl", action="store_true",
+                        help="强制重新爬取：重置进度+禁用历史复用，爬取时直接下载图片")
 
     args = parser.parse_args()
 
@@ -1850,6 +2081,9 @@ def main():
             export_format=export_format,
             export_dir=export_dir,
             limit=args.limit,
+            patch_only=args.patch_only,
+            patch_limit=args.patch_limit,
+            force_recrawl=args.force_recrawl,
         )
 
     async def _cleanup():

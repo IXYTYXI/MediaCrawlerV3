@@ -492,8 +492,10 @@
             const timerText = computed(() => {
                 const s = state.value.elapsed;
                 if (!s) return '';
-                const remaining = Math.max(0, 120 - s);
-                return `剩余 ${remaining}s`;
+                const remaining = Math.max(0, 300 - s);
+                const min = Math.floor(remaining / 60);
+                const sec = remaining % 60;
+                return min > 0 ? `剩余 ${min}m${sec}s` : `剩余 ${sec}s`;
             });
 
             const qrcodeUrl = computed(() =>

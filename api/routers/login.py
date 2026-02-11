@@ -206,8 +206,8 @@ async def _run_login_flow(platform: str):
         _login_state["status"] = "waiting_scan"
         _login_state["message"] = "请用小红书APP扫描二维码登录"
 
-        # 7. 等待登录成功（轮询120秒）
-        for i in range(120):
+        # 7. 等待登录成功（轮询300秒，支持多次扫码/验证）
+        for i in range(300):
             if _login_state["status"] == "cancelled":
                 return
 
@@ -217,10 +217,25 @@ async def _run_login_flow(platform: str):
             if not page or page.is_closed() or not ctx:
                 return
 
-            # 每3秒刷新一次截图
+            # 每3秒刷新一次截图 + 二维码 + 页面状态检测
             if i % 3 == 0:
                 await _take_screenshot(page)
                 await _capture_qrcode(page)
+
+                # 检测页面状态变化（验证码、二次扫码等）
+                try:
+                    page_content = await page.content()
+                    if "请通过验证" in page_content or "滑动" in page_content:
+                        _login_state["message"] = "需要滑块验证，请查看页面截图"
+                    elif "扫码" in page_content and i > 30:
+                        # 可能是二次扫码
+                        _login_state["message"] = "请再次扫描二维码"
+                    elif _login_state["qrcode_base64"]:
+                        _login_state["message"] = "请用小红书APP扫描二维码登录"
+                    else:
+                        _login_state["message"] = "等待中...请查看页面截图"
+                except Exception:
+                    pass
 
             # 检查登录状态
             if await _check_already_logged_in(page, ctx):
@@ -234,7 +249,7 @@ async def _run_login_flow(platform: str):
 
         # 超时
         _login_state["status"] = "failed"
-        _login_state["message"] = "登录超时（120秒），请重试"
+        _login_state["message"] = "登录超时（5分钟），请重试"
 
     except asyncio.CancelledError:
         _login_state["status"] = "cancelled"
