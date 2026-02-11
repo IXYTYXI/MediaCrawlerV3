@@ -1631,7 +1631,27 @@ async def run_batch_crawl(
             continue
 
         # ========== 复用历史数据检查 ==========
-        if reuse_history and user_id:
+        # 如果作者在 failed 列表中，说明上次失败需要重爬，不复用
+        is_in_failed = creator_url in progress._failed
+        if is_in_failed:
+            fail_reason = progress._failed.get(creator_url, "")
+            utils.logger.info(
+                f"[BatchCrawler] [{idx}/{total}] {creator_name} 在失败列表中，跳过复用，强制重爬"
+            )
+            # 如果是需要重爬图片的情况，清除断点进度以确保重新获取所有作品详情+图片
+            if "need_recrawl" in fail_reason or "image" in fail_reason.lower():
+                progress_dir = os.path.join("data", "xhs", "progress")
+                if user_id:
+                    import glob as _glob
+                    pattern = os.path.join(progress_dir, f"creator_{user_id}_progress.json")
+                    for pf in _glob.glob(pattern):
+                        os.remove(pf)
+                        utils.logger.info(f"[BatchCrawler] 已清除断点进度: {pf}")
+                utils.logger.info(
+                    f"[BatchCrawler] [{idx}/{total}] {creator_name} 需要重爬图片，已清除断点进度"
+                )
+        
+        if reuse_history and user_id and not is_in_failed:
             history_status = check_creator_history_status(user_id)
 
             if history_status == "completed":

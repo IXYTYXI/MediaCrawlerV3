@@ -562,11 +562,16 @@ class XiaoHongShuCrawler(AbstractCrawler):
         if progress_manager:
             progress_manager.save_progress()
         
+        # 如果整批全部跳过（已爬取），说明后续页也是旧数据，直接停止翻页
+        all_skipped = (skip_count == total and total > 0 and success_count == 0)
+        if all_skipped:
+            utils.logger.info(f"[详情获取] 本批 {total} 条全部已爬取，停止继续翻页")
+        
         early_stop_msg = f", 提前停止(早于{crawl_date_start})" if early_stopped else ""
         utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}, 总计 {total}{early_stop_msg}")
         
-        # 返回是否需要停止翻页
-        return early_stopped
+        # 返回是否需要停止翻页（日期提前停止 或 全部已爬取）
+        return early_stopped or all_skipped
     
     async def _fetch_comments_with_delay(
         self, 
