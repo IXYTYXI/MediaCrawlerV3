@@ -223,7 +223,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             **kwargs,
         )
 
-    async def get_note_media(self, url: str) -> Union[bytes, None]:
+    async def get_note_media(self, url: str, max_retries: int = 3) -> Union[bytes, None]:
         # Check if proxy is expired before request
         await self._refresh_proxy_if_expired()
 
@@ -232,24 +232,32 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             "Referer": "https://www.xiaohongshu.com/",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         }
-        async with httpx.AsyncClient(proxy=self.proxy) as client:
-            try:
-                response = await client.request("GET", url, headers=headers, timeout=self.timeout)
-                response.raise_for_status()
-                if not response.reason_phrase == "OK":
-                    utils.logger.error(
-                        f"[XiaoHongShuClient.get_note_media] request {url} err, res:{response.text}"
-                    )
-                    return None
-                else:
-                    return response.content
-            except (
-                httpx.HTTPError
-            ) as exc:  # some wrong when call httpx.request method, such as connection error, client error, server error or response status code is not 2xx
-                utils.logger.error(
-                    f"[XiaoHongShuClient.get_aweme_media] {exc.__class__.__name__} for {exc.request.url} - {exc}"
-                )  # Keep original exception type name for developer debugging
-                return None
+        for attempt in range(1, max_retries + 1):
+            async with httpx.AsyncClient(proxy=self.proxy) as client:
+                try:
+                    response = await client.request("GET", url, headers=headers, timeout=self.timeout)
+                    response.raise_for_status()
+                    if not response.reason_phrase == "OK":
+                        utils.logger.error(
+                            f"[XiaoHongShuClient.get_note_media] request {url} err, res:{response.text}"
+                        )
+                        return None
+                    else:
+                        return response.content
+                except (
+                    httpx.HTTPError
+                ) as exc:
+                    if attempt < max_retries:
+                        wait = attempt * 2  # 2s, 4s
+                        utils.logger.warning(
+                            f"[XiaoHongShuClient.get_note_media] {exc.__class__.__name__} 第{attempt}次失败，{wait}s后重试: {url}"
+                        )
+                        await asyncio.sleep(wait)
+                    else:
+                        utils.logger.error(
+                            f"[XiaoHongShuClient.get_note_media] {exc.__class__.__name__} 第{max_retries}次仍失败，跳过: {url}"
+                        )
+                        return None
 
     async def pong(self) -> bool:
         """
