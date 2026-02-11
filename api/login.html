@@ -504,8 +504,20 @@
                 state.value.screenshot ? `data:image/png;base64,${state.value.screenshot}` : ''
             );
 
+            // 从 URL 参数中获取 api_key（访问: /login?api_key=xxx）
+            const urlParams = new URLSearchParams(window.location.search);
+            const apiKey = urlParams.get('api_key') || '';
+
             async function apiCall(url, method = 'GET') {
-                const resp = await fetch(`/api/login${url}`, { method });
+                const separator = url.includes('?') ? '&' : '?';
+                const fullUrl = `/api/login${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
+                const resp = await fetch(fullUrl, { method });
+                if (resp.status === 401) {
+                    state.value.status = 'failed';
+                    state.value.message = '认证失败：请在URL中添加 ?api_key=你的密钥';
+                    stopPolling();
+                    return { status: 'failed', message: '认证失败' };
+                }
                 return resp.json();
             }
 

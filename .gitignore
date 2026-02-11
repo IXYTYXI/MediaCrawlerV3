@@ -168,6 +168,9 @@ cython_debug/
 
 .DS_Store
 */.DS_Store
+
+# 敏感配置（含飞书密钥等）
+config/anti_crawl_config.json
 .vscode
 /node_modules
 docs/.vitepress/cache

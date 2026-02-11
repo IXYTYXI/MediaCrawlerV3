@@ -23,12 +23,13 @@ Or: python -m api.main
 """
 import asyncio
 import os
+import secrets
 import subprocess
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from .routers import crawler_router, data_router, websocket_router, login_router
 
@@ -40,6 +41,59 @@ app = FastAPI(
 
 # Get webui static files directory
 WEBUI_DIR = os.path.join(os.path.dirname(__file__), "webui")
+
+# ==================== API Key 认证 ====================
+# 从环境变量读取，未设置则自动生成（首次启动时打印到控制台）
+API_KEY = os.environ.get("MC_API_KEY", "")
+if not API_KEY:
+    # 从配置文件读取
+    try:
+        import json
+        _cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "anti_crawl_config.json")
+        with open(_cfg_path, "r", encoding="utf-8") as _f:
+            _cfg = json.load(_f)
+        API_KEY = _cfg.get("api_key", "")
+    except Exception:
+        pass
+
+if not API_KEY:
+    API_KEY = secrets.token_urlsafe(32)
+    print("=" * 60)
+    print(f"[安全] 未设置 API Key，已自动生成:")
+    print(f"  API_KEY = {API_KEY}")
+    print(f"  设置方式（二选一）:")
+    print(f"    1. 环境变量: export MC_API_KEY='{API_KEY}'")
+    print(f"    2. 配置文件: anti_crawl_config.json 中添加 \"api_key\": \"{API_KEY}\"")
+    print(f"  访问时在 URL 中加 ?api_key=xxx 或 Header 中加 X-API-Key: xxx")
+    print("=" * 60)
+
+# 不需要认证的路径（页面和健康检查）
+_PUBLIC_PATHS = {"/", "/login", "/api/health", "/docs", "/openapi.json", "/redoc"}
+_PUBLIC_PREFIXES = ("/assets/", "/logos/", "/static/", "/api/ws/")  # 静态资源和 WebSocket
+
+
+@app.middleware("http")
+async def api_key_auth(request: Request, call_next):
+    """API Key 认证中间件"""
+    path = request.url.path
+
+    # 公开路径跳过认证
+    if path in _PUBLIC_PATHS:
+        return await call_next(request)
+    for prefix in _PUBLIC_PREFIXES:
+        if path.startswith(prefix):
+            return await call_next(request)
+
+    # 检查 API Key（支持 query param 和 header 两种方式）
+    key = request.query_params.get("api_key") or request.headers.get("X-API-Key")
+    if key != API_KEY:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "未授权：缺少或无效的 API Key。请在 URL 中加 ?api_key=xxx 或 Header 中加 X-API-Key"}
+        )
+
+    return await call_next(request)
+
 
 # CORS configuration - allow all origins for remote access
 # 远程部署时需要通过 IP 访问，因此允许所有来源
