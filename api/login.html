@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaCrawler - 远程扫码登录</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 520px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px;
+            margin-bottom: 16px;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-bar.idle { background: #1e293b; border: 1px solid var(--border); }
+        .status-bar.starting { background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd; }
+        .status-bar.waiting { background: #422006; border: 1px solid #f59e0b; color: #fcd34d; }
+        .status-bar.success { background: #052e16; border: 1px solid #10b981; color: #6ee7b7; }
+        .status-bar.failed { background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dot.idle { background: var(--text-muted); }
+        .dot.starting { background: #3b82f6; animation: pulse 1.5s infinite; }
+        .dot.waiting { background: #f59e0b; animation: pulse 1.5s infinite; }
+        .dot.success { background: #10b981; }
+        .dot.failed { background: #ef4444; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .qrcode-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            min-height: 280px;
+            justify-content: center;
+        }
+
+        .qrcode-placeholder {
+            width: 220px;
+            height: 220px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .qrcode-img {
+            max-width: 220px;
+            max-height: 220px;
+            border-radius: 8px;
+            border: 3px solid white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .screenshot-area {
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .screenshot-img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .screenshot-img:hover { transform: scale(1.02); }
+
+        .screenshot-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .timer {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #475569;
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #450a0a;
+        }
+
+        .info-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+        }
+
+        .info-card h3 {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-list {
+            list-style: none;
+            font-size: 14px;
+            color: var(--text);
+        }
+
+        .info-list li {
+            padding: 6px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            line-height: 1.5;
+        }
+
+        .info-list li::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary);
+            flex-shrink: 0;
+            margin-top: 7px;
+        }
+
+        .success-checkmark {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #052e16;
+            border: 3px solid var(--success);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .select-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .select-wrapper label {
+            font-size: 14px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .select-wrapper select {
+            flex: 1;
+            padding: 8px 12px;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .select-wrapper select:focus {
+            border-color: var(--primary);
+        }
+
+        /* 全屏预览 */
+        .fullscreen-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            cursor: zoom-out;
+            padding: 20px;
+        }
+
+        .fullscreen-overlay img {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 16px;
+            color: var(--text-muted);
+            font-size: 13px;
+            text-decoration: none;
+            transition: color 0.15s;
+        }
+
+        .back-link:hover { color: var(--text); }
+
+        /* 加载动画 */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <div class="header">
+            <h1>MediaCrawler 远程登录</h1>
+            <p>通过扫描二维码完成平台账号登录</p>
+        </div>
+
+        <div class="card">
+            <!-- 状态栏 -->
+            <div class="status-bar" :class="statusClass">
+                <span class="dot" :class="statusClass"></span>
+                <span>{{ statusText }}</span>
+                <span v-if="isActive" class="timer" style="margin-left: auto;">{{ timerText }}</span>
+            </div>
+
+            <!-- 平台选择 -->
+            <div v-if="state.status === 'idle' || state.status === 'success' || state.status === 'failed'" class="select-wrapper">
+                <label>目标平台</label>
+                <select v-model="platform">
+                    <option value="xhs">小红书</option>
+                    <!-- 后续可扩展 -->
+                </select>
+            </div>
+
+            <!-- 二维码区域 -->
+            <div class="qrcode-area">
+                <!-- 闲置状态 -->
+                <template v-if="state.status === 'idle'">
+                    <div class="qrcode-placeholder">点击下方按钮开始</div>
+                </template>
+
+                <!-- 启动中 -->
+                <template v-if="state.status === 'starting'">
+                    <div class="spinner"></div>
+                    <span style="color: var(--text-muted); font-size: 14px;">{{ state.message }}</span>
+                </template>
+
+                <!-- 等待扫码 -->
+                <template v-if="state.status === 'waiting_scan'">
+                    <img v-if="state.qrcode"
+                         :src="qrcodeUrl"
+                         alt="QR Code"
+                         class="qrcode-img" />
+                    <div v-else-if="state.screenshot" class="screenshot-area">
+                        <img :src="screenshotUrl"
+                             alt="Login Page"
+                             class="screenshot-img"
+                             @click="showFullscreen = true" />
+                        <div class="screenshot-label">点击图片放大查看</div>
+                    </div>
+                    <div v-else class="qrcode-placeholder">等待二维码...</div>
+                    <span style="font-size: 14px; color: var(--warning);">请用小红书APP扫码</span>
+                </template>
+
+                <!-- 成功 -->
+                <template v-if="state.status === 'success'">
+                    <div class="success-checkmark">&#10003;</div>
+                    <span style="font-size: 16px; font-weight: 600; color: var(--success);">登录成功</span>
+                    <span style="font-size: 13px; color: var(--text-muted);">Cookie已保存，可以开始爬取</span>
+                </template>
+
+                <!-- 失败 -->
+                <template v-if="state.status === 'failed'">
+                    <div style="text-align:center;">
+                        <div style="font-size: 40px; margin-bottom: 12px;">&#9888;</div>
+                        <span style="font-size: 15px; color: var(--danger);">{{ state.message }}</span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="btn-group">
+                <button v-if="!isActive" class="btn btn-primary" @click="startLogin" :disabled="loading">
+                    {{ state.status === 'failed' || state.status === 'success' ? '重新登录' : '开始登录' }}
+                </button>
+                <button v-if="state.status === 'waiting_scan'" class="btn btn-secondary" @click="refreshQR" :disabled="loading">
+                    刷新二维码
+                </button>
+                <button v-if="isActive" class="btn btn-danger" @click="cancelLogin">
+                    取消
+                </button>
+            </div>
+        </div>
+
+        <!-- 使用说明 -->
+        <div class="info-card">
+            <h3>使用说明</h3>
+            <ul class="info-list">
+                <li>点击「开始登录」后，服务端会自动打开浏览器并加载登录页面</li>
+                <li>二维码出现后，用对应平台 APP 扫码即可完成登录</li>
+                <li>登录成功后 Cookie 会自动保存，后续爬取无需重复登录</li>
+                <li>如二维码过期，点击「刷新二维码」获取新的二维码</li>
+                <li>服务器地址: 浏览器访问 <code style="color:var(--primary);">http://服务器IP:8088/login</code></li>
+            </ul>
+        </div>
+
+        <a href="/" class="back-link">&larr; 返回控制台</a>
+
+        <!-- 全屏预览 -->
+        <div v-if="showFullscreen" class="fullscreen-overlay" @click="showFullscreen = false">
+            <img :src="screenshotUrl" alt="Full screenshot" />
+        </div>
+    </div>
+
+    <script>
+    const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+    createApp({
+        setup() {
+            const platform = ref('xhs');
+            const loading = ref(false);
+            const showFullscreen = ref(false);
+            const state = ref({
+                status: 'idle',
+                qrcode: '',
+                screenshot: '',
+                message: '',
+                elapsed: 0,
+            });
+
+            let pollTimer = null;
+
+            const isActive = computed(() =>
+                ['starting', 'waiting_scan'].includes(state.value.status)
+            );
+
+            const statusClass = computed(() => {
+                const map = {
+                    idle: 'idle',
+                    starting: 'starting',
+                    waiting_scan: 'waiting',
+                    success: 'success',
+                    failed: 'failed',
+                    cancelled: 'failed',
+                };
+                return map[state.value.status] || 'idle';
+            });
+
+            const statusText = computed(() => {
+                const map = {
+                    idle: '就绪 - 等待开始',
+                    starting: '启动中...',
+                    waiting_scan: '等待扫码...',
+                    success: '登录成功',
+                    failed: '登录失败',
+                    cancelled: '已取消',
+                };
+                return map[state.value.status] || state.value.message;
+            });
+
+            const timerText = computed(() => {
+                const s = state.value.elapsed;
+                if (!s) return '';
+                const remaining = Math.max(0, 300 - s);
+                const min = Math.floor(remaining / 60);
+                const sec = remaining % 60;
+                return min > 0 ? `剩余 ${min}m${sec}s` : `剩余 ${sec}s`;
+            });
+
+            const qrcodeUrl = computed(() =>
+                state.value.qrcode ? `data:image/png;base64,${state.value.qrcode}` : ''
+            );
+
+            const screenshotUrl = computed(() =>
+                state.value.screenshot ? `data:image/png;base64,${state.value.screenshot}` : ''
+            );
+
+            // 从 URL 参数中获取 api_key（访问: /login?api_key=xxx）
+            const urlParams = new URLSearchParams(window.location.search);
+            const apiKey = urlParams.get('api_key') || '';
+
+            async function apiCall(url, method = 'GET') {
+                const separator = url.includes('?') ? '&' : '?';
+                const fullUrl = `/api/login${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
+                const resp = await fetch(fullUrl, { method });
+                if (resp.status === 401) {
+                    state.value.status = 'failed';
+                    state.value.message = '认证失败：请在URL中添加 ?api_key=你的密钥';
+                    stopPolling();
+                    return { status: 'failed', message: '认证失败' };
+                }
+                return resp.json();
+            }
+
+            async function startLogin() {
+                loading.value = true;
+                try {
+                    await apiCall(`/start?platform=${platform.value}`, 'POST');
+                    startPolling();
+                } catch (e) {
+                    state.value.status = 'failed';
+                    state.value.message = '请求失败: ' + e.message;
+                } finally {
+                    loading.value = false;
+                }
+            }
+
+            async function cancelLogin() {
+                await apiCall('/cancel', 'POST');
+                stopPolling();
+                state.value.status = 'cancelled';
+                state.value.message = '已取消';
+            }
+
+            async function refreshQR() {
+                loading.value = true;
+                try {
+                    await apiCall('/refresh', 'POST');
+                    await pollStatus();
+                } finally {
+                    loading.value = false;
+                }
+            }
+
+            async function pollStatus() {
+                try {
+                    const data = await apiCall('/qrcode');
+                    state.value.status = data.status;
+                    state.value.qrcode = data.qrcode || '';
+                    state.value.screenshot = data.screenshot || '';
+                    state.value.message = data.message || '';
+                    state.value.elapsed = data.elapsed || 0;
+
+                    if (['success', 'failed', 'cancelled', 'idle'].includes(data.status)) {
+                        stopPolling();
+                    }
+                } catch (e) {
+                    // 网络错误，继续轮询
+                }
+            }
+
+            function startPolling() {
+                stopPolling();
+                pollTimer = setInterval(pollStatus, 1500);
+                pollStatus(); // 立即轮询一次
+            }
+
+            function stopPolling() {
+                if (pollTimer) {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                }
+            }
+
+            // 初始化: 检查是否有活跃的登录会话
+            onMounted(async () => {
+                try {
+                    const data = await apiCall('/qrcode');
+                    if (['starting', 'waiting_scan'].includes(data.status)) {
+                        state.value.status = data.status;
+                        state.value.qrcode = data.qrcode || '';
+                        state.value.screenshot = data.screenshot || '';
+                        state.value.message = data.message || '';
+                        state.value.elapsed = data.elapsed || 0;
+                        startPolling();
+                    }
+                } catch(e) {}
+            });
+
+            onUnmounted(() => stopPolling());
+
+            return {
+                platform, loading, showFullscreen, state,
+                isActive, statusClass, statusText, timerText,
+                qrcodeUrl, screenshotUrl,
+                startLogin, cancelLogin, refreshQR,
+            };
+        }
+    }).mount('#app');
+    </script>
+</body>
+</html>

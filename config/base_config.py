@@ -18,10 +18,13 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 # 基础配置
+import platform as _platform
+_IS_LINUX = _platform.system() == "Linux"
+
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
-LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
-COOKIES = ""
+LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
+COOKIES = "web_session=040069b95f580579a23e7313b93b4b6573011c"
 CRAWLER_TYPE = (
     "creator"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )
@@ -38,7 +41,8 @@ IP_PROXY_PROVIDER_NAME = "kuaidaili"  # kuaidaili | wandouhttp
 # 设置False会打开一个浏览器
 # 小红书如果一直扫码登录不通过，打开浏览器手动过一下滑动验证码
 # 抖音如果一直提示失败，打开浏览器看下是否扫码登录之后出现了手机号验证，如果出现了手动过一下再试。
-HEADLESS = False
+# Linux 服务器无图形界面，自动设为 True
+HEADLESS = True if _IS_LINUX else False
 
 # 是否保存登录状态
 SAVE_LOGIN_STATE = True
@@ -47,7 +51,8 @@ SAVE_LOGIN_STATE = True
 # 是否启用CDP模式 - 使用用户现有的Chrome/Edge浏览器进行爬取，提供更好的反检测能力
 # 启用后将自动检测并启动用户的Chrome/Edge浏览器，通过CDP协议进行控制
 # 这种方式使用真实的浏览器环境，包括用户的扩展、Cookie和设置，大大降低被检测的风险
-ENABLE_CDP_MODE = True
+# Linux 服务器无 Chrome Dev，自动关闭 CDP，使用 Playwright 内置 Chromium
+ENABLE_CDP_MODE = False if _IS_LINUX else True
 
 # CDP调试端口，用于与浏览器通信
 # 如果端口被占用，系统会自动尝试下一个可用端口
@@ -61,7 +66,7 @@ CUSTOM_BROWSER_PATH = ""
 
 # CDP模式下是否启用无头模式
 # 注意：即使设置为True，某些反检测功能在无头模式下可能效果不佳
-CDP_HEADLESS = False
+CDP_HEADLESS = True if _IS_LINUX else False
 
 # 浏览器启动超时时间（秒）
 BROWSER_LAUNCH_TIMEOUT = 120
@@ -86,13 +91,13 @@ CRAWLER_MAX_NOTES_COUNT = 3000
 MAX_CONCURRENCY_NUM = 3
 
 # 是否开启爬媒体模式（包含图片或视频资源），默认不开启爬媒体
-ENABLE_GET_MEIDAS = False
+ENABLE_GET_MEIDAS = True
 
 # 是否获取作品详情（点赞数、收藏数等），关闭则只获取基本信息
 ENABLE_GET_NOTE_DETAIL = True
 
 # 是否开启爬评论模式, 默认开启爬评论
-ENABLE_GET_COMMENTS = True
+ENABLE_GET_COMMENTS = False
 
 # 爬取一级评论的数量控制(单视频/帖子)
 CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 8000
@@ -143,6 +148,12 @@ BATCH_PAUSE_ENABLED = True
 BATCH_PAUSE_EVERY_N = 10  # 每 10 条
 BATCH_PAUSE_MIN_SEC = 30.0  # 暂停 30~60 秒
 BATCH_PAUSE_MAX_SEC = 60.0
+
+# 按日期提前停止：当连续 N 条作品早于 date_start 时，停止爬取该作者剩余作品
+# 由 batch_crawler 在运行时动态设置 DATE_EARLY_STOP_THRESHOLD 和 CRAWL_DATE_START
+DATE_EARLY_STOP_ENABLED = False
+DATE_EARLY_STOP_THRESHOLD = 5  # 连续多少条超出范围后停止
+CRAWL_DATE_START = ""  # 由 batch_crawler 动态注入，格式 "2025-01-01"
 
 # 假动作策略：随机访问无关内容，模拟真实用户浏览
 FAKE_ACTION_ENABLED = True

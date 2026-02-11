@@ -25,12 +25,12 @@ import asyncio
 import os
 import subprocess
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
-from .routers import crawler_router, data_router, websocket_router, dashboard_router
+from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -41,16 +41,12 @@ app = FastAPI(
 # Get webui static files directory
 WEBUI_DIR = os.path.join(os.path.dirname(__file__), "webui")
 
-# CORS configuration - allow frontend dev server access
+# CORS configuration - allow all origins for remote access
+# 远程部署时需要通过 IP 访问，因此允许所有来源
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Backup port
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,  # allow_origins=["*"] 时不能 allow_credentials=True
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -60,6 +56,7 @@ app.include_router(crawler_router, prefix="/api")
 app.include_router(data_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
+app.include_router(login_router, prefix="/api")
 
 
 @app.get("/")
@@ -87,6 +84,15 @@ async def serve_dashboard():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"message": "Dashboard not found"}
+
+
+@app.get("/login")
+async def serve_login_page():
+    """Return remote login page"""
+    login_path = os.path.join(os.path.dirname(__file__), "login.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path, media_type="text/html")
+    return {"message": "Login page not found"}
 
 
 @app.get("/api/health")
@@ -197,4 +203,4 @@ if os.path.exists(WEBUI_DIR):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8088)
+    uvicorn.run(app, host="0.0.0.0", port=9001)
