@@ -607,6 +607,195 @@ def _get_local_image_paths(note_id: str, image_dir: str = "data/xhs/images") -> 
     return image_files
 
 
+# ==================== 补下载缺失图片 ====================
+
+async def _download_missing_images(notes: List[Dict], max_notes: int = 0) -> int:
+    """
+    扫描笔记列表，对缺少本地图片的笔记重新获取新鲜URL并下载
+    
+    不重新爬作者页面，只通过 note_id + xsec_token 调 API 获取新鲜图片链接。
+    
+    Args:
+        notes: 所有待处理的笔记列表（含 note_id, xsec_token, image_list 等字段）
+        max_notes: 最多处理多少条笔记（0=不限）
+        
+    Returns:
+        成功下载图片的笔记数
+    """
+    import random
+    import pathlib
+    
+    # 1. 筛选需要补图的笔记
+    notes_need_images = []
+    for note in notes:
+        note_id = note.get("note_id", "")
+        if not note_id:
+            continue
+        # 有图片URL但本地没有图片文件
+        image_list_raw = note.get("image_list", "")
+        if not image_list_raw:
+            continue
+        image_urls = _parse_image_urls(image_list_raw)
+        if not image_urls:
+            continue
+        local_paths = _get_local_image_paths(note_id)
+        if len(local_paths) >= len(image_urls):
+            continue  # 本地图片已完整
+        notes_need_images.append(note)
+    
+    if not notes_need_images:
+        utils.logger.info("[补图] 所有笔记的本地图片已完整，无需补下载")
+        return 0
+    
+    if max_notes > 0:
+        notes_need_images = notes_need_images[:max_notes]
+    
+    utils.logger.info(f"[补图] 发现 {len(notes_need_images)} 条笔记缺少本地图片，开始补下载...")
+    
+    # 2. 启动浏览器获取新鲜图片URL
+    from playwright.async_api import async_playwright
+    import config
+    
+    downloaded_count = 0
+    pw = None
+    browser_context = None
+    xhs_client = None
+    
+    try:
+        pw = await async_playwright().start()
+        chromium = pw.chromium
+        
+        user_data_dir = os.path.join(
+            os.getcwd(), "browser_data",
+            config.USER_DATA_DIR % config.PLATFORM
+        )
+        os.makedirs(user_data_dir, exist_ok=True)
+        
+        browser_context = await chromium.launch_persistent_context(
+            user_data_dir=user_data_dir,
+            accept_downloads=True,
+            headless=True,
+            viewport={"width": 1920, "height": 1080},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        )
+        
+        # 添加反检测脚本
+        stealth_js_path = os.path.join(os.getcwd(), "libs", "stealth.min.js")
+        if os.path.exists(stealth_js_path):
+            await browser_context.add_init_script(path=stealth_js_path)
+        
+        # 打开页面并创建 XHS 客户端
+        context_page = await browser_context.new_page()
+        await context_page.goto("https://www.xiaohongshu.com", wait_until="domcontentloaded")
+        await asyncio.sleep(3)
+        
+        from media_platform.xhs.client import XiaoHongShuClient
+        cookie_str, cookie_dict = utils.convert_cookies(await browser_context.cookies())
+        
+        xhs_client = XiaoHongShuClient(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Cookie": cookie_str,
+                "Origin": "https://www.xiaohongshu.com",
+                "Referer": "https://www.xiaohongshu.com",
+                "Content-Type": "application/json;charset=UTF-8",
+            },
+            playwright_page=context_page,
+            cookie_dict=cookie_dict,
+        )
+        
+        # 3. 逐笔记获取新鲜图片URL并下载
+        image_dir = "data/xhs/images"
+        
+        for i, note in enumerate(notes_need_images):
+            note_id = note.get("note_id", "")
+            xsec_token = note.get("xsec_token", "")
+            xsec_source = note.get("xsec_source", "pc_search")
+            title = note.get("title", "")[:20]
+            
+            try:
+                utils.logger.info(
+                    f"[补图] [{i+1}/{len(notes_need_images)}] "
+                    f"获取新鲜图片URL: {note_id} ({title}...)"
+                )
+                
+                # 调API获取新鲜的笔记详情（含新鲜图片URL）
+                note_detail = await xhs_client.get_note_by_id(
+                    note_id, xsec_source, xsec_token
+                )
+                
+                if not note_detail:
+                    utils.logger.warning(f"[补图] {note_id} 获取详情失败，跳过")
+                    continue
+                
+                # 提取新鲜的 image_list
+                fresh_image_list = note_detail.get("image_list", [])
+                if not fresh_image_list:
+                    utils.logger.warning(f"[补图] {note_id} 无图片，跳过")
+                    continue
+                
+                # 对URL做默认URL优先
+                for img in fresh_image_list:
+                    if img.get("url_default"):
+                        img["url"] = img["url_default"]
+                
+                # 下载每张图片
+                note_image_dir = os.path.join(image_dir, note_id)
+                pathlib.Path(note_image_dir).mkdir(parents=True, exist_ok=True)
+                
+                pic_num = 0
+                for pic in fresh_image_list:
+                    url = pic.get("url")
+                    if not url:
+                        continue
+                    # 检查是否已有该图片
+                    save_path = os.path.join(note_image_dir, f"{pic_num}.jpg")
+                    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                        pic_num += 1
+                        continue
+                    
+                    content = await xhs_client.get_note_media(url)
+                    if content:
+                        with open(save_path, "wb") as f:
+                            f.write(content)
+                        pic_num += 1
+                    await asyncio.sleep(random.random() * 0.5)
+                
+                downloaded_count += 1
+                utils.logger.info(
+                    f"[补图] [{i+1}/{len(notes_need_images)}] "
+                    f"{note_id}: 下载 {pic_num} 张图片"
+                )
+                
+                # 反爬等待（比全量爬取短，因为只是获取详情+下载图片）
+                wait_time = random.uniform(2, 5)
+                await asyncio.sleep(wait_time)
+                
+            except Exception as e:
+                utils.logger.warning(f"[补图] {note_id} 异常: {e}")
+                await asyncio.sleep(3)
+                continue
+    
+    except Exception as e:
+        utils.logger.error(f"[补图] 浏览器启动/运行异常: {e}")
+    
+    finally:
+        # 清理浏览器
+        try:
+            if browser_context:
+                await browser_context.close()
+        except Exception:
+            pass
+        try:
+            if pw:
+                await pw.stop()
+        except Exception:
+            pass
+    
+    utils.logger.info(f"[补图] 完成: {downloaded_count}/{len(notes_need_images)} 条笔记图片下载成功")
+    return downloaded_count
+
+
 def _upload_note_images_to_feishu(
     client, app_token: str, note_id: str,
     image_urls: List[str], num_threads: int = 2
@@ -1360,6 +1549,16 @@ async def run_batch_crawl(
         all_export_notes.append(item)
 
     utils.logger.info(f"  汇总结果: {len(all_export_notes)} 条符合条件 (互动量>={min_interaction})")
+
+    # 8.5 补下载缺失图片（image 模式下，对复用的历史数据补图）
+    if feishu_image_mode == "image" and not skip_feishu and all_export_notes:
+        utils.logger.info("[BatchCrawler] 检查是否有笔记缺少本地图片...")
+        try:
+            img_count = await _download_missing_images(all_export_notes)
+            if img_count > 0:
+                utils.logger.info(f"[BatchCrawler] 补图完成: {img_count} 条笔记的图片已下载")
+        except Exception as e:
+            utils.logger.warning(f"[BatchCrawler] 补图阶段异常: {e}")
 
     if all_export_notes:
         utils.logger.info(f"[BatchCrawler] 导出到本地 ({export_format})...")
