@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Node (文档站，运行时不需要)
+node_modules/
+
+# 运行时数据（通过 volume 挂载）
+data/
+browser_data/
+logs/
+*.log
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# 编辑器 / IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# 虚拟环境
+.venv/
+venv/
+.python-version
+uv.lock
+
+# 杂项
+.env
+.env.example
+*.md
+docs/static/images/

@@ -1,0 +1,39 @@
+# MediaCrawler Docker Compose
+# 启动: MC_DASHBOARD_PWD="你的密码" docker compose up -d
+# 查看日志: docker compose logs -f mediacrawler
+
+services:
+  mediacrawler:
+    build: .
+    container_name: mediacrawler
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./data:/app/data
+      - ./browser_data:/app/browser_data
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    environment:
+      - MC_DASHBOARD_PWD=${MC_DASHBOARD_PWD:-changeme}
+      - PYTHONIOENCODING=utf-8
+      - LC_ALL=C.UTF-8
+    restart: unless-stopped
+    mem_limit: 4g
+    shm_size: 1g
+
+  # Redis（可选，默认不启动，需要时用 --profile with-redis）
+  # 启动方式: docker compose --profile with-redis up -d
+  redis:
+    image: redis:7-alpine
+    container_name: mediacrawler-redis
+    profiles:
+      - with-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
