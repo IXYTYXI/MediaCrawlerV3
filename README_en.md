@@ -1,23 +1,6 @@
-<div align="center" markdown="1">
-   <sup>Special thanks to:</sup>
-   <br>
-   <br>
-   <a href="https://go.warp.dev/MediaCrawler">
-      <img alt="Warp sponsorship" width="400" src="https://github.com/warpdotdev/brand-assets/blob/main/Github/Sponsor/Warp-Github-LG-02.png?raw=true">
-   </a>
-
-### [Warp is built for coding with multiple AI agents](https://go.warp.dev/MediaCrawler)
-
-
-</div>
-<hr>
 # 🔥 MediaCrawler - Social Media Platform Crawler 🕷️
 
 <div align="center">
-
-<a href="https://trendshift.io/repositories/8291" target="_blank">
-  <img src="https://trendshift.io/api/badge/repositories/8291" alt="NanmiCoder%2FMediaCrawler | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-</a>
 
 [![GitHub Stars](https://img.shields.io/github/stars/NanmiCoder/MediaCrawler?style=social)](https://github.com/NanmiCoder/MediaCrawler/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/NanmiCoder/MediaCrawler?style=social)](https://github.com/NanmiCoder/MediaCrawler/network/members)
@@ -89,8 +72,6 @@ Click to view: [MediaCrawlerPro Project Homepage](https://github.com/MediaCrawle
 </details>
 
 ## 🚀 Quick Start
-
-> 💡 **Open source is not easy, if this project helps you, please give a ⭐ Star to support!**
 
 ## 📋 Prerequisites
 
@@ -243,62 +224,6 @@ MediaCrawler supports multiple data storage methods, including CSV, JSON, Excel,
 
 ---
 
-[🚀 MediaCrawlerPro Major Release 🚀! More features, better architectural design!](https://github.com/MediaCrawlerPro)
-
-### 💬 Discussion Groups
-- **WeChat Discussion Group**: [Click to join](https://nanmicoder.github.io/MediaCrawler/%E5%BE%AE%E4%BF%A1%E4%BA%A4%E6%B5%81%E7%BE%A4.html)
-- **Bilibili Account**: [Follow me](https://space.bilibili.com/434377496), sharing AI and crawler technology knowledge
-
-
-### 💰 Sponsor Display
-
-<a href="https://h.wandouip.com">
-<img src="docs/static/images/img_8.jpg">
-<br>
-WandouHTTP - Self-operated tens of millions IP resource pool, IP purity ≥99.8%, daily high-frequency IP updates, fast response, stable connection, supports multiple business scenarios, customizable on demand, register to get 10000 free IPs.
-</a>
-
----
-
-<a href="https://tikhub.io/?utm_source=github.com/NanmiCoder/MediaCrawler&utm_medium=marketing_social&utm_campaign=retargeting&utm_content=carousel_ad">
-<img width="500" src="docs/static/images/tikhub_banner_zh.png">
-<br>
-TikHub.io provides 900+ highly stable data interfaces, covering 14+ mainstream domestic and international platforms including TK, DY, XHS, Y2B, Ins, X, etc. Supports multi-dimensional public data APIs for users, content, products, comments, etc., with 40M+ cleaned structured datasets. Use invitation code <code>cfzyejV9</code> to register and recharge, and get an additional $2 bonus.
-</a>
-
----
-
-<a href="https://www.thordata.com/?ls=github&lk=mediacrawler">
-<img width="500" src="docs/static/images/Thordata.png">
-<br>
-Thordata: Reliable and cost-effective proxy service provider. Provides stable, efficient and compliant global proxy IP services for enterprises and developers. Register now to get 1GB free residential proxy trial and 2000 serp-api calls.
-</a>
-<br>
-<a href="https://www.thordata.com/products/residential-proxies/?ls=github&lk=mediacrawler">【Residential Proxies】</a> | <a href="https://www.thordata.com/products/web-scraper/?ls=github&lk=mediacrawler">【serp-api】</a>
-
-
-### 🤝 Become a Sponsor
-
-Become a sponsor and showcase your product here, getting massive exposure daily!
-
-**Contact Information**:
-- WeChat: `relakkes`
-- Email: `relakkes@gmail.com`
----
-
-### 📚 Other
-- **FAQ**: [MediaCrawler Complete Documentation](https://nanmicoder.github.io/MediaCrawler/)
-- **Crawler Beginner Tutorial**: [CrawlerTutorial Free Tutorial](https://github.com/NanmiCoder/CrawlerTutorial)
-- **News Crawler Open Source Project**: [NewsCrawlerCollection](https://github.com/NanmiCoder/NewsCrawlerCollection)
-
-
-## ⭐ Star Trend Chart
-
-If this project helps you, please give a ⭐ Star to support and let more people see MediaCrawler!
-
-[![Star History Chart](https://api.star-history.com/svg?repos=NanmiCoder/MediaCrawler&type=Date)](https://star-history.com/#NanmiCoder/MediaCrawler&Date)
-
-
 ## 📚 References
 
 - **Xiaohongshu Signature Repository**: [Cloxl's xhs signature repository](https://github.com/Cloxl/xhshow)
@@ -330,12 +255,3 @@ The developer has the final interpretation rights regarding this project. The de
 </div>
 
 
-## 🙏 Acknowledgments
-
-### JetBrains Open Source License Support
-
-Thanks to JetBrains for providing free open source license support for this project!
-
-<a href="https://www.jetbrains.com/?from=MediaCrawler">
-    <img src="https://www.jetbrains.com/company/brand/img/jetbrains_logo.png" width="100" alt="JetBrains" />
-</a>
