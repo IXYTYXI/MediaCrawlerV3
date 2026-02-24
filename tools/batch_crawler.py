@@ -19,8 +19,108 @@ from typing import List, Dict, Any, Optional, Set, Tuple
 # 确保项目根目录在 path 中
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import httpx
+
 from tools import utils
 from tools.excel_reader import ExcelCreatorReader, load_creators_from_excel
+
+import signal
+
+
+# ==================== 优雅退出 ====================
+
+class _GracefulShutdown:
+    """跟踪当前爬取状态，支持信号中断时保存部分数据"""
+    shutdown_requested: bool = False
+    current_creator_name: str = ""
+    current_creator_url: str = ""
+    current_user_id: str = ""
+    current_session_ts: str = ""
+    current_task_dir: str = ""
+    current_progress: Any = None
+
+    @classmethod
+    def reset_current(cls):
+        cls.current_creator_name = ""
+        cls.current_creator_url = ""
+        cls.current_user_id = ""
+        cls.current_session_ts = ""
+
+    @classmethod
+    def save_partial_and_exit(cls):
+        """信号处理：保存当前作者的部分数据后标记完成"""
+        if cls.shutdown_requested:
+            return
+        cls.shutdown_requested = True
+        utils.logger.info("")
+        utils.logger.info("=" * 60)
+        utils.logger.info("[GracefulShutdown] 收到停止信号，正在保存当前进度...")
+
+        if cls.current_user_id and cls.current_session_ts and cls.current_task_dir:
+            try:
+                data_dir = os.path.join("data", "xhs", "json")
+                partial_notes = collect_crawled_data(
+                    data_dir, cls.current_session_ts,
+                    cls.current_creator_name, min_interaction=0,
+                    user_id=cls.current_user_id,
+                )
+                if partial_notes:
+                    contents_file = os.path.join(
+                        cls.current_task_dir,
+                        f"creator_{cls.current_user_id}_contents.json",
+                    )
+                    # 合并已有数据（如果存在）
+                    if os.path.exists(contents_file):
+                        try:
+                            with open(contents_file, "r", encoding="utf-8") as f:
+                                old_data = json.load(f)
+                            new_ids = {n.get("note_id") for n in partial_notes if n.get("note_id")}
+                            extra = [n for n in old_data if n.get("note_id") and n["note_id"] not in new_ids]
+                            if extra:
+                                partial_notes = partial_notes + extra
+                                utils.logger.info(
+                                    f"[GracefulShutdown] 合并旧数据 {len(extra)} 条"
+                                )
+                        except Exception:
+                            pass
+                    with open(contents_file, "w", encoding="utf-8") as f:
+                        json.dump(partial_notes, f, ensure_ascii=False, indent=2)
+                    utils.logger.info(
+                        f"[GracefulShutdown] 已保存 {cls.current_creator_name} 的 "
+                        f"{len(partial_notes)} 条数据到 {contents_file}"
+                    )
+                    if cls.current_progress and cls.current_creator_url:
+                        cls.current_progress.mark_partial(
+                            cls.current_creator_url,
+                            f"{len(partial_notes)} notes saved at shutdown"
+                        )
+                        utils.logger.info(
+                            f"[GracefulShutdown] 已标记 {cls.current_creator_name} 为部分完成"
+                            f"（{len(partial_notes)} 条已保存，下次会重新爬取）"
+                        )
+                else:
+                    utils.logger.info(
+                        f"[GracefulShutdown] {cls.current_creator_name} 暂无可保存的数据"
+                    )
+            except Exception as e:
+                utils.logger.error(f"[GracefulShutdown] 保存部分数据失败: {e}")
+        else:
+            utils.logger.info("[GracefulShutdown] 当前没有正在爬取的作者，无需保存")
+
+        utils.logger.info("[GracefulShutdown] 退出完成")
+        utils.logger.info("=" * 60)
+
+
+def _install_signal_handlers():
+    """注册信号处理器，支持 SIGTERM / SIGINT 优雅退出"""
+    def _handler(signum, frame):
+        sig_name = signal.Signals(signum).name
+        utils.logger.info(f"[GracefulShutdown] 收到信号 {sig_name}")
+        _GracefulShutdown.save_partial_and_exit()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _handler)
+    signal.signal(signal.SIGINT, _handler)
 
 
 # ==================== 批量爬取进度管理 ====================
@@ -32,6 +132,7 @@ class BatchProgress:
         self.progress_file = progress_file
         self._completed: Set[str] = set()  # 已完成的作者 URL
         self._failed: Dict[str, str] = {}  # 失败记录 {url: error_msg}
+        self._partial: Dict[str, str] = {}  # 部分完成 {url: "265 notes saved"}
         self._session_id: str = ""
         self._load()
 
@@ -41,10 +142,20 @@ class BatchProgress:
                 with open(self.progress_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self._completed = set(data.get("completed", []))
-                self._failed = data.get("failed", {})
+                raw_failed = data.get("failed", {})
+                # 兼容：如果 failed 是 list（旧格式/手动清理残留），转为 dict
+                if isinstance(raw_failed, list):
+                    self._failed = {}
+                elif isinstance(raw_failed, dict):
+                    self._failed = raw_failed
+                else:
+                    self._failed = {}
                 self._session_id = data.get("session_id", "")
+                raw_partial = data.get("partial", {})
+                self._partial = raw_partial if isinstance(raw_partial, dict) else {}
                 utils.logger.info(
                     f"[BatchProgress] 加载进度: {len(self._completed)} 完成, "
+                    f"{len(self._partial)} 部分完成, "
                     f"{len(self._failed)} 失败"
                 )
             except Exception as e:
@@ -52,10 +163,12 @@ class BatchProgress:
 
     def save(self):
         os.makedirs(os.path.dirname(self.progress_file), exist_ok=True)
+        self._ensure_failed_is_dict()
         data = {
             "session_id": self._session_id,
             "completed": list(self._completed),
             "failed": self._failed,
+            "partial": self._partial,
             "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         with open(self.progress_file, "w", encoding="utf-8") as f:
@@ -64,13 +177,42 @@ class BatchProgress:
     def is_completed(self, url: str) -> bool:
         return url in self._completed
 
+    def _ensure_failed_is_dict(self):
+        """防御性检查：确保 _failed 始终是 dict"""
+        if not isinstance(self._failed, dict):
+            utils.logger.warning(f"[BatchProgress] _failed 类型异常 ({type(self._failed).__name__})，已重置为 dict")
+            self._failed = {}
+
     def mark_completed(self, url: str):
         self._completed.add(url)
+        self._ensure_failed_is_dict()
         self._failed.pop(url, None)
+        self._partial.pop(url, None)
         self.save()
 
     def mark_failed(self, url: str, error: str):
+        self._ensure_failed_is_dict()
         self._failed[url] = error
+        self.save()
+
+    def mark_partial(self, url: str, info: str):
+        """标记为部分完成（优雅中止时使用，下次会重新爬取）"""
+        self._partial[url] = info
+        self._completed.discard(url)
+        self._ensure_failed_is_dict()
+        self._failed.pop(url, None)
+        self.save()
+
+    def is_partial(self, url: str) -> bool:
+        return url in self._partial
+
+    def clear_partial(self, url: str):
+        """爬取完成后清除 partial 标记"""
+        self._partial.pop(url, None)
+
+    def remove_completed(self, url: str):
+        """从已完成列表中移除（校验失败时使用）"""
+        self._completed.discard(url)
         self.save()
 
     def set_session(self, session_id: str):
@@ -80,6 +222,7 @@ class BatchProgress:
         """重置进度（重新开始）"""
         self._completed.clear()
         self._failed.clear()
+        self._partial.clear()
         self.save()
 
     @property
@@ -90,11 +233,17 @@ class BatchProgress:
 # ==================== 数据收集与过滤 ====================
 
 def _safe_int(value) -> int:
-    """安全转换为整数，处理空字符串和None"""
+    """安全转换为整数，处理空字符串、None、以及 '3.2万' 等中文数字格式"""
     if value is None or value == "":
         return 0
+    import re
+    val = str(value).strip()
+    # 处理 "3.2万" 格式
+    match = re.match(r'^([\d.]+)\s*万$', val)
+    if match:
+        return int(float(match.group(1)) * 10000)
     try:
-        return int(value)
+        return int(float(val))
     except (ValueError, TypeError):
         return 0
 
@@ -148,21 +297,24 @@ def _note_completeness(n: Dict) -> int:
 
 def collect_crawled_data(data_dir: str, session_timestamp: str,
                          creator_name: str = "",
-                         min_interaction: int = 0) -> List[Dict]:
+                         min_interaction: int = 0,
+                         user_id: str = "") -> List[Dict]:
     """
-    从爬取结果 JSON 文件中收集数据，支持互动量过滤
+    从爬取结果 JSON 文件中收集数据，支持互动量过滤和作者过滤
     
     Args:
         data_dir: 数据目录 (如 data/xhs/json)
         session_timestamp: 会话时间戳（用于匹配文件）
         creator_name: 作者名称（附加到每条记录）
         min_interaction: 最低互动量阈值，0=不过滤
+        user_id: 作者 user_id，非空时仅收集该作者的笔记（防止数据串作者）
         
     Returns:
         笔记数据列表
     """
     notes = []
     filtered_count = 0
+    author_filtered_count = 0
     
     if not os.path.exists(data_dir):
         utils.logger.warning(f"[BatchCrawler] 数据目录不存在: {data_dir}")
@@ -183,6 +335,11 @@ def collect_crawled_data(data_dir: str, session_timestamp: str,
                 data = json.load(f)
             if isinstance(data, list):
                 for item in data:
+                    # 按 user_id 过滤，防止数据串到其他作者
+                    if user_id and item.get("user_id", "") != user_id:
+                        author_filtered_count += 1
+                        continue
+
                     if creator_name:
                         item["_creator_name"] = creator_name
                     
@@ -200,6 +357,12 @@ def collect_crawled_data(data_dir: str, session_timestamp: str,
         except Exception as e:
             utils.logger.error(f"[BatchCrawler] 读取 {filename} 失败: {e}")
 
+    if author_filtered_count > 0:
+        utils.logger.info(
+            f"[BatchCrawler] 作者过滤: 保留 {len(notes)} 条, "
+            f"过滤掉 {author_filtered_count} 条非本作者数据"
+        )
+
     if filtered_count > 0:
         utils.logger.info(
             f"[BatchCrawler] 互动量过滤: 保留 {len(notes)} 条, 过滤掉 {filtered_count} 条 "
@@ -207,6 +370,33 @@ def collect_crawled_data(data_dir: str, session_timestamp: str,
         )
 
     return notes
+
+
+def _merge_partial_data(task_dir: str, user_id: str, new_notes: list):
+    """
+    合并 partial 旧数据与新爬取数据（按 note_id 去重）
+    确保中止后重爬时，旧数据中未覆盖到的笔记不会丢失
+    """
+    contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+    if not os.path.exists(contents_file) or not new_notes:
+        return
+
+    try:
+        with open(contents_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+
+        new_ids = {n.get("note_id") for n in new_notes if n.get("note_id")}
+        merged_extra = [n for n in existing if n.get("note_id") and n["note_id"] not in new_ids]
+
+        if merged_extra:
+            combined = new_notes + merged_extra
+            with open(contents_file, "w", encoding="utf-8") as f:
+                json.dump(combined, f, ensure_ascii=False, indent=2)
+            utils.logger.info(
+                f"  [合并] 新爬 {len(new_notes)} + 旧数据 {len(merged_extra)} = {len(combined)} 条"
+            )
+    except Exception as e:
+        utils.logger.warning(f"  [合并] 合并 partial 数据失败: {e}")
 
 
 # ==================== 历史数据复用 ====================
@@ -368,6 +558,9 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
     # 热门标记
     is_hot = "🔥 热门" if interaction >= 50 else ""
 
+    # 视频URL
+    video_url = note.get("video_url", "")
+
     result = {
         "账号名称": creator_name or note.get("nickname", ""),
         "内容类型": content_type,
@@ -381,6 +574,7 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
         "评论数": comment,
         "互动量": interaction,
         "热门": is_hot,
+        "视频附件": video_url if video_url else "",
         "视频脚本": video_script,
     }
 
@@ -469,6 +663,23 @@ def export_to_local(notes: List[Dict], export_dir: str = "data/export",
     return filepath
 
 
+def _sanitize_for_excel(value) -> str:
+    """
+    清理字符串中 openpyxl 不支持的非法字符（XML 控制字符等）。
+    保留 emoji 和常见 Unicode 字符，仅移除 XML 1.0 不允许的控制字符。
+    """
+    import re
+    if not isinstance(value, str):
+        return value
+    # XML 1.0 允许的字符范围：
+    # #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+    # 移除不在此范围内的字符（如 \x00-\x08, \x0B, \x0C, \x0E-\x1F, \xFFFE, \xFFFF 等）
+    illegal_xml_chars = re.compile(
+        r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ufffe\uffff]'
+    )
+    return illegal_xml_chars.sub('', value)
+
+
 def _export_excel_multi_sheet(grouped: Dict[str, List[Dict]],
                                columns: List[str], filepath: str):
     """导出为 Excel，每个作者一个 Sheet"""
@@ -530,6 +741,7 @@ def _export_excel_multi_sheet(grouped: Dict[str, List[Dict]],
             is_hot_row = formatted.get("热门", "") != ""
             for col_idx, col_name in enumerate(columns, 1):
                 value = formatted.get(col_name, "")
+                value = _sanitize_for_excel(value)
                 cell = ws.cell(row=row_idx, column=col_idx, value=value)
                 cell.alignment = wrap_align
                 cell.border = thin_border
@@ -605,6 +817,104 @@ def _get_local_image_paths(note_id: str, image_dir: str = "data/xhs/images") -> 
     
     image_files.sort(key=sort_key)
     return image_files
+
+
+def _get_local_video_path(note_id: str, video_dir: str = "data/xhs/videos") -> Optional[str]:
+    """
+    根据 note_id 查找本地已下载的视频文件
+    
+    视频由爬虫下载保存在 data/xhs/videos/{note_id}/0.mp4
+    
+    Args:
+        note_id: 笔记ID
+        video_dir: 视频存储根目录
+        
+    Returns:
+        视频文件路径，不存在返回 None
+    """
+    note_dir = os.path.join(video_dir, note_id)
+    if not os.path.exists(note_dir):
+        return None
+
+    for filename in os.listdir(note_dir):
+        filepath = os.path.join(note_dir, filename)
+        if os.path.isfile(filepath) and filename.lower().endswith(('.mp4', '.mov', '.avi', '.webm')):
+            return filepath
+    return None
+
+
+def _upload_note_video_to_feishu(
+    client, app_token: str, note_id: str,
+    video_url: str = ""
+) -> Optional[List[Dict]]:
+    """
+    上传单个笔记的视频到飞书，优先使用本地文件，URL作为回退
+    
+    Args:
+        client: FeishuBitableClient 实例
+        app_token: 多维表格 token
+        note_id: 笔记ID
+        video_url: 视频URL（作为回退）
+        
+    Returns:
+        [{"file_token": "xxx"}] 格式的附件值，失败返回 None
+    """
+    # 优先本地文件
+    local_path = _get_local_video_path(note_id)
+    if local_path:
+        try:
+            file_size_mb = os.path.getsize(local_path) / 1024 / 1024
+            # 飞书上传限制 20MB
+            if file_size_mb > 20:
+                utils.logger.warning(
+                    f"[视频上传] {note_id}: 视频 {file_size_mb:.1f}MB 超过 20MB 限制，跳过"
+                )
+                return None
+            file_token = client.upload_media(app_token, local_path)
+            if file_token:
+                return [{"file_token": file_token}]
+        except Exception as e:
+            utils.logger.warning(f"[视频上传] {note_id} 本地上传失败: {e}")
+
+    # 回退: 从 URL 下载后上传
+    if video_url and video_url.startswith("http"):
+        try:
+            import hashlib
+            temp_dir = "/tmp/feishu_videos"
+            os.makedirs(temp_dir, exist_ok=True)
+
+            download_headers = {
+                "Referer": "https://www.xiaohongshu.com/",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            }
+            resp = httpx.get(video_url, timeout=60.0, follow_redirects=True, headers=download_headers)
+            if resp.status_code != 200:
+                utils.logger.warning(f"[视频上传] {note_id} URL下载失败 HTTP {resp.status_code}")
+                return None
+
+            # 检查大小
+            if len(resp.content) > 20 * 1024 * 1024:
+                utils.logger.warning(f"[视频上传] {note_id}: URL视频超过 20MB 限制，跳过")
+                return None
+
+            url_hash = hashlib.md5(video_url.encode()).hexdigest()[:12]
+            file_path = os.path.join(temp_dir, f"{url_hash}.mp4")
+            with open(file_path, "wb") as f:
+                f.write(resp.content)
+
+            file_token = client.upload_media(app_token, file_path)
+
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+            if file_token:
+                return [{"file_token": file_token}]
+        except Exception as e:
+            utils.logger.warning(f"[视频上传] {note_id} URL上传失败: {e}")
+
+    return None
 
 
 # ==================== 补下载缺失图片 ====================
@@ -1360,30 +1670,97 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 if cleaned > 0:
                     utils.logger.info(f"[图片上传] 清理 {cleaned} 个未处理的图片字段（避免附件类型写入错误）")
 
-            # 6. 逐作者创建数据表并写入记录
+            # 5.5 视频上传（image 模式下同时上传视频）
+            if is_image_mode:
+                total_videos = 0
+                total_videos_uploaded = 0
+                total_videos_skipped = 0
+
+                for creator_name, raw_notes in all_grouped_raw_notes.items():
+                    records = all_grouped_records[creator_name]
+                    for note, record in zip(raw_notes, records):
+                        note_id = note.get("note_id", "")
+                        video_url = note.get("video_url", "")
+                        note_type = note.get("type", "")
+
+                        # 只处理有视频的笔记
+                        if note_type != "video" and not video_url:
+                            continue
+                        if not note_id:
+                            continue
+
+                        total_videos += 1
+                        attachment = _upload_note_video_to_feishu(
+                            client, app_token, note_id, video_url
+                        )
+                        if attachment:
+                            record["fields"]["视频附件"] = attachment
+                            total_videos_uploaded += 1
+                        else:
+                            # 未上传成功，清空字段（附件类型不接受字符串）
+                            if "视频附件" in record["fields"]:
+                                del record["fields"]["视频附件"]
+                            total_videos_skipped += 1
+
+                        # 进度日志
+                        done = total_videos_uploaded + total_videos_skipped
+                        if done % 5 == 0 or done == total_videos:
+                            utils.logger.info(
+                                f"[视频上传] 进度: {done}/{total_videos} "
+                                f"(成功 {total_videos_uploaded}, 跳过 {total_videos_skipped})"
+                            )
+
+                        # 飞书限流
+                        time.sleep(0.5)
+
+                if total_videos > 0:
+                    utils.logger.info(
+                        f"[视频上传] 全部完成: {total_videos_uploaded} 个成功, "
+                        f"{total_videos_skipped} 个跳过 (共 {total_videos} 个视频笔记)"
+                    )
+
+                # 清理残留的视频URL文本（附件类型不接受字符串）
+                video_cleaned = 0
+                for creator_name, records in all_grouped_records.items():
+                    for record in records:
+                        fields = record.get("fields", {})
+                        if "视频附件" in fields and isinstance(fields["视频附件"], str):
+                            del fields["视频附件"]
+                            video_cleaned += 1
+                if video_cleaned > 0:
+                    utils.logger.info(f"[视频上传] 清理 {video_cleaned} 个未处理的视频字段")
+
+            # 6. 构建完整字段列表（创建新表时一次性传入）
+            all_table_fields = []
+            for field_name in ordered_fields:
+                ftype = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
+                all_table_fields.append({"field_name": field_name, "type": ftype})
+
+            # 7. 逐作者创建数据表并写入记录
             first_creator = True
             for creator_name, records in all_grouped_records.items():
                 safe_name = creator_name[:100]
                 utils.logger.info(f"[飞书] 创建数据表: {safe_name} ({len(records)} 条)")
 
                 if first_creator:
-                    # 用默认表
+                    # 用默认表（已有默认字段，需要逐个添加自定义字段）
                     tables = client.list_tables(app_token)
-                    table_id = tables[0]["table_id"] if tables else client.create_table(app_token, safe_name, [])
+                    table_id = tables[0]["table_id"] if tables else client.create_table(app_token, safe_name, all_table_fields)
                     first_creator = False
+                    
+                    if tables:
+                        # 默认表需要逐个添加字段
+                        for field_name in ordered_fields:
+                            if field_name == "序号":
+                                continue
+                            ftype = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
+                            try:
+                                client.add_field(app_token, table_id, field_name, ftype)
+                            except Exception:
+                                pass
                 else:
-                    # 创建新数据表
-                    table_id = client.create_table(app_token, safe_name, [])
-
-                # 创建字段
-                for field_name in ordered_fields:
-                    if field_name == "序号":
-                        continue
-                    ftype = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
-                    try:
-                        client.add_field(app_token, table_id, field_name, ftype)
-                    except Exception:
-                        pass
+                    # 创建新数据表，一次性传入所有字段
+                    table_id = client.create_table(app_token, safe_name, all_table_fields)
 
                 # 清理默认字段和空记录
                 client.cleanup_default_fields_and_records(app_token, table_id, ordered_with_serial)
@@ -1428,6 +1805,155 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             else:
                 utils.logger.info("[BatchCrawler] 图片模式: link（链接文本，跳过图片上传）")
 
+            # ========== 8. 创建视频汇总表 ==========
+            try:
+                # 收集所有作者的视频记录
+                video_records = []
+                for creator_name, records in all_grouped_records.items():
+                    for record in records:
+                        fields = record.get("fields", {})
+                        note_type = fields.get("内容类型", "")
+                        # 视频类型 或 有视频附件的
+                        has_video = (
+                            note_type == "video"
+                            or fields.get("视频附件")
+                        )
+                        if has_video:
+                            # 复制 record，确保有账号名称字段
+                            video_record = {"fields": dict(fields)}
+                            video_record["fields"]["账号名称"] = creator_name
+                            video_records.append(video_record)
+
+                if video_records:
+                    utils.logger.info(
+                        f"[飞书] 创建视频汇总表: {len(video_records)} 条视频记录"
+                    )
+                    # 汇总表字段与分表相同
+                    summary_table_id = client.create_table(
+                        app_token, "视频汇总", all_table_fields
+                    )
+                    client.cleanup_default_fields_and_records(
+                        app_token, summary_table_id, ordered_with_serial
+                    )
+                    # 填充序号
+                    for i, record in enumerate(video_records, 1):
+                        record["fields"]["序号"] = str(i)
+                    # 写入
+                    summary_inserted = client.batch_insert_records(
+                        app_token, summary_table_id, video_records
+                    )
+                    utils.logger.info(
+                        f"[飞书] 视频汇总表写入完成: {summary_inserted} 条"
+                    )
+
+                    # 添加"视频公网链接"文本字段
+                    try:
+                        client.add_field(
+                            app_token, summary_table_id,
+                            "视频公网链接", 15  # 15=超链接
+                        )
+                    except Exception:
+                        pass
+
+                    # 创建热门视图
+                    try:
+                        summary_fields = client.list_fields(app_token, summary_table_id)
+                        hot_fid = ""
+                        for sf in summary_fields:
+                            if sf and sf.get("field_name") == "热门":
+                                hot_fid = sf.get("field_id", "")
+                                break
+                        if hot_fid:
+                            client.create_view(
+                                app_token, summary_table_id,
+                                view_name="🔥 热门作品",
+                                filter_conditions=[{
+                                    "field_id": hot_fid,
+                                    "operator": "isNotEmpty",
+                                }]
+                            )
+                    except Exception:
+                        pass
+
+                    # ========== 9. 生成视频临时公网下载链接 ==========
+                    try:
+                        utils.logger.info("[飞书] 开始生成视频临时公网下载链接...")
+                        # 读回汇总表所有记录，提取视频附件的 file_token
+                        summary_records = client.list_all_records(
+                            app_token, summary_table_id
+                        )
+                        utils.logger.info(
+                            f"[飞书] 读取汇总表记录: {len(summary_records)} 条"
+                        )
+
+                        # 收集所有视频附件的 file_token
+                        record_file_map = {}  # {record_id: file_token}
+                        all_file_tokens = []
+                        for rec in summary_records:
+                            record_id = rec.get("record_id", "")
+                            fields = rec.get("fields", {})
+                            video_attach = fields.get("视频附件")
+                            if video_attach and isinstance(video_attach, list):
+                                for att in video_attach:
+                                    ft = att.get("file_token", "")
+                                    if ft:
+                                        record_file_map[record_id] = ft
+                                        all_file_tokens.append(ft)
+                                        break  # 只取第一个视频
+
+                        if all_file_tokens:
+                            utils.logger.info(
+                                f"[飞书] 找到 {len(all_file_tokens)} 个视频附件，"
+                                f"批量获取临时下载链接..."
+                            )
+                            # 批量获取临时 URL
+                            token_url_map = client.batch_get_tmp_download_url(
+                                all_file_tokens
+                            )
+
+                            # 批量更新记录，写入"视频公网链接"字段
+                            update_records = []
+                            for record_id, file_token in record_file_map.items():
+                                tmp_url = token_url_map.get(file_token, "")
+                                if tmp_url:
+                                    update_records.append({
+                                        "record_id": record_id,
+                                        "fields": {
+                                            "视频公网链接": {
+                                                "link": tmp_url,
+                                                "text": tmp_url
+                                            }
+                                        }
+                                    })
+
+                            if update_records:
+                                updated = client.batch_update_records(
+                                    app_token, summary_table_id, update_records
+                                )
+                                utils.logger.info(
+                                    f"[飞书] 视频公网链接写入完成: "
+                                    f"{updated}/{len(update_records)} 条"
+                                )
+                            else:
+                                utils.logger.warning(
+                                    "[飞书] 未能获取任何临时下载链接"
+                                )
+                        else:
+                            utils.logger.info(
+                                "[飞书] 汇总表中无视频附件，跳过链接生成"
+                            )
+
+                    except Exception as e:
+                        utils.logger.warning(
+                            f"[飞书] 生成视频公网链接失败（不影响已写入数据）: {e}"
+                        )
+
+                else:
+                    utils.logger.info("[飞书] 没有视频记录，跳过汇总表创建")
+
+            except Exception as e:
+                utils.logger.warning(f"[飞书] 创建视频汇总表失败（不影响分表数据）: {e}")
+
             return bitable_url
 
     except Exception as e:
@@ -1435,6 +1961,285 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
         import traceback
         utils.logger.error(f"[BatchCrawler] 详细错误: {traceback.format_exc()}")
         return None
+
+
+# ==================== 数据完整性校验 ====================
+
+def _validate_single_creator(expected_uid: str, notes: list) -> bool:
+    """
+    校验单个作者的数据是否有效
+    
+    检查项:
+    1. 数据不为空
+    2. 数据中的 user_id 与预期的 creator uid 一致（允许少量不匹配）
+    """
+    if not notes:
+        return False
+
+    if not expected_uid:
+        return len(notes) > 0
+
+    # 统计 user_id 匹配率
+    match_count = sum(1 for n in notes if n.get("user_id", "") == expected_uid)
+    match_ratio = match_count / len(notes) if notes else 0
+
+    # 至少 80% 的数据应该属于这个作者（允许少量合集/转发）
+    return match_ratio >= 0.8
+
+
+def _validate_crawled_data(
+    task_dir: str,
+    creators: list,
+    progress,
+) -> list:
+    """
+    批量爬取完成后，校验所有已完成作者的数据完整性
+    
+    检查项:
+    1. user_id 不匹配：数据文件里的 user_id 和目标作者不一致
+    2. 数据为空：标记为完成但没有数据文件
+    3. 数据重复：多个不同作者的数据文件内容完全相同（session 失效的典型表现）
+    
+    Returns:
+        需要补爬的作者列表
+    """
+    utils.logger.info("[DataValidator] 开始数据完整性校验...")
+
+    invalid_creators = []
+    data_fingerprints = {}  # uid → (note_count, first_note_id_set) 用于检测重复
+
+    for creator in creators:
+        creator_name = creator["name"]
+        creator_url = creator["url"]
+        user_id = ""
+        if "/user/profile/" in creator_url:
+            user_id = creator_url.split("/user/profile/")[1].split("?")[0]
+
+        if not user_id:
+            continue
+
+        # 只校验已标记为"完成"的作者
+        if not progress.is_completed(creator_url):
+            continue
+
+        contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+        reuse_file = os.path.join(task_dir, f"creator_{user_id}_reuse.json")
+
+        # 收集该作者的所有数据
+        notes = []
+        for fpath in [contents_file, reuse_file]:
+            if os.path.exists(fpath):
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        notes.extend(data)
+                except Exception:
+                    pass
+
+        # 检查1: 数据文件是否存在且非空
+        if not notes:
+            utils.logger.warning(
+                f"[DataValidator] ⚠️ {creator_name} ({user_id}): 标记完成但无数据文件"
+            )
+            invalid_creators.append(creator)
+            progress.remove_completed(creator_url)
+            continue
+
+        # 检查2: user_id 是否匹配
+        if not _validate_single_creator(user_id, notes):
+            actual_uids = {}
+            for n in notes:
+                uid = n.get("user_id", "unknown")
+                actual_uids[uid] = actual_uids.get(uid, 0) + 1
+            top_uid = max(actual_uids, key=actual_uids.get) if actual_uids else "?"
+            utils.logger.warning(
+                f"[DataValidator] ⚠️ {creator_name} ({user_id}): "
+                f"user_id 不匹配！数据实际属于 {top_uid} ({actual_uids.get(top_uid, 0)}/{len(notes)} 条)"
+            )
+            invalid_creators.append(creator)
+            progress.remove_completed(creator_url)
+            # 移除脏数据文件
+            for fpath in [contents_file, reuse_file]:
+                if os.path.exists(fpath):
+                    backup = fpath + ".invalid"
+                    try:
+                        os.rename(fpath, backup)
+                    except Exception:
+                        pass
+            # 删除断点续爬进度
+            progress_file = os.path.join("data", "xhs", "progress", f"creator_{user_id}_progress.json")
+            if os.path.exists(progress_file):
+                try:
+                    os.remove(progress_file)
+                except Exception:
+                    pass
+            continue
+
+        # 检查3: 收集指纹用于检测重复
+        note_ids = frozenset(n.get("note_id", "") for n in notes[:20])
+        fingerprint = (len(notes), note_ids)
+        data_fingerprints[user_id] = {
+            "fingerprint": fingerprint,
+            "creator": creator,
+            "name": creator_name,
+        }
+
+    # 检查3: 检测重复数据（多个作者的数据指纹完全相同）
+    fp_groups = {}
+    for uid, info in data_fingerprints.items():
+        fp_key = (info["fingerprint"][0], tuple(sorted(info["fingerprint"][1])))
+        if fp_key not in fp_groups:
+            fp_groups[fp_key] = []
+        fp_groups[fp_key].append(info)
+
+    for fp_key, group in fp_groups.items():
+        if len(group) > 1:
+            # 多个作者有完全相同的数据 → session 失效时的典型症状
+            names = [g["name"] for g in group]
+            utils.logger.warning(
+                f"[DataValidator] ⚠️ 检测到重复数据！以下 {len(group)} 个作者数据完全相同: {names}"
+            )
+            for g in group:
+                c = g["creator"]
+                uid = ""
+                if "/user/profile/" in c["url"]:
+                    uid = c["url"].split("/user/profile/")[1].split("?")[0]
+                if c not in invalid_creators:
+                    invalid_creators.append(c)
+                    progress.remove_completed(c["url"])
+                    # 移除脏数据
+                    for suffix in ["_contents.json", "_reuse.json"]:
+                        fpath = os.path.join(task_dir, f"creator_{uid}{suffix}")
+                        if os.path.exists(fpath):
+                            try:
+                                os.rename(fpath, fpath + ".invalid")
+                            except Exception:
+                                pass
+                    # 删除断点续爬进度
+                    pf = os.path.join("data", "xhs", "progress", f"creator_{uid}_progress.json")
+                    if os.path.exists(pf):
+                        try:
+                            os.remove(pf)
+                        except Exception:
+                            pass
+
+    if invalid_creators:
+        utils.logger.info(
+            f"[DataValidator] 校验完成: {len(invalid_creators)} 个作者需要补爬"
+        )
+    else:
+        utils.logger.info("[DataValidator] ✅ 校验完成: 所有数据正常")
+
+    return invalid_creators
+
+
+# ==================== Session 健康检查 ====================
+
+async def _check_session_health() -> bool:
+    """
+    检查当前 session 是否有效（通过创建临时 XHS client 执行 pong）
+
+    Returns:
+        True=session 有效, False=已失效
+    """
+    try:
+        from playwright.async_api import async_playwright
+        import config as app_config
+
+        browser_data_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "browser_data",
+            app_config.USER_DATA_DIR % "xhs",
+        )
+
+        pw = await async_playwright().start()
+        try:
+            ctx = await pw.chromium.launch_persistent_context(
+                user_data_dir=browser_data_dir,
+                headless=True,
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                ),
+            )
+
+            # 检查是否有 web_session cookie
+            cookies = await ctx.cookies()
+            has_session = any(c.get("name") == "web_session" for c in cookies)
+            await ctx.close()
+
+            if not has_session:
+                utils.logger.warning("[SessionCheck] 浏览器中无 web_session cookie")
+                return False
+
+            utils.logger.info("[SessionCheck] Session 检查通过 ✓")
+            return True
+
+        except Exception as e:
+            utils.logger.warning(f"[SessionCheck] 检查失败: {e}")
+            return False
+        finally:
+            try:
+                await pw.stop()
+            except Exception:
+                pass
+
+    except Exception as e:
+        utils.logger.warning(f"[SessionCheck] 初始化失败: {e}")
+        return False
+
+
+async def _wait_for_session_recovery(
+    max_wait_minutes: int = 60,
+    check_interval_seconds: int = 120,
+) -> bool:
+    """
+    等待 session 恢复（由 session_keeper 或手动重新登录修复）
+
+    Args:
+        max_wait_minutes: 最大等待时间（分钟）
+        check_interval_seconds: 检查间隔（秒）
+
+    Returns:
+        True=session 已恢复, False=等待超时
+    """
+    max_wait_seconds = max_wait_minutes * 60
+    elapsed = 0
+
+    utils.logger.info(
+        f"[SessionCheck] ⏸ 爬虫暂停，等待 session 恢复（最长等待 {max_wait_minutes} 分钟）..."
+    )
+    utils.logger.info(
+        f"[SessionCheck] 请通过 Web 界面重新扫码登录，或等待 session_keeper 自动恢复"
+    )
+
+    while elapsed < max_wait_seconds:
+        await asyncio.sleep(check_interval_seconds)
+        elapsed += check_interval_seconds
+
+        minutes_elapsed = elapsed / 60
+        minutes_remaining = (max_wait_seconds - elapsed) / 60
+
+        utils.logger.info(
+            f"[SessionCheck] 第 {int(minutes_elapsed)} 分钟，检查 session..."
+        )
+
+        if await _check_session_health():
+            utils.logger.info(
+                f"[SessionCheck] ✅ Session 已恢复！等待了 {int(minutes_elapsed)} 分钟，继续爬取"
+            )
+            return True
+        else:
+            utils.logger.warning(
+                f"[SessionCheck] Session 仍然无效，继续等待（剩余 {int(minutes_remaining)} 分钟）..."
+            )
+
+    utils.logger.error(
+        f"[SessionCheck] ❌ 等待 {max_wait_minutes} 分钟后 session 仍未恢复"
+    )
+    return False
 
 
 # ==================== 主流程 ====================
@@ -1597,6 +2402,12 @@ async def run_batch_crawl(
     task_dir = os.path.join("data", "xhs", "json", task_id)
     os.makedirs(task_dir, exist_ok=True)
 
+    # 注册优雅退出信号处理
+    _install_signal_handlers()
+    _GracefulShutdown.current_task_dir = task_dir
+    _GracefulShutdown.current_progress = progress
+    _GracefulShutdown.shutdown_requested = False
+
     # 5. 统计
     total = len(creators)
     skipped = 0
@@ -1611,6 +2422,9 @@ async def run_batch_crawl(
         skipped = total
         # 跳到汇总阶段（下面的 for 循环不会执行）
         creators = []
+
+    # 保存完整作者列表（校验阶段需要）
+    creators_original = list(creators) if not patch_only else []
 
     # 6. 逐个作者处理
     for idx, creator in enumerate(creators, 1):
@@ -1629,6 +2443,13 @@ async def run_batch_crawl(
             )
             skipped += 1
             continue
+
+        # 部分完成的作者：有部分数据但需要重新完整爬取
+        if progress.is_partial(creator_url):
+            utils.logger.info(
+                f"[BatchCrawler] [{idx}/{total}] 重新爬取（上次中止未完成）: {creator_name}"
+            )
+            progress.clear_partial(creator_url)
 
         # ========== 复用历史数据检查 ==========
         if reuse_history and user_id:
@@ -1661,7 +2482,30 @@ async def run_batch_crawl(
                 )
                 # 不 continue，继续下面的爬取流程
 
+        # ========== Session 健康检查 ==========
+        session_ok = await _check_session_health()
+        if not session_ok:
+            utils.logger.warning(
+                f"[BatchCrawler] [{idx}/{total}] Session 失效，暂停爬取并等待恢复..."
+            )
+            recovered = await _wait_for_session_recovery(
+                max_wait_minutes=60,
+                check_interval_seconds=120,
+            )
+            if not recovered:
+                utils.logger.error(
+                    f"[BatchCrawler] [{idx}/{total}] Session 等待超时（60分钟），"
+                    f"跳过 {creator_name}，标记为失败"
+                )
+                progress.mark_failed(creator_url, "Session 过期且等待恢复超时")
+                failed += 1
+                continue
+
         # ========== 爬取 ==========
+        if _GracefulShutdown.shutdown_requested:
+            utils.logger.info(f"[BatchCrawler] [{idx}/{total}] 收到退出信号，停止处理后续作者")
+            break
+
         utils.logger.info("=" * 60)
         utils.logger.info(
             f"[BatchCrawler] [{idx}/{total}] 开始爬取: {creator_name}"
@@ -1675,6 +2519,12 @@ async def run_batch_crawl(
             AsyncFileWriter.reset_session_timestamp()
             session_ts = AsyncFileWriter._session_timestamp
 
+            # 记录当前爬取状态（供优雅退出时使用）
+            _GracefulShutdown.current_creator_name = creator_name
+            _GracefulShutdown.current_creator_url = creator_url
+            _GracefulShutdown.current_user_id = user_id
+            _GracefulShutdown.current_session_ts = session_ts
+
             # 设置当前作者
             config.XHS_CREATOR_ID_LIST = [creator_url]
 
@@ -1684,6 +2534,7 @@ async def run_batch_crawl(
 
             # 创建并运行爬虫
             from media_platform.xhs import XiaoHongShuCrawler
+            from media_platform.xhs.exception import SessionExpiredError
             from var import crawler_type_var
             crawler_type_var.set("creator")
 
@@ -1693,7 +2544,8 @@ async def run_batch_crawl(
             # 新爬取的数据保存到任务目录
             data_dir = os.path.join("data", "xhs", "json")
             new_notes = collect_crawled_data(
-                data_dir, session_ts, creator_name, min_interaction=0
+                data_dir, session_ts, creator_name, min_interaction=0,
+                user_id=user_id
             )
             if new_notes:
                 contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
@@ -1701,12 +2553,85 @@ async def run_batch_crawl(
                     json.dump(new_notes, f, ensure_ascii=False, indent=2)
                 utils.logger.info(f"  新爬 {len(new_notes)} 条保存到 {contents_file}")
 
+            # 合并：如果之前有 partial 的旧数据，与新数据合并（按 note_id 去重）
+            _merge_partial_data(task_dir, user_id, new_notes)
+
             # 标记完成
             progress.mark_completed(creator_url)
+            _GracefulShutdown.reset_current()
             success += 1
             utils.logger.info(
                 f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
             )
+
+        except SessionExpiredError as se:
+            # ========== Session 失效熔断：暂停等待恢复 ==========
+            utils.logger.error(
+                f"[BatchCrawler] [{idx}/{total}] ⚡ Session 失效熔断: {creator_name} - {se}"
+            )
+            
+            # 保存已爬到的部分数据（如果有的话）
+            try:
+                data_dir = os.path.join("data", "xhs", "json")
+                partial_notes = collect_crawled_data(
+                    data_dir, session_ts, creator_name, min_interaction=0,
+                    user_id=user_id
+                )
+                if partial_notes:
+                    contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+                    with open(contents_file, "w", encoding="utf-8") as f:
+                        json.dump(partial_notes, f, ensure_ascii=False, indent=2)
+                    utils.logger.info(
+                        f"[BatchCrawler] [{idx}/{total}] 已保存 {len(partial_notes)} 条有效数据"
+                        f"（session 断前爬到的部分）"
+                    )
+            except Exception as save_err:
+                utils.logger.warning(f"[BatchCrawler] 保存部分数据失败: {save_err}")
+            
+            # 标记为失败（需重爬）
+            progress.mark_failed(creator_url, f"Session 失效熔断: {se}")
+            failed += 1
+            
+            # 关闭当前浏览器
+            if crawler:
+                try:
+                    if getattr(crawler, "cdp_manager", None):
+                        await crawler.cdp_manager.cleanup(force=True)
+                        crawler.cdp_manager = None
+                    elif getattr(crawler, "browser_context", None):
+                        await crawler.browser_context.close()
+                except Exception:
+                    pass
+                try:
+                    import subprocess
+                    import platform as _platform
+                    if _platform.system() == "Linux":
+                        subprocess.run(["pkill", "-f", "chromium"], capture_output=True, timeout=5)
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
+                crawler = None
+            
+            # 等待 session 恢复
+            utils.logger.info(
+                f"[BatchCrawler] [{idx}/{total}] 等待 session 恢复..."
+            )
+            recovered = await _wait_for_session_recovery(
+                max_wait_minutes=60,
+                check_interval_seconds=120,
+            )
+            if not recovered:
+                utils.logger.error(
+                    f"[BatchCrawler] [{idx}/{total}] Session 等待超时（60分钟），"
+                    f"停止后续爬取"
+                )
+                break  # 超时直接停止整个批次
+            
+            utils.logger.info(
+                f"[BatchCrawler] [{idx}/{total}] Session 已恢复，继续下一个作者"
+            )
+            # 继续 for 循环处理下一个作者（当前作者标记为 failed，下次可重爬）
+            continue
 
         except Exception as e:
             failed += 1
@@ -1751,6 +2676,113 @@ async def run_batch_crawl(
     utils.logger.info("[BatchCrawler] 批量爬取完成!")
     utils.logger.info(f"  总计: {total} | 成功: {success} | 复用: {reused} | 失败: {failed} | 跳过: {skipped}")
     utils.logger.info("=" * 60)
+
+    # 7.5 数据完整性校验 + 自动补爬
+    if not patch_only:
+        invalid_creators = _validate_crawled_data(task_dir, creators_original, progress)
+        if invalid_creators:
+            utils.logger.info("=" * 60)
+            utils.logger.info(f"[DataValidator] 发现 {len(invalid_creators)} 个作者数据异常，自动补爬...")
+            utils.logger.info("=" * 60)
+
+            recrawl_success = 0
+            recrawl_failed = 0
+            for ridx, rc in enumerate(invalid_creators, 1):
+                rc_name = rc["name"]
+                rc_url = rc["url"]
+                rc_uid = ""
+                if "/user/profile/" in rc_url:
+                    rc_uid = rc_url.split("/user/profile/")[1].split("?")[0]
+
+                utils.logger.info(f"[DataValidator] 补爬 [{ridx}/{len(invalid_creators)}]: {rc_name}")
+
+                crawler = None
+                try:
+                    AsyncFileWriter.reset_session_timestamp()
+                    session_ts = AsyncFileWriter._session_timestamp
+                    config.XHS_CREATOR_ID_LIST = [rc_url]
+
+                    from tools.crawl_statistics import reset_statistics
+                    reset_statistics(platform="xhs")
+
+                    from media_platform.xhs import XiaoHongShuCrawler
+                    from media_platform.xhs.exception import SessionExpiredError as _SSE
+                    from var import crawler_type_var
+                    crawler_type_var.set("creator")
+
+                    crawler = XiaoHongShuCrawler()
+                    await crawler.start()
+
+                    data_dir = os.path.join("data", "xhs", "json")
+                    new_notes = collect_crawled_data(
+                        data_dir, session_ts, rc_name, min_interaction=0,
+                        user_id=rc_uid
+                    )
+                    if new_notes:
+                        contents_file = os.path.join(task_dir, f"creator_{rc_uid}_contents.json")
+                        with open(contents_file, "w", encoding="utf-8") as f:
+                            json.dump(new_notes, f, ensure_ascii=False, indent=2)
+                        utils.logger.info(f"  补爬完成: {len(new_notes)} 条 → {contents_file}")
+
+                    # 再次校验补爬结果
+                    if new_notes and _validate_single_creator(rc_uid, new_notes):
+                        progress.mark_completed(rc_url)
+                        recrawl_success += 1
+                        utils.logger.info(f"[DataValidator] ✅ 补爬校验通过: {rc_name}")
+                    else:
+                        recrawl_failed += 1
+                        progress.mark_failed(rc_url, "补爬后数据仍异常")
+                        utils.logger.warning(f"[DataValidator] ⚠️ 补爬后仍异常: {rc_name}")
+
+                except _SSE as se:
+                    # Session 失效熔断 — 停止补爬
+                    recrawl_failed += 1
+                    progress.mark_failed(rc_url, f"Session 失效熔断: {se}")
+                    utils.logger.error(
+                        f"[DataValidator] ⚡ 补爬 Session 失效: {rc_name} - {se}，停止补爬"
+                    )
+                    # 关闭浏览器
+                    if crawler:
+                        try:
+                            if getattr(crawler, "cdp_manager", None):
+                                await crawler.cdp_manager.cleanup(force=True)
+                            elif getattr(crawler, "browser_context", None):
+                                await crawler.browser_context.close()
+                        except Exception:
+                            pass
+                        crawler = None
+                    break  # 停止补爬循环
+
+                except Exception as e:
+                    recrawl_failed += 1
+                    progress.mark_failed(rc_url, f"补爬异常: {str(e)}")
+                    utils.logger.error(f"[DataValidator] 补爬失败: {rc_name} - {e}")
+
+                finally:
+                    if crawler:
+                        try:
+                            if getattr(crawler, "cdp_manager", None):
+                                await crawler.cdp_manager.cleanup(force=True)
+                            elif getattr(crawler, "browser_context", None):
+                                await crawler.browser_context.close()
+                        except Exception:
+                            pass
+                        try:
+                            import subprocess as _sp
+                            import platform as _pf
+                            if _pf.system() == "Linux":
+                                _sp.run(["pkill", "-f", "chromium"], capture_output=True, timeout=5)
+                            await asyncio.sleep(2)
+                        except Exception:
+                            pass
+
+                if ridx < len(invalid_creators):
+                    utils.logger.info("[DataValidator] 等待 10 秒后继续...")
+                    await asyncio.sleep(10)
+
+            utils.logger.info("=" * 60)
+            utils.logger.info(f"[DataValidator] 补爬完成: 成功 {recrawl_success} | 失败 {recrawl_failed}")
+            utils.logger.info("=" * 60)
 
     # 8. 从任务目录读取所有数据，合并导出
     utils.logger.info(f"[BatchCrawler] 从任务目录汇总数据: {task_dir}")
@@ -1804,29 +2836,35 @@ async def run_batch_crawl(
             utils.logger.warning(f"[BatchCrawler] 补图阶段异常: {e}")
 
     if all_export_notes:
-        utils.logger.info(f"[BatchCrawler] 导出到本地 ({export_format})...")
-        export_path = export_to_local(
-            notes=all_export_notes,
-            export_dir=export_dir,
-            export_format=export_format,
-        )
-        if export_path:
-            utils.logger.info(f"[BatchCrawler] 本地导出完成: {export_path}")
+        try:
+            utils.logger.info(f"[BatchCrawler] 导出到本地 ({export_format})...")
+            export_path = export_to_local(
+                notes=all_export_notes,
+                export_dir=export_dir,
+                export_format=export_format,
+            )
+            if export_path:
+                utils.logger.info(f"[BatchCrawler] 本地导出完成: {export_path}")
+        except Exception as e:
+            utils.logger.error(f"[BatchCrawler] 本地导出失败: {e}，继续执行飞书推送...")
     else:
         utils.logger.info("[BatchCrawler] 没有符合条件的数据可导出")
 
     # 8. 推送到飞书
     if not skip_feishu and all_export_notes:
-        utils.logger.info("[BatchCrawler] 开始推送到飞书多维表格...")
-        bitable_url = push_to_feishu(
-            notes=all_export_notes,
-            field_defs=field_defs,
-            app_id=feishu_app_id,
-            app_secret=feishu_app_secret,
-            folder_token=feishu_folder_token,
-        )
-        if bitable_url:
-            utils.logger.info(f"[BatchCrawler] 飞书表格链接: {bitable_url}")
+        try:
+            utils.logger.info("[BatchCrawler] 开始推送到飞书多维表格...")
+            bitable_url = push_to_feishu(
+                notes=all_export_notes,
+                field_defs=field_defs,
+                app_id=feishu_app_id,
+                app_secret=feishu_app_secret,
+                folder_token=feishu_folder_token,
+            )
+            if bitable_url:
+                utils.logger.info(f"[BatchCrawler] 飞书表格链接: {bitable_url}")
+        except Exception as e:
+            utils.logger.error(f"[BatchCrawler] 飞书推送失败: {e}")
     elif skip_feishu:
         utils.logger.info("[BatchCrawler] 跳过飞书写入 (--skip-feishu)")
     elif not all_export_notes:

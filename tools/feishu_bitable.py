@@ -97,6 +97,18 @@ class FeishuBitableClient:
         utils.logger.info(f"[FeishuBitable] 创建多维表格成功: {name} (token={app_token})")
         return {"app_token": app_token, "url": app_url}
 
+    def list_tables(self, app_token: str) -> List[Dict[str, str]]:
+        """
+        列出多维表格中的所有数据表
+        
+        Returns:
+            [{"table_id": "xxx", "name": "xxx"}, ...]
+        """
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables"
+        data = self._request("GET", url)
+        items = data.get("items", [])
+        return [{"table_id": t.get("table_id", ""), "name": t.get("name", "")} for t in items]
+
     def create_table(self, app_token: str, table_name: str,
                      fields: List[Dict[str, str]]) -> str:
         """
@@ -422,6 +434,90 @@ class FeishuBitableClient:
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
         body = {"fields": fields}
         self._request("PUT", url, json=body)
+
+    def batch_update_records(self, app_token: str, table_id: str,
+                             records: List[Dict[str, Any]],
+                             batch_size: int = 100) -> int:
+        """
+        批量更新记录
+        
+        Args:
+            records: [{"record_id": "xxx", "fields": {"字段名": "值"}}]
+        Returns:
+            成功更新的记录数
+        """
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_update"
+        total_updated = 0
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+            body = {"records": batch}
+            try:
+                data = self._request("POST", url, json=body)
+                updated = len(data.get("records", []))
+                total_updated += updated
+            except Exception as e:
+                utils.logger.error(f"[FeishuBitable] 批量更新失败 (批次 {i // batch_size + 1}): {e}")
+            if i + batch_size < len(records):
+                time.sleep(0.5)
+        return total_updated
+
+    def list_all_records(self, app_token: str, table_id: str,
+                         page_size: int = 100) -> List[Dict]:
+        """列出数据表的所有记录（自动分页）"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records"
+        all_records = []
+        page_token = None
+        while True:
+            params: Dict[str, Any] = {"page_size": page_size}
+            if page_token:
+                params["page_token"] = page_token
+            data = self._request("GET", url, params=params)
+            items = data.get("items", [])
+            all_records.extend(items)
+            if not data.get("has_more", False):
+                break
+            page_token = data.get("page_token")
+        return all_records
+
+    def batch_get_tmp_download_url(self, file_tokens: List[str]) -> Dict[str, str]:
+        """
+        批量获取文件的临时公网下载链接
+        
+        Args:
+            file_tokens: file_token 列表
+            
+        Returns:
+            {file_token: tmp_download_url} 映射
+        """
+        if not file_tokens:
+            return {}
+
+        result = {}
+        # API 实际限制每次最多 5 个（文档标称 50，实测不超过 5）
+        url = f"{self.BASE_URL}/drive/v1/medias/batch_get_tmp_download_url"
+        batch_size = 5
+        for i in range(0, len(file_tokens), batch_size):
+            batch = file_tokens[i:i + batch_size]
+            try:
+                # httpx 用 tuple list 传递重复的 query key
+                params = [("file_tokens", t) for t in batch]
+                data = self._request("GET", url, params=params)
+                for item in data.get("tmp_download_urls", []):
+                    token = item.get("file_token", "")
+                    tmp_url = item.get("tmp_download_url", "")
+                    if token and tmp_url:
+                        result[token] = tmp_url
+            except Exception as e:
+                utils.logger.warning(
+                    f"[FeishuBitable] 获取临时下载链接失败 (批次 {i // batch_size + 1}): {e}"
+                )
+            if i + batch_size < len(file_tokens):
+                time.sleep(0.3)
+
+        utils.logger.info(
+            f"[FeishuBitable] 获取临时下载链接: {len(result)}/{len(file_tokens)} 个成功"
+        )
+        return result
 
     def close(self):
         self._client.close()

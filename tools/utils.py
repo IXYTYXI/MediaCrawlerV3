@@ -20,6 +20,8 @@
 
 import argparse
 import logging
+import os
+from logging.handlers import TimedRotatingFileHandler
 
 from .crawler_util import *
 from .slider_util import *
@@ -28,13 +30,33 @@ from .time_util import *
 
 def init_loging_config():
     level = logging.INFO
+    log_format = "%(asctime)s %(name)s %(levelname)s (%(filename)s:%(lineno)d) - %(message)s"
+    date_format = '%Y-%m-%d %H:%M:%S'
+
     logging.basicConfig(
         level=level,
-        format="%(asctime)s %(name)s %(levelname)s (%(filename)s:%(lineno)d) - %(message)s",
-        datefmt='%Y-%m-%d %H:%M:%S'
+        format=log_format,
+        datefmt=date_format,
     )
     _logger = logging.getLogger("MediaCrawler")
     _logger.setLevel(level)
+
+    # 日志文件：按天轮转，保留 14 天，第 15 天自动删除
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "crawler.log")
+
+    file_handler = TimedRotatingFileHandler(
+        log_file,
+        when="midnight",       # 每天零点轮转
+        interval=1,
+        backupCount=14,        # 保留 14 个旧文件（即 14 天，第 15 天删除最早的）
+        encoding="utf-8",
+    )
+    file_handler.suffix = "%Y-%m-%d"  # 旧文件名格式: crawler.log.2026-02-13
+    file_handler.setLevel(level)
+    file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+    _logger.addHandler(file_handler)
 
     # Disable httpx INFO level logs
     logging.getLogger("httpx").setLevel(logging.WARNING)

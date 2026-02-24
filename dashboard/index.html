@@ -75,8 +75,38 @@
 <body class="bg-mesh text-gray-200 min-h-screen">
 
 <div id="app" v-cloak>
+
+  <!-- 登录遮罩 -->
+  <div v-if="!authenticated" class="fixed inset-0 z-[999] bg-mesh flex items-center justify-center">
+    <div class="card rounded-2xl p-8 w-full max-w-sm animate-in">
+      <div class="flex flex-col items-center mb-6">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-4">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        </div>
+        <h2 class="text-xl font-bold text-white">MediaCrawler</h2>
+        <p class="text-xs text-gray-500 mt-1">请输入访问密码</p>
+      </div>
+      <form @submit.prevent="doLogin" class="space-y-4">
+        <div>
+          <input v-model="loginPassword" type="password" placeholder="访问密码" autocomplete="current-password"
+            class="input-field w-full px-4 py-3 rounded-xl text-sm text-gray-200 placeholder-gray-600"
+            :class="loginError ? 'border-red-500/60' : ''" autofocus>
+          <p v-if="loginError" class="text-red-400 text-xs mt-2">{{ loginError }}</p>
+        </div>
+        <button type="submit" :disabled="loginLoading"
+          class="btn-primary w-full py-3 rounded-xl text-sm font-medium text-white disabled:opacity-50">
+          <span v-if="loginLoading" class="inline-flex items-center gap-2">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            验证中...
+          </span>
+          <span v-else>登 录</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- 顶部导航 -->
-  <header class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/60 px-6 py-3.5 flex items-center justify-between sticky top-0 z-50">
+  <header v-if="authenticated" class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/60 px-6 py-3.5 flex items-center justify-between sticky top-0 z-50">
     <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -101,10 +131,13 @@
         </span>
         <span v-else>{{ configDirty ? '保存配置' : '已保存' }}</span>
       </button>
+      <button @click="doLogout" class="px-3 py-2 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 transition" title="退出登录">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      </button>
     </div>
   </header>
 
-  <div class="flex">
+  <div v-if="authenticated" class="flex">
     <!-- 侧边栏 -->
     <nav class="w-52 min-h-screen border-r border-gray-800/40 py-5 px-3 space-y-0.5 sticky top-[52px] h-[calc(100vh-52px)] bg-gray-900/40">
       <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
@@ -129,6 +162,122 @@
 
     <!-- 主内容区 -->
     <main class="flex-1 p-8 max-w-5xl animate-in">
+
+      <!-- ========== 登录管理 ========== -->
+      <section v-show="activeTab === 'session'" class="space-y-5 animate-in">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-2xl">🔐</span>
+          <div><h2 class="text-lg font-semibold text-white">登录管理</h2><p class="text-xs text-gray-500">管理小红书 Session，确保爬虫正常运行</p></div>
+        </div>
+
+        <!-- 状态总览 -->
+        <div class="grid grid-cols-3 gap-4">
+          <div class="card rounded-xl p-5 text-center">
+            <div class="text-3xl mb-2" :class="sessionStatus.browser_data_exists ? '' : 'grayscale opacity-40'">
+              {{ sessionStatus.browser_data_exists ? '🟢' : '⚪' }}
+            </div>
+            <div class="text-sm text-gray-300 font-medium">浏览器数据</div>
+            <div class="text-[11px] text-gray-500 mt-1">
+              {{ sessionStatus.browser_data_exists ? sessionStatus.browser_data_size_mb + ' MB' : '未创建' }}
+            </div>
+          </div>
+          <div class="card rounded-xl p-5 text-center">
+            <div class="text-3xl mb-2">
+              {{ sessionStatus.crawler_running ? '🔄' : '⏹️' }}
+            </div>
+            <div class="text-sm text-gray-300 font-medium">爬虫状态</div>
+            <div class="text-[11px] mt-1" :class="sessionStatus.crawler_running ? 'text-green-400' : 'text-gray-500'">
+              {{ sessionStatus.crawler_running ? '运行中' : '未运行' }}
+            </div>
+          </div>
+          <div class="card rounded-xl p-5 text-center">
+            <div class="text-3xl mb-2">
+              {{ sessionVerify.status === 'valid' ? '✅' : sessionVerify.status === 'expired' ? '❌' : '❓' }}
+            </div>
+            <div class="text-sm text-gray-300 font-medium">Session 状态</div>
+            <div class="text-[11px] mt-1" :class="sessionVerify.status === 'valid' ? 'text-green-400' : sessionVerify.status === 'expired' ? 'text-red-400' : 'text-gray-500'">
+              {{ sessionVerify.status === 'valid' ? '有效' : sessionVerify.status === 'expired' ? '已过期' : '未检测' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Session 验证 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center gap-2 mb-4"><span>🔍</span><h3 class="text-sm font-semibold text-white">Session 验证</h3></div>
+          <p class="text-xs text-gray-500 mb-4">启动浏览器访问小红书，验证当前 session 是否有效（约 5-10 秒）。爬虫运行时会自动判定为有效。</p>
+          
+          <div v-if="sessionVerify.message" class="mb-4 p-3 rounded-lg text-sm"
+            :class="sessionVerify.status === 'valid' ? 'bg-green-500/10 border border-green-500/20 text-green-400' : sessionVerify.status === 'expired' ? 'bg-red-500/10 border border-red-500/20 text-red-400' : sessionVerify.status === 'error' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' : 'bg-blue-500/10 border border-blue-500/20 text-blue-400'">
+            <div class="font-medium">{{ sessionVerify.message }}</div>
+            <div v-if="sessionVerify.web_session" class="text-[11px] mt-1 opacity-70 font-mono">web_session: {{ sessionVerify.web_session }}</div>
+          </div>
+
+          <div class="flex gap-3">
+            <button @click="verifySession" :disabled="sessionVerify.loading"
+              class="px-5 py-2.5 btn-primary text-white rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+              <span v-if="sessionVerify.loading" class="inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                验证中...
+              </span>
+              <span v-else>验证 Session</span>
+            </button>
+            <button @click="loadSessionStatus"
+              class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg text-xs transition">
+              刷新状态
+            </button>
+          </div>
+        </div>
+
+        <!-- 扫码登录入口 -->
+        <div class="card rounded-xl p-5 border-blue-500/20">
+          <div class="flex items-center gap-2 mb-3"><span>📱</span><h3 class="text-sm font-semibold text-white">扫码登录</h3></div>
+          <p class="text-xs text-gray-500 mb-4">
+            当 session 过期时，点击下方按钮打开扫码登录页面。扫码成功后，浏览器会自动保存 session，后续爬取<strong class="text-gray-300">无需再次登录</strong>。
+          </p>
+          <div class="flex items-center gap-4">
+            <button @click="openLoginPage"
+              class="px-6 py-3 btn-success text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-green-600/30">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+              </svg>
+              打开扫码登录
+            </button>
+            <span class="text-[11px] text-gray-600">将在新窗口打开登录页面</span>
+          </div>
+        </div>
+
+        <!-- 手动更新 Cookie -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center gap-2 mb-3"><span>🍪</span><h3 class="text-sm font-semibold text-white">手动更新 Cookie</h3>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-500">备用方案</span>
+          </div>
+          <p class="text-xs text-gray-500 mb-3">如果扫码不可用，可以手动粘贴从浏览器复制的 web_session 值。</p>
+          
+          <div v-if="sessionStatus.config_cookie" class="mb-3 p-2.5 rounded-lg bg-gray-800/50 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] text-gray-500">当前 config cookie：</span>
+              <span class="text-xs font-mono text-gray-400">{{ sessionStatus.config_cookie }}</span>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <input type="text" v-model="newCookieInput" placeholder="粘贴 web_session 值，如 040069b9..."
+              class="input-field flex-1 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 font-mono">
+            <button @click="updateCookie"
+              class="px-5 py-2.5 btn-primary text-white rounded-lg text-xs font-medium whitespace-nowrap">更新 Cookie</button>
+          </div>
+        </div>
+
+        <!-- 自动化说明 -->
+        <div class="card rounded-xl p-5 border-gray-700/30">
+          <div class="flex items-center gap-2 mb-3"><span>💡</span><h3 class="text-sm font-semibold text-white">自动化机制说明</h3></div>
+          <div class="space-y-2 text-xs text-gray-400 leading-relaxed">
+            <p><strong class="text-gray-300">自动续期：</strong>爬虫启动时使用 Playwright 持久化浏览器上下文（browser_data 目录），在爬取过程中浏览器会自动刷新 session，无需人工干预。</p>
+            <p><strong class="text-gray-300">智能登录：</strong>爬虫启动时会自动检查：①浏览器持久化 session → ②config cookie → ③扫码登录，逐级降级，优先使用最新的有效 session。</p>
+            <p><strong class="text-gray-300">日常维护：</strong>正常情况下只需首次扫码一次。如果长时间（数天）不运行爬虫导致 session 过期，再扫码一次即可。</p>
+          </div>
+        </div>
+      </section>
 
       <!-- ========== 爬取设置 ========== -->
       <section v-show="activeTab === 'crawl'" class="space-y-5 animate-in">
@@ -384,6 +533,113 @@
           <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">文件夹 Token <span class="text-gray-600">(可选)</span></label>
             <input type="text" v-model="config.feishu.folder_token" placeholder="留空则创建在根目录" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
         </div>
+
+        <!-- 视频链接管理 -->
+        <div class="card rounded-xl p-5 space-y-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-base">🔗</span>
+            <div>
+              <label class="text-sm text-gray-300 font-medium">视频公网链接管理</label>
+              <p class="text-[11px] text-gray-600 mt-0.5">刷新飞书视频汇总表中的临时下载链接（有效期约 24 小时）</p>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">多维表格 App Token</label>
+            <input type="text" v-model="feishuRefresh.appToken" placeholder="从飞书表格 URL 中获取，如 EHdTbhGXmaowAgs6wtXczNfqnfe"
+              class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            <p class="text-[10px] text-gray-600 mt-1.5">URL 格式: https://xxx.feishu.cn/base/<span class="text-blue-400">APP_TOKEN</span></p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button @click="refreshVideoLinks" :disabled="feishuRefresh.loading || !feishuRefresh.appToken"
+              class="px-4 py-2.5 rounded-lg text-xs font-medium transition-all duration-200"
+              :class="feishuRefresh.loading || !feishuRefresh.appToken ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'btn-primary text-white shadow-lg'">
+              <span v-if="feishuRefresh.loading" class="inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                刷新中...
+              </span>
+              <span v-else>刷新视频公网链接</span>
+            </button>
+            <span v-if="feishuRefresh.result" class="text-[11px]"
+              :class="feishuRefresh.result.success ? 'text-emerald-400' : 'text-red-400'">
+              {{ feishuRefresh.result.message }}
+              <span v-if="feishuRefresh.result.elapsed_sec" class="text-gray-500 ml-1">({{ feishuRefresh.result.elapsed_sec }}s)</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- AI 视频脚本提取 -->
+        <div class="card rounded-xl p-5 space-y-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-base">🤖</span>
+            <div>
+              <label class="text-sm text-gray-300 font-medium">AI 视频脚本提取</label>
+              <p class="text-[11px] text-gray-600 mt-0.5">使用 Gemini 从视频中提取完整口播脚本，结果写入飞书汇总表</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">多维表格 App Token</label>
+              <input type="text" v-model="scriptExtract.appToken" placeholder="与上方相同的 App Token"
+                class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">Gemini API Key</label>
+              <input type="password" v-model="scriptExtract.apiKey" placeholder="sk-xxxxx"
+                class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">API Base URL</label>
+              <input type="text" v-model="scriptExtract.baseUrl" placeholder="https://ops-ai-gateway.yc345.tv/v1"
+                class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">模型</label>
+              <input type="text" v-model="scriptExtract.model" placeholder="gemini-3-pro-preview"
+                class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">提示词 (Prompt)</label>
+            <textarea v-model="scriptExtract.prompt" rows="5"
+              class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-y"
+              placeholder="自定义提示词..."></textarea>
+            <p class="text-[10px] text-gray-600 mt-1.5">修改提示词可以调整脚本提取的效果，如要求输出结构化分析、摘要等</p>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="skipExisting" v-model="scriptExtract.skipExisting" class="rounded">
+              <label for="skipExisting" class="text-[11px] text-gray-400">跳过已有脚本的记录</label>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <button @click="startScriptExtract"
+              :disabled="scriptExtract.status === 'running' || !scriptExtract.appToken || !scriptExtract.apiKey"
+              class="px-4 py-2.5 rounded-lg text-xs font-medium transition-all duration-200"
+              :class="scriptExtract.status === 'running' || !scriptExtract.appToken || !scriptExtract.apiKey ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'btn-success text-white shadow-lg'">
+              <span v-if="scriptExtract.status === 'running'" class="inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                提取中...
+              </span>
+              <span v-else>开始提取脚本</span>
+            </button>
+            <span v-if="scriptExtract.progress && scriptExtract.status === 'running'" class="text-[11px] text-blue-400">
+              {{ scriptExtract.progress }}
+            </span>
+          </div>
+          <div v-if="scriptExtract.result" class="rounded-lg p-3 text-[11px]"
+            :class="scriptExtract.result.success ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-red-500/10 border border-red-500/20 text-red-300'">
+            <p class="font-medium">{{ scriptExtract.result.message }}</p>
+            <p v-if="scriptExtract.result.processed !== undefined" class="text-gray-400 mt-1">
+              总记录: {{ scriptExtract.result.total }} | 
+              成功: {{ scriptExtract.result.processed }} | 
+              失败: {{ scriptExtract.result.failed }} | 
+              跳过: {{ scriptExtract.result.skipped }}
+              <span v-if="scriptExtract.result.elapsed_sec"> | 耗时: {{ scriptExtract.result.elapsed_sec }}s</span>
+            </p>
+          </div>
+        </div>
       </section>
 
       <!-- ========== 断点续爬 ========== -->
@@ -480,6 +736,20 @@ const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue
 createApp({
   setup() {
     const API = '/api/dashboard'
+    const AUTH_API = '/api/auth'
+
+    const authenticated = ref(false)
+    const loginPassword = ref('')
+    const loginError = ref('')
+    const loginLoading = ref(false)
+    let _authToken = localStorage.getItem('mc_token') || ''
+
+    function getAuthHeaders() {
+      const h = { 'Content-Type': 'application/json' }
+      if (_authToken) h['Authorization'] = 'Bearer ' + _authToken
+      return h
+    }
+
     const defaultConfig = {
       crawl_settings: { platform: 'xhs', crawler_type: 'creator', keywords: '', creator_ids: [], max_notes_count: 3000, enable_get_comments: false, enable_get_sub_comments: false, comments_fetch_mode: 'parallel', comments_delay_sec: 1.0, max_comments_per_note: 500, comments_concurrency: 2 },
       '随机等待策略': { enabled: true, min_sec: 5, max_sec: 10, distribution: 'lognormal' },
@@ -497,8 +767,9 @@ createApp({
     const configOriginal = ref('')
     const configDirty = computed(() => JSON.stringify(config) !== configOriginal.value)
     const saving = ref(false)
-    const activeTab = ref('crawl')
+    const activeTab = ref('session')
     const tabs = [
+      { id: 'session', name: '登录管理', icon: '🔐' },
       { id: 'crawl', name: '爬取设置', icon: '🔍' },
       { id: 'anti', name: '反爬策略', icon: '🛡️' },
       { id: 'batch', name: '批量爬取', icon: '📦' },
@@ -509,10 +780,73 @@ createApp({
     const creators = ref([])
     const batchStatus = reactive({ status: 'idle', started_at: null, message: '' })
     const batchLogs = ref([])
-    const batchForm = reactive({ limit: 5, min_interaction: 0, enable_comments: false })
+    const batchForm = reactive({ limit: 0, min_interaction: 0, enable_comments: false })
     const files = ref([])
     const toast = reactive({ show: false, message: '', type: 'info' })
     const logContainer = ref(null)
+
+    // Session 管理
+    const sessionStatus = reactive({
+      browser_data_exists: false,
+      browser_data_size_mb: 0,
+      config_cookie: '',
+      config_cookie_raw: '',
+      config_login_type: '',
+      save_login_state: false,
+      crawler_running: false,
+      login_flow_status: 'idle',
+    })
+    const sessionVerify = reactive({ status: '', message: '', web_session: '', loading: false })
+    const newCookieInput = ref('')
+    const sessionChecking = ref(false)
+
+    // 飞书视频链接刷新
+    const feishuRefresh = reactive({ appToken: '', loading: false, result: null })
+
+    // AI 视频脚本提取
+    const scriptExtract = reactive({
+      appToken: '', apiKey: '', baseUrl: 'https://ops-ai-gateway.yc345.tv/v1',
+      model: 'gemini-3-pro-preview', skipExisting: true,
+      prompt: `# 角色
+你是一位专业的短视频脚本拆解专家。你的任务是根据视频的口播内容和元信息，还原出一份完整的、可复现的视频拍摄脚本。
+
+# 输入信息
+- 视频标题：{{标题}}
+- 账号名称：{{账号名称}}
+- 口播原文：{{语音转文字结果}}
+
+# 任务要求
+1. 严格基于口播内容进行拆解，不得臆想或添加视频中不存在的内容
+2. 按时间顺序逐段拆解，标注每段的时间节点
+3. 每段需包含：画面描述、口播文案、字幕/贴纸（如有提及）、BGM/音效风格
+4. 识别视频结构（开头钩子→正文→转折→结尾引导）
+
+# 输出格式
+
+## 基本信息
+- 视频类型：（口播/剧情/教程/展示/混剪）
+- 预估总时长：
+- 核心主题：（不超过3个关键词）
+
+## 脚本拆解
+
+| 时间段 | 画面描述 | 口播文案 | 字幕/贴纸 | 备注 |
+|--------|---------|---------|----------|------|
+| 00:00-00:03 | 真人出镜，面对镜头 | "家长们注意了！" | 大字标题弹出 | 开头钩子 |
+| 00:03-00:15 | 切换到课程画面 | "很多家长问我..." | 重点文字高亮 | 痛点引入 |
+| ... | ... | ... | ... | ... |
+
+## 结构分析
+- 开头钩子（0-3秒）：用了什么方式抓注意力
+- 正文展开：核心卖点如何呈现
+- 结尾引导：如何引导互动/转化
+
+# 限制
+1. 不做主观评价，只做客观拆解
+2. 不添加视频中未出现的内容
+3. 口播文案必须忠实于原文，可适当断句但不改动用词`,
+      status: 'idle', progress: '', result: null,
+    })
 
     const creatorIdsText = computed({
       get: () => (config.crawl_settings.creator_ids || []).join('\n'),
@@ -522,8 +856,11 @@ createApp({
     function showToast(msg, type = 'info') { toast.message = msg; toast.type = type; toast.show = true; setTimeout(() => { toast.show = false }, 3000) }
 
     async function api(url, opts = {}) {
-      try { const r = await fetch(API + url, { headers: { 'Content-Type': 'application/json' }, ...opts }); return await r.json() }
-      catch (e) { showToast(`请求失败: ${e.message}`, 'error'); return null }
+      try {
+        const r = await fetch(API + url, { headers: getAuthHeaders(), ...opts })
+        if (r.status === 401) { authenticated.value = false; _authToken = ''; localStorage.removeItem('mc_token'); return null }
+        return await r.json()
+      } catch (e) { showToast(`请求失败: ${e.message}`, 'error'); return null }
     }
 
     async function loadConfig() {
@@ -585,16 +922,204 @@ createApp({
 
     async function loadFiles() { const res = await api('/files'); if (res?.success) files.value = res.data }
 
-    onMounted(() => {
-      loadConfig(); loadCreators(); loadFiles()
+    // Session 管理函数
+    async function loadSessionStatus() {
+      sessionChecking.value = true
+      try {
+        const res = await api('/session/status')
+        if (res?.success) Object.assign(sessionStatus, res.data)
+      } finally { sessionChecking.value = false }
+    }
+
+    async function verifySession() {
+      sessionVerify.loading = true
+      sessionVerify.status = ''
+      sessionVerify.message = '正在验证...(约 5-10 秒)'
+      try {
+        const res = await fetch(API + '/session/verify', { method: 'POST', headers: getAuthHeaders() })
+        const data = await res.json()
+        if (data?.success) {
+          Object.assign(sessionVerify, data.data)
+          showToast(data.data.message, data.data.status === 'valid' ? 'success' : 'error')
+        }
+      } catch (e) {
+        sessionVerify.status = 'error'
+        sessionVerify.message = '验证请求失败: ' + e.message
+        showToast('验证失败', 'error')
+      } finally { sessionVerify.loading = false }
+    }
+
+    async function updateCookie() {
+      const val = newCookieInput.value.trim()
+      if (!val) { showToast('请输入 Cookie', 'error'); return }
+      try {
+        const res = await fetch(API + '/session/cookie', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ cookie: val }),
+        })
+        const data = await res.json()
+        if (data?.success) {
+          showToast('Cookie 已更新', 'success')
+          newCookieInput.value = ''
+          loadSessionStatus()
+        } else {
+          showToast(data?.detail || '更新失败', 'error')
+        }
+      } catch (e) { showToast('请求失败: ' + e.message, 'error') }
+    }
+
+    async function startScriptExtract() {
+      if (!scriptExtract.appToken.trim() || !scriptExtract.apiKey.trim()) {
+        showToast('请填写 App Token 和 API Key', 'error'); return
+      }
+      scriptExtract.result = null
+      scriptExtract.progress = '启动中...'
+      try {
+        const res = await fetch(API + '/feishu/extract-scripts', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            app_token: scriptExtract.appToken.trim(),
+            gemini_api_key: scriptExtract.apiKey.trim(),
+            gemini_base_url: scriptExtract.baseUrl.trim(),
+            gemini_model: scriptExtract.model.trim(),
+            skip_existing: scriptExtract.skipExisting,
+            prompt: scriptExtract.prompt.trim(),
+          }),
+        })
+        const data = await res.json()
+        if (data.success) {
+          scriptExtract.status = 'running'
+          showToast('脚本提取任务已启动', 'success')
+          pollScriptStatus()
+        } else {
+          scriptExtract.status = 'idle'
+          scriptExtract.result = { success: false, message: data.message || data.detail || '启动失败' }
+          showToast(data.message || data.detail || '启动失败', 'error')
+        }
+      } catch (e) {
+        scriptExtract.status = 'idle'
+        scriptExtract.result = { success: false, message: '请求异常: ' + e.message }
+        showToast('请求失败', 'error')
+      }
+    }
+
+    async function pollScriptStatus() {
+      const poll = async () => {
+        try {
+          const res = await api('/feishu/extract-scripts/status')
+          if (res?.success) {
+            const d = res.data
+            scriptExtract.status = d.status
+            scriptExtract.progress = d.progress || ''
+            if (d.status === 'completed' || d.status === 'error') {
+              scriptExtract.result = d.result
+              if (d.result?.success) showToast('脚本提取完成', 'success')
+              else showToast(d.result?.message || '任务异常', 'error')
+              return
+            }
+          }
+        } catch (e) { /* ignore */ }
+        if (scriptExtract.status === 'running') setTimeout(poll, 3000)
+      }
+      poll()
+    }
+
+    async function refreshVideoLinks() {
+      if (!feishuRefresh.appToken.trim()) { showToast('请输入多维表格 App Token', 'error'); return }
+      feishuRefresh.loading = true
+      feishuRefresh.result = null
+      try {
+        const res = await fetch(API + '/feishu/refresh-video-links', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ app_token: feishuRefresh.appToken.trim() }),
+        })
+        const data = await res.json()
+        if (data.success !== undefined) {
+          feishuRefresh.result = data
+          showToast(data.message || (data.success ? '刷新完成' : '刷新失败'), data.success ? 'success' : 'error')
+        } else {
+          feishuRefresh.result = { success: false, message: data.detail || '请求失败' }
+          showToast(data.detail || '请求失败', 'error')
+        }
+      } catch (e) {
+        feishuRefresh.result = { success: false, message: '请求异常: ' + e.message }
+        showToast('请求失败: ' + e.message, 'error')
+      } finally { feishuRefresh.loading = false }
+    }
+
+    function openLoginPage() {
+      const port = window.location.port || '9001'
+      const host = window.location.hostname
+      window.open(`http://${host}:${port}/login`, '_blank')
+    }
+
+    async function doLogin() {
+      loginError.value = ''
+      loginLoading.value = true
+      try {
+        const res = await fetch(AUTH_API + '/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: loginPassword.value }),
+        })
+        const data = await res.json()
+        if (data.success && data.token) {
+          _authToken = data.token
+          localStorage.setItem('mc_token', _authToken)
+          authenticated.value = true
+          loginPassword.value = ''
+          initDashboard()
+        } else {
+          loginError.value = data.message || '密码错误'
+        }
+      } catch (e) {
+        loginError.value = '连接失败: ' + e.message
+      } finally { loginLoading.value = false }
+    }
+
+    function doLogout() {
+      _authToken = ''
+      localStorage.removeItem('mc_token')
+      authenticated.value = false
+    }
+
+    async function checkAuth() {
+      if (!_authToken) return false
+      try {
+        const res = await fetch(AUTH_API + '/check', { headers: { 'Authorization': 'Bearer ' + _authToken } })
+        const data = await res.json()
+        return data.authenticated === true
+      } catch { return false }
+    }
+
+    function initDashboard() {
+      loadConfig(); loadCreators(); loadFiles(); loadSessionStatus()
+    }
+
+    onMounted(async () => {
+      if (_authToken) {
+        const valid = await checkAuth()
+        if (valid) {
+          authenticated.value = true
+          initDashboard()
+        } else {
+          _authToken = ''
+          localStorage.removeItem('mc_token')
+        }
+      }
       setInterval(async () => {
+        if (!authenticated.value) return
         const res = await api('/batch/status')
         if (res?.success) Object.assign(batchStatus, res.data)
         if (batchStatus.status === 'running') refreshLogs()
       }, 5000)
+      setInterval(() => { if (authenticated.value) loadSessionStatus() }, 30000)
     })
 
-    return { config, configDirty, saving, activeTab, tabs, creators, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles }
+    return { config, configDirty, saving, activeTab, tabs, creators, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout }
   }
 }).mount('#app')
 </script>

@@ -24,7 +24,7 @@ _IS_LINUX = _platform.system() == "Linux"
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = "web_session=040069b95f580579a23e7313b93b4b6573011c"
+COOKIES = "web_session=040069b95f580579a23ea008b83b4b8a1ae284"
 CRAWLER_TYPE = (
     "creator"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )

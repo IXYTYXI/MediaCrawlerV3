@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaCrawler - 控制面板</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-hover: #253349;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --success-bg: #052e16;
+            --warning: #f59e0b;
+            --warning-bg: #422006;
+            --danger: #ef4444;
+            --danger-bg: #450a0a;
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container { max-width: 960px; width: 100%; }
+
+        /* 头部 */
+        .header { text-align: center; margin-bottom: 24px; }
+        .header h1 {
+            font-size: 22px; font-weight: 700; margin-bottom: 6px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--text-muted); font-size: 13px; }
+
+        /* 导航链接 */
+        .nav-links {
+            display: flex; justify-content: center; gap: 16px;
+            margin-bottom: 20px; font-size: 13px;
+        }
+        .nav-links a {
+            color: var(--text-muted); text-decoration: none;
+            padding: 4px 12px; border-radius: 6px; transition: all 0.2s;
+        }
+        .nav-links a:hover { color: var(--primary); background: rgba(59,130,246,0.1); }
+
+        /* Tab 栏 */
+        .tabs {
+            display: flex; gap: 0; border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            padding: 10px 24px; font-size: 14px; font-weight: 500;
+            color: var(--text-muted); background: none; border: none;
+            cursor: pointer; border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active {
+            color: var(--primary); border-bottom-color: var(--primary);
+        }
+
+        /* 卡片 */
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 15px; font-weight: 600; margin-bottom: 16px;
+            padding-bottom: 10px; border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        /* 表单 */
+        .form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-label {
+            font-size: 12px; color: var(--text-muted); font-weight: 500;
+        }
+        .form-desc {
+            font-size: 11px; color: var(--text-dim); margin-top: 2px;
+        }
+        .form-input, .form-select {
+            padding: 8px 12px; background: var(--bg); color: var(--text);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+        }
+        .form-input:focus, .form-select:focus { border-color: var(--primary); }
+        .form-select { cursor: pointer; }
+
+        /* 开关 */
+        .switch-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 0;
+        }
+        .switch {
+            position: relative; width: 40px; height: 22px;
+            background: var(--border); border-radius: 11px;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .switch.on { background: var(--primary); }
+        .switch::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 18px; height: 18px; background: #fff;
+            border-radius: 50%; transition: transform 0.2s;
+        }
+        .switch.on::after { transform: translateX(18px); }
+
+        /* 按钮 */
+        .btn {
+            padding: 10px 20px; font-size: 14px; font-weight: 500;
+            border: none; border-radius: var(--radius-sm);
+            cursor: pointer; transition: all 0.2s; display: inline-flex;
+            align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-success:hover { opacity: 0.9; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-danger:hover { opacity: 0.9; }
+        .btn-secondary { background: var(--border); color: var(--text); }
+        .btn-secondary:hover { background: var(--card-hover); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-bar {
+            display: flex; gap: 10px; margin-top: 16px;
+            padding-top: 16px; border-top: 1px solid var(--border);
+        }
+
+        /* 状态指示 */
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
+        }
+        .status-badge.idle { background: var(--card); border: 1px solid var(--border); color: var(--text-muted); }
+        .status-badge.running { background: var(--success-bg); border: 1px solid var(--success); color: #6ee7b7; }
+        .status-badge.stopped { background: var(--danger-bg); border: 1px solid var(--danger); color: #fca5a5; }
+
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+        }
+        .status-dot.idle { background: var(--text-muted); }
+        .status-dot.running { background: var(--success); animation: pulse 1.5s infinite; }
+        .status-dot.stopped { background: var(--danger); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* 启动面板 */
+        .launch-panel {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 20px; padding: 30px 0;
+        }
+        .launch-info {
+            text-align: center; color: var(--text-muted); font-size: 13px;
+        }
+        .launch-info span { color: var(--text); font-weight: 500; }
+
+        /* 日志面板 */
+        .log-container {
+            background: #0a0e17; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); height: 500px;
+            overflow-y: auto; padding: 12px; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 12px; line-height: 1.7; color: #a8b8cf;
+        }
+        .log-container::-webkit-scrollbar { width: 6px; }
+        .log-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .log-line { white-space: pre-wrap; word-break: break-all; }
+        .log-empty { color: var(--text-dim); text-align: center; padding: 60px 0; }
+
+        .log-toolbar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px;
+        }
+        .log-toolbar .left { display: flex; align-items: center; gap: 10px; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 20px; right: 20px; padding: 12px 20px;
+            border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+            z-index: 9999; transition: all 0.3s; opacity: 0; transform: translateY(-10px);
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.success { background: var(--success-bg); border: 1px solid var(--success); color: #6ee7b7; }
+        .toast.error { background: var(--danger-bg); border: 1px solid var(--danger); color: #fca5a5; }
+
+        /* 进度表格 */
+        .progress-table {
+            width: 100%; border-collapse: collapse; font-size: 13px;
+            margin-top: 12px;
+        }
+        .progress-table th {
+            text-align: left; padding: 8px 10px; font-weight: 500;
+            color: var(--text-muted); border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .progress-table td {
+            padding: 7px 10px; border-bottom: 1px solid rgba(51,65,85,0.5);
+            color: var(--text); font-size: 12px;
+        }
+        .progress-table tr:hover td { background: rgba(59,130,246,0.05); }
+        .uid-text {
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 11px; color: var(--text-dim);
+        }
+        .tag-ok {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: 500;
+            background: var(--success-bg); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3);
+        }
+        .tag-fail {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: 500;
+            background: var(--danger-bg); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3);
+        }
+        .tag-warn {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: 500;
+            background: var(--warning-bg); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3);
+        }
+        .progress-summary {
+            display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .progress-stat {
+            display: flex; flex-direction: column; align-items: center; gap: 2px;
+        }
+        .progress-stat .num { font-size: 22px; font-weight: 700; }
+        .progress-stat .label { font-size: 11px; color: var(--text-muted); }
+        .btn-sm {
+            padding: 5px 12px; font-size: 12px; font-weight: 500;
+            border: none; border-radius: 6px; cursor: pointer;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* 响应式 */
+        @media (max-width: 640px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .container { padding: 0 4px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <!-- Toast -->
+        <div class="toast" :class="[toast.type, toast.show ? 'show' : '']">{{ toast.msg }}</div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>MediaCrawler 控制面板</h1>
+            <p>配置管理 / 爬虫启停 / 实时日志</p>
+        </div>
+
+        <!-- Nav -->
+        <div class="nav-links">
+            <a href="/login">远程登录</a>
+            <a href="/dashboard">数据仪表盘</a>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn" :class="{ active: tab === 'config' }" @click="tab = 'config'">配置管理</button>
+            <button class="tab-btn" :class="{ active: tab === 'launch' }" @click="tab = 'launch'">启动控制</button>
+            <button class="tab-btn" :class="{ active: tab === 'log' }" @click="switchToLog">实时日志</button>
+        </div>
+
+        <!-- ============ 配置 Tab ============ -->
+        <div v-show="tab === 'config'">
+
+            <!-- 批量爬虫 -->
+            <div class="card">
+                <div class="card-title">批量爬虫</div>
+                <div class="form-grid" v-if="config.batch_crawl">
+                    <div class="form-group">
+                        <label class="form-label">任务 ID</label>
+                        <input class="form-input" v-model="config.batch_crawl.task_id" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Excel 文件路径</label>
+                        <input class="form-input" v-model="config.batch_crawl.excel_path" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">爬取模式</label>
+                        <select class="form-select" v-model="config.batch_crawl.crawl_mode">
+                            <option value="full">全量爬取</option>
+                            <option value="date_range">日期范围</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">每作者最大笔记数</label>
+                        <input class="form-input" type="number" v-model.number="config.batch_crawl.max_notes_per_creator" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">开始日期</label>
+                        <input class="form-input" type="date" v-model="config.batch_crawl.date_start" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">结束日期</label>
+                        <input class="form-input" type="date" v-model="config.batch_crawl.date_end" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">作者间等待 (秒)</label>
+                        <input class="form-input" type="number" v-model.number="config.batch_crawl.wait_between_creators_sec" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">最小互动量过滤</label>
+                        <input class="form-input" type="number" v-model.number="config.batch_crawl.min_interaction" />
+                        <span class="form-desc">点赞+评论+收藏之和，0=不过滤</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">导出格式</label>
+                        <select class="form-select" v-model="config.batch_crawl.export_format">
+                            <option value="excel">Excel</option>
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">导出目录</label>
+                        <input class="form-input" v-model="config.batch_crawl.export_dir" />
+                    </div>
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">启用评论爬取</label>
+                            <div class="switch" :class="{ on: config.batch_crawl.enable_comments }"
+                                 @click="config.batch_crawl.enable_comments = !config.batch_crawl.enable_comments"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">断点续爬</label>
+                            <div class="switch" :class="{ on: config.batch_crawl.resume }"
+                                 @click="config.batch_crawl.resume = !config.batch_crawl.resume"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">复用历史数据</label>
+                            <div class="switch" :class="{ on: config.batch_crawl.reuse_history }"
+                                 @click="config.batch_crawl.reuse_history = !config.batch_crawl.reuse_history"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 基础爬取设置 -->
+            <div class="card">
+                <div class="card-title">基础爬取设置</div>
+                <div class="form-grid" v-if="config.crawl_settings">
+                    <div class="form-group">
+                        <label class="form-label">平台</label>
+                        <select class="form-select" v-model="config.crawl_settings.platform">
+                            <option value="xhs">小红书</option>
+                            <option value="dy">抖音</option>
+                            <option value="ks">快手</option>
+                            <option value="bili">B站</option>
+                            <option value="wb">微博</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">爬取类型</label>
+                        <select class="form-select" v-model="config.crawl_settings.crawler_type">
+                            <option value="search">关键词搜索</option>
+                            <option value="creator">作者主页</option>
+                            <option value="detail">指定帖子</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">最大笔记数</label>
+                        <input class="form-input" type="number" v-model.number="config.crawl_settings.max_notes_count" />
+                    </div>
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">爬取评论</label>
+                            <div class="switch" :class="{ on: config.crawl_settings.enable_get_comments }"
+                                 @click="config.crawl_settings.enable_get_comments = !config.crawl_settings.enable_get_comments"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 反爬策略 -->
+            <div class="card">
+                <div class="card-title">反爬策略</div>
+                <div class="form-grid">
+                    <!-- 随机等待 -->
+                    <div class="form-group" v-if="config['随机等待策略']">
+                        <label class="form-label">随机等待 - 最小 (秒)</label>
+                        <input class="form-input" type="number" step="0.1" v-model.number="config['随机等待策略'].min_sec" />
+                    </div>
+                    <div class="form-group" v-if="config['随机等待策略']">
+                        <label class="form-label">随机等待 - 最大 (秒)</label>
+                        <input class="form-input" type="number" step="0.1" v-model.number="config['随机等待策略'].max_sec" />
+                    </div>
+                    <div class="form-group" v-if="config['随机等待策略']">
+                        <label class="form-label">等待分布</label>
+                        <select class="form-select" v-model="config['随机等待策略'].distribution">
+                            <option value="uniform">均匀分布</option>
+                            <option value="normal">正态分布</option>
+                            <option value="lognormal">对数正态 (推荐)</option>
+                        </select>
+                    </div>
+                    <!-- 批次暂停 -->
+                    <div class="form-group" v-if="config['批次暂停策略']">
+                        <label class="form-label">批次暂停 - 每 N 条 (最小)</label>
+                        <input class="form-input" type="number" v-model.number="config['批次暂停策略'].every_n_min" />
+                    </div>
+                    <div class="form-group" v-if="config['批次暂停策略']">
+                        <label class="form-label">批次暂停 - 每 N 条 (最大)</label>
+                        <input class="form-input" type="number" v-model.number="config['批次暂停策略'].every_n_max" />
+                    </div>
+                    <div class="form-group" v-if="config['批次暂停策略']">
+                        <label class="form-label">暂停时间 (秒)</label>
+                        <input class="form-input" :value="config['批次暂停策略'].min_sec + ' ~ ' + config['批次暂停策略'].max_sec" disabled />
+                    </div>
+                    <!-- 大暂停 -->
+                    <div class="form-group" v-if="config['大暂停策略']">
+                        <label class="form-label">大暂停 - 每 N 条</label>
+                        <input class="form-input" type="number" v-model.number="config['大暂停策略'].every_n" />
+                    </div>
+                    <div class="form-group" v-if="config['大暂停策略']">
+                        <label class="form-label">大暂停时间 (秒)</label>
+                        <input class="form-input" :value="config['大暂停策略'].min_sec + ' ~ ' + config['大暂停策略'].max_sec" disabled />
+                    </div>
+                    <!-- 假动作 -->
+                    <div class="form-group" v-if="config['假动作策略']">
+                        <label class="form-label">假动作概率</label>
+                        <input class="form-input" type="number" step="0.01" min="0" max="1"
+                               v-model.number="config['假动作策略'].probability" />
+                        <span class="form-desc">0~1，推荐 0.1-0.2</span>
+                    </div>
+                    <!-- 并发 -->
+                    <div class="form-group" v-if="config['并发控制']">
+                        <label class="form-label">最大并发数</label>
+                        <input class="form-input" type="number" v-model.number="config['并发控制'].max_concurrency" />
+                        <span class="form-desc">建议 2-3</span>
+                    </div>
+                    <!-- 动态调整 -->
+                    <div class="form-group" v-if="config['动态调整策略']">
+                        <div class="switch-row">
+                            <label class="form-label">动态调速</label>
+                            <div class="switch" :class="{ on: config['动态调整策略'].enabled }"
+                                 @click="config['动态调整策略'].enabled = !config['动态调整策略'].enabled"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" v-if="config['假动作策略']">
+                        <div class="switch-row">
+                            <label class="form-label">假动作</label>
+                            <div class="switch" :class="{ on: config['假动作策略'].enabled }"
+                                 @click="config['假动作策略'].enabled = !config['假动作策略'].enabled"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 飞书推送 -->
+            <div class="card">
+                <div class="card-title">飞书推送</div>
+                <div class="form-grid" v-if="config.feishu">
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">启用飞书推送</label>
+                            <div class="switch" :class="{ on: config.feishu.enabled }"
+                                 @click="config.feishu.enabled = !config.feishu.enabled"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">图片模式</label>
+                        <select class="form-select" v-model="config.feishu.image_mode">
+                            <option value="link">链接</option>
+                            <option value="image">图片上传</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">App ID</label>
+                        <input class="form-input" v-model="config.feishu.app_id" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">App Secret</label>
+                        <input class="form-input" type="password" v-model="config.feishu.app_secret" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文件夹 Token</label>
+                        <input class="form-input" v-model="config.feishu.folder_token" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">图片上传线程数</label>
+                        <input class="form-input" type="number" v-model.number="config.feishu.image_threads" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- 浏览器 & 容错 -->
+            <div class="card">
+                <div class="card-title">浏览器 / 容错</div>
+                <div class="form-grid">
+                    <div class="form-group" v-if="config['浏览器控制']">
+                        <div class="switch-row">
+                            <label class="form-label">去除 WebDriver 标记</label>
+                            <div class="switch" :class="{ on: config['浏览器控制'].remove_webdriver_flag }"
+                                 @click="config['浏览器控制'].remove_webdriver_flag = !config['浏览器控制'].remove_webdriver_flag"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" v-if="config['浏览器控制']">
+                        <div class="switch-row">
+                            <label class="form-label">Canvas 指纹伪装</label>
+                            <div class="switch" :class="{ on: config['浏览器控制'].spoof_canvas_fingerprint }"
+                                 @click="config['浏览器控制'].spoof_canvas_fingerprint = !config['浏览器控制'].spoof_canvas_fingerprint"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" v-if="config['浏览器控制']">
+                        <div class="switch-row">
+                            <label class="form-label">WebGL 指纹伪装</label>
+                            <div class="switch" :class="{ on: config['浏览器控制'].spoof_webgl_fingerprint }"
+                                 @click="config['浏览器控制'].spoof_webgl_fingerprint = !config['浏览器控制'].spoof_webgl_fingerprint"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" v-if="config['容错机制'] && config['容错机制'].exponential_backoff">
+                        <label class="form-label">最大重试次数</label>
+                        <input class="form-input" type="number"
+                               v-model.number="config['容错机制'].exponential_backoff.max_retries" />
+                    </div>
+                    <div class="form-group" v-if="config['断点续爬']">
+                        <div class="switch-row">
+                            <label class="form-label">断点续爬</label>
+                            <div class="switch" :class="{ on: config['断点续爬'].enabled }"
+                                 @click="config['断点续爬'].enabled = !config['断点续爬'].enabled"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" v-if="config['断点续爬']">
+                        <label class="form-label">自动保存间隔 (条)</label>
+                        <input class="form-input" type="number" v-model.number="config['断点续爬'].auto_save_interval" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- 保存按钮 -->
+            <div class="btn-bar" style="border-top: none; padding-top: 0;">
+                <button class="btn btn-primary" @click="saveConfig" :disabled="saving">
+                    {{ saving ? '保存中...' : '保存配置' }}
+                </button>
+                <button class="btn btn-secondary" @click="loadConfig">重新加载</button>
+            </div>
+        </div>
+
+        <!-- ============ 启动 Tab ============ -->
+        <div v-show="tab === 'launch'">
+            <div class="card">
+                <div class="launch-panel">
+                    <!-- 状态 -->
+                    <div class="status-badge" :class="crawlerStatus">
+                        <div class="status-dot" :class="crawlerStatus"></div>
+                        {{ statusText }}
+                    </div>
+
+                    <!-- 运行信息 -->
+                    <div class="launch-info" v-if="crawlerStatus === 'running'">
+                        PID: <span>{{ crawlerPid }}</span> &nbsp;|&nbsp;
+                        运行时间: <span>{{ formatDuration(runningSeconds) }}</span>
+                    </div>
+                    <div class="launch-info" v-if="crawlerStatus === 'stopped' && exitCode !== null">
+                        退出码: <span :style="{ color: exitCode === 0 ? 'var(--success)' : 'var(--danger)' }">{{ exitCode }}</span>
+                    </div>
+
+                    <!-- 按钮 -->
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-success" @click="startCrawler"
+                                :disabled="crawlerStatus === 'running' || starting">
+                            {{ starting ? '启动中...' : '启动爬虫' }}
+                        </button>
+                        <button class="btn btn-danger" @click="stopCrawler"
+                                :disabled="crawlerStatus !== 'running' || stopping">
+                            {{ stopping ? '停止中...' : '停止爬虫' }}
+                        </button>
+                    </div>
+
+                    <div class="launch-info" style="max-width: 400px; text-align: center; line-height: 1.8;">
+                        启动前请确保：<br/>
+                        1. 已通过 <a href="/login" style="color: var(--primary);">远程登录</a> 完成扫码<br/>
+                        2. 配置项已按需调整
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 日志 Tab ============ -->
+        <div v-show="tab === 'log'">
+            <div class="card" style="padding: 16px;">
+                <div class="log-toolbar">
+                    <div class="left">
+                        <div class="status-badge" :class="crawlerStatus" style="font-size: 12px; padding: 4px 10px;">
+                            <div class="status-dot" :class="crawlerStatus" style="width: 6px; height: 6px;"></div>
+                            {{ statusText }}
+                        </div>
+                        <span style="font-size: 12px; color: var(--text-dim);">{{ logLines.length }} 行</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;"
+                                @click="autoScroll = !autoScroll">
+                            {{ autoScroll ? '自动滚动: 开' : '自动滚动: 关' }}
+                        </button>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;"
+                                @click="clearLogs">清空</button>
+                    </div>
+                </div>
+                <div class="log-container" ref="logEl">
+                    <div v-if="logLines.length === 0" class="log-empty">暂无日志，启动爬虫后将实时显示</div>
+                    <div v-for="(line, i) in logLines" :key="i" class="log-line">{{ line }}</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script>
+    (function() {
+        const { createApp, ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                // ── 基础状态 ──
+                const tab = ref('launch');
+                const config = reactive({});
+                const saving = ref(false);
+                const toast = reactive({ show: false, msg: '', type: 'success' });
+
+                // ── 爬虫状态 ──
+                const crawlerStatus = ref('idle');  // idle / running / stopped
+                const crawlerPid = ref(null);
+                const runningSeconds = ref(0);
+                const exitCode = ref(null);
+                const starting = ref(false);
+                const stopping = ref(false);
+                let statusTimer = null;
+
+                // ── 日志 ──
+                const logLines = ref([]);
+                const autoScroll = ref(true);
+                const logEl = ref(null);
+                let logWs = null;
+
+                // ── Toast ──
+                let toastTimer = null;
+                function showToast(msg, type = 'success') {
+                    toast.msg = msg;
+                    toast.type = type;
+                    toast.show = true;
+                    if (toastTimer) clearTimeout(toastTimer);
+                    toastTimer = setTimeout(() => { toast.show = false; }, 3000);
+                }
+
+                // ── API 基地址 ──
+                const API = '/api/control';
+
+                // ── 配置 ──
+                async function loadConfig() {
+                    try {
+                        const res = await fetch(API + '/config');
+                        const data = await res.json();
+                        if (data.success) {
+                            // 深拷贝进 reactive
+                            Object.keys(data.config).forEach(k => { config[k] = data.config[k]; });
+                            showToast('配置已加载');
+                        } else {
+                            showToast('加载失败: ' + data.error, 'error');
+                        }
+                    } catch (e) {
+                        showToast('请求失败: ' + e.message, 'error');
+                    }
+                }
+
+                async function saveConfig() {
+                    saving.value = true;
+                    try {
+                        // 深拷贝去除 reactive 代理
+                        const raw = JSON.parse(JSON.stringify(config));
+                        const res = await fetch(API + '/config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(raw),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast('配置已保存');
+                        } else {
+                            showToast('保存失败: ' + data.error, 'error');
+                        }
+                    } catch (e) {
+                        showToast('保存失败: ' + e.message, 'error');
+                    } finally {
+                        saving.value = false;
+                    }
+                }
+
+                // ── 爬虫控制 ──
+                async function fetchStatus() {
+                    try {
+                        const res = await fetch(API + '/status');
+                        const data = await res.json();
+                        crawlerStatus.value = data.status;
+                        crawlerPid.value = data.pid;
+                        runningSeconds.value = data.running_seconds || 0;
+                        exitCode.value = data.exit_code;
+                    } catch (e) {}
+                }
+
+                async function startCrawler() {
+                    starting.value = true;
+                    try {
+                        const res = await fetch(API + '/start', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast('爬虫已启动, PID: ' + data.pid);
+                            crawlerStatus.value = 'running';
+                            crawlerPid.value = data.pid;
+                            runningSeconds.value = 0;
+                            exitCode.value = null;
+                            // 自动跳到日志
+                            tab.value = 'log';
+                            connectLogWs();
+                        } else {
+                            showToast(data.message || '启动失败', 'error');
+                        }
+                    } catch (e) {
+                        showToast('启动请求失败: ' + e.message, 'error');
+                    } finally {
+                        starting.value = false;
+                    }
+                }
+
+                async function stopCrawler() {
+                    stopping.value = true;
+                    try {
+                        const res = await fetch(API + '/stop', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast('爬虫已停止');
+                            crawlerStatus.value = 'stopped';
+                        } else {
+                            showToast(data.message || '停止失败', 'error');
+                        }
+                    } catch (e) {
+                        showToast('停止请求失败: ' + e.message, 'error');
+                    } finally {
+                        stopping.value = false;
+                    }
+                }
+
+                // ── 时间格式化 ──
+                function formatDuration(sec) {
+                    if (!sec) return '0s';
+                    const h = Math.floor(sec / 3600);
+                    const m = Math.floor((sec % 3600) / 60);
+                    const s = sec % 60;
+                    if (h > 0) return `${h}h ${m}m ${s}s`;
+                    if (m > 0) return `${m}m ${s}s`;
+                    return `${s}s`;
+                }
+
+                const statusText = computed(() => {
+                    switch (crawlerStatus.value) {
+                        case 'running': return '运行中';
+                        case 'stopped': return '已停止';
+                        default: return '未启动';
+                    }
+                });
+
+                // ── 日志 WebSocket ──
+                function connectLogWs() {
+                    if (logWs && logWs.readyState <= 1) return; // 已连接
+
+                    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const url = `${proto}//${location.host}/api/control/ws/log`;
+                    logWs = new WebSocket(url);
+
+                    logWs.onmessage = (evt) => {
+                        try {
+                            const msg = JSON.parse(evt.data);
+                            if (msg.type === 'history') {
+                                logLines.value = msg.lines;
+                                scrollToBottom();
+                            } else if (msg.type === 'log') {
+                                logLines.value.push(msg.line);
+                                // 限制前端行数
+                                if (logLines.value.length > 3000) {
+                                    logLines.value = logLines.value.slice(-2000);
+                                }
+                                scrollToBottom();
+                            } else if (msg.type === 'status') {
+                                crawlerStatus.value = msg.status;
+                                if (msg.exit_code !== undefined) exitCode.value = msg.exit_code;
+                                if (msg.pid) crawlerPid.value = msg.pid;
+                                if (msg.running_seconds) runningSeconds.value = msg.running_seconds;
+                            }
+                        } catch (e) {}
+                    };
+
+                    logWs.onclose = () => {
+                        // 5秒后自动重连
+                        setTimeout(() => {
+                            if (tab.value === 'log') connectLogWs();
+                        }, 5000);
+                    };
+                }
+
+                function scrollToBottom() {
+                    if (!autoScroll.value) return;
+                    nextTick(() => {
+                        const el = logEl.value;
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
+                }
+
+                function clearLogs() {
+                    logLines.value = [];
+                }
+
+                function switchToLog() {
+                    tab.value = 'log';
+                    connectLogWs();
+                }
+
+                // ── 生命周期 ──
+                onMounted(() => {
+                    loadConfig();
+                    fetchStatus();
+                    // 定时刷新状态
+                    statusTimer = setInterval(() => {
+                        fetchStatus();
+                    }, 5000);
+                });
+
+                onUnmounted(() => {
+                    if (statusTimer) clearInterval(statusTimer);
+                    if (logWs) logWs.close();
+                });
+
+                return {
+                    tab, config, saving, toast,
+                    crawlerStatus, crawlerPid, runningSeconds, exitCode,
+                    starting, stopping, statusText,
+                    progressTasks, progressLoading,
+                    logLines, autoScroll, logEl,
+                    showToast, loadConfig, saveConfig,
+                    startCrawler, stopCrawler, formatDuration,
+                    loadProgress, clearFailed, resetProgress,
+                    clearLogs, switchToLog,
+                };
+            }
+        }).mount('#app');
+    })();
+    </script>
+</body>
+</html>

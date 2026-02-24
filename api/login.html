@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediaCrawler - 远程扫码登录</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <title>MediaCrawler - 远程登录</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -30,24 +29,23 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             padding: 20px;
         }
 
         .container {
-            max-width: 520px;
+            max-width: 900px;
             width: 100%;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
         }
 
         .header h1 {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             background: linear-gradient(135deg, #3b82f6, #8b5cf6);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -55,118 +53,98 @@
 
         .header p {
             color: var(--text-muted);
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .card {
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 32px;
+            padding: 24px;
             margin-bottom: 16px;
         }
 
+        /* 状态栏 */
         .status-bar {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 16px;
+            padding: 10px 16px;
             border-radius: 8px;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             font-size: 14px;
             font-weight: 500;
         }
-
         .status-bar.idle { background: #1e293b; border: 1px solid var(--border); }
-        .status-bar.starting { background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd; }
-        .status-bar.waiting { background: #422006; border: 1px solid #f59e0b; color: #fcd34d; }
+        .status-bar.connecting { background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd; }
+        .status-bar.live { background: #052e16; border: 1px solid #10b981; color: #6ee7b7; }
         .status-bar.success { background: #052e16; border: 1px solid #10b981; color: #6ee7b7; }
-        .status-bar.failed { background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; }
+        .status-bar.error { background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; }
+        .status-bar.closed { background: #1e293b; border: 1px solid var(--border); color: var(--text-muted); }
 
         .dot {
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             flex-shrink: 0;
         }
-
         .dot.idle { background: var(--text-muted); }
-        .dot.starting { background: #3b82f6; animation: pulse 1.5s infinite; }
-        .dot.waiting { background: #f59e0b; animation: pulse 1.5s infinite; }
+        .dot.connecting { background: #3b82f6; animation: pulse 1.5s infinite; }
+        .dot.live { background: #10b981; animation: pulse 2s infinite; }
         .dot.success { background: #10b981; }
-        .dot.failed { background: #ef4444; }
+        .dot.error { background: #ef4444; }
+        .dot.closed { background: var(--text-muted); }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
 
-        .qrcode-area {
+        /* 浏览器画布区域 */
+        .browser-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .browser-canvas {
+            display: block;
+            width: 100%;
+            cursor: default;
+            image-rendering: auto;
+        }
+
+        .browser-placeholder {
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 16px;
-            min-height: 280px;
-            justify-content: center;
-        }
-
-        .qrcode-placeholder {
-            width: 220px;
-            height: 220px;
-            border: 2px dashed var(--border);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            min-height: 300px;
             color: var(--text-muted);
             font-size: 14px;
         }
 
-        .qrcode-img {
-            max-width: 220px;
-            max-height: 220px;
-            border-radius: 8px;
-            border: 3px solid white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .screenshot-area {
-            margin-top: 16px;
-            text-align: center;
-        }
-
-        .screenshot-img {
-            max-width: 100%;
-            max-height: 400px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .screenshot-img:hover { transform: scale(1.02); }
-
-        .screenshot-label {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 8px;
-        }
-
-        .timer {
-            font-size: 13px;
-            color: var(--text-muted);
-            font-variant-numeric: tabular-nums;
-        }
-
+        /* 按钮 */
         .btn-group {
             display: flex;
             gap: 12px;
-            margin-top: 24px;
+            margin-top: 16px;
         }
-
         .btn {
             flex: 1;
-            padding: 12px 20px;
+            padding: 11px 20px;
             border: none;
             border-radius: 8px;
             font-size: 14px;
@@ -178,164 +156,105 @@
             justify-content: center;
             gap: 6px;
         }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-secondary { background: var(--border); color: var(--text); }
+        .btn-secondary:hover:not(:disabled) { background: #475569; }
+        .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+        .btn-danger:hover:not(:disabled) { background: #450a0a; }
 
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* 成功覆盖层 */
+        .success-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(5, 46, 22, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 10;
+            border-radius: 8px;
+        }
+        .success-overlay .checkmark {
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, 0.2);
+            border: 3px solid var(--success);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: var(--success);
+        }
+        .success-overlay .msg {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--success);
+        }
+        .success-overlay .sub {
+            font-size: 13px;
+            color: #6ee7b7;
         }
 
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background: var(--primary-hover);
-            transform: translateY(-1px);
-        }
-
-        .btn-secondary {
-            background: var(--border);
-            color: var(--text);
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            background: #475569;
-        }
-
-        .btn-danger {
-            background: transparent;
-            color: var(--danger);
-            border: 1px solid var(--danger);
-        }
-
-        .btn-danger:hover:not(:disabled) {
-            background: #450a0a;
-        }
-
+        /* 说明 */
         .info-card {
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 20px 24px;
+            padding: 18px 22px;
         }
-
         .info-card h3 {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-
         .info-list {
             list-style: none;
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text);
         }
-
         .info-list li {
-            padding: 6px 0;
+            padding: 4px 0;
             display: flex;
             align-items: flex-start;
             gap: 8px;
             line-height: 1.5;
         }
-
         .info-list li::before {
             content: '';
-            width: 6px;
-            height: 6px;
+            width: 5px; height: 5px;
             border-radius: 50%;
             background: var(--primary);
             flex-shrink: 0;
             margin-top: 7px;
         }
 
-        .success-checkmark {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: #052e16;
-            border: 3px solid var(--success);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-            margin-bottom: 12px;
-        }
-
-        .select-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .select-wrapper label {
-            font-size: 14px;
-            color: var(--text-muted);
-            white-space: nowrap;
-        }
-
-        .select-wrapper select {
-            flex: 1;
-            padding: 8px 12px;
-            background: var(--bg);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .select-wrapper select:focus {
-            border-color: var(--primary);
-        }
-
-        /* 全屏预览 */
-        .fullscreen-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            cursor: zoom-out;
-            padding: 20px;
-        }
-
-        .fullscreen-overlay img {
-            max-width: 100%;
-            max-height: 100%;
-            border-radius: 8px;
-        }
-
         .back-link {
             display: inline-block;
-            margin-top: 16px;
+            margin-top: 14px;
             color: var(--text-muted);
             font-size: 13px;
             text-decoration: none;
             transition: color 0.15s;
         }
-
         .back-link:hover { color: var(--text); }
 
-        /* 加载动画 */
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        /* FPS 指示 */
+        .fps-badge {
+            position: absolute;
+            top: 8px; right: 8px;
+            background: rgba(0,0,0,0.6);
+            color: #94a3b8;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-variant-numeric: tabular-nums;
+            z-index: 5;
         }
     </style>
 </head>
@@ -343,7 +262,7 @@
     <div id="app" class="container">
         <div class="header">
             <h1>MediaCrawler 远程登录</h1>
-            <p>通过扫描二维码完成平台账号登录</p>
+            <p>通过服务器浏览器完成平台账号登录 (可交互)</p>
         </div>
 
         <div class="card">
@@ -351,74 +270,87 @@
             <div class="status-bar" :class="statusClass">
                 <span class="dot" :class="statusClass"></span>
                 <span>{{ statusText }}</span>
-                <span v-if="isActive" class="timer" style="margin-left: auto;">{{ timerText }}</span>
             </div>
 
-            <!-- 平台选择 -->
-            <div v-if="state.status === 'idle' || state.status === 'success' || state.status === 'failed'" class="select-wrapper">
-                <label>目标平台</label>
-                <select v-model="platform">
-                    <option value="xhs">小红书</option>
-                    <!-- 后续可扩展 -->
-                </select>
+            <!-- 浏览器区域 -->
+            <div class="browser-wrapper" ref="browserWrapper">
+                <!-- 空闲/连接中 -->
+                <div v-if="!isLive && !loginSuccess" class="browser-placeholder">
+                    <div v-if="state === 'connecting'" class="spinner"></div>
+                    <span v-if="state === 'idle'">点击下方按钮启动远程浏览器</span>
+                    <span v-else-if="state === 'connecting'">{{ message }}</span>
+                    <span v-else-if="state === 'error'" style="color: var(--danger);">{{ message }}</span>
+                    <span v-else-if="state === 'closed'">会话已结束</span>
+                </div>
+
+                <!-- 实时画面 -->
+                <canvas v-show="isLive || loginSuccess"
+                        ref="canvas"
+                        class="browser-canvas"
+                        tabindex="0"
+                        @mousedown="onMouseDown"
+                        @mousemove="onMouseMove"
+                        @mouseup="onMouseUp"
+                        @click.prevent
+                        @wheel.prevent="onWheel"
+                        @contextmenu.prevent></canvas>
+
+                <!-- FPS -->
+                <div v-if="isLive" class="fps-badge">{{ fps }} FPS</div>
+
+                <!-- 成功覆盖层 -->
+                <div v-if="loginSuccess" class="success-overlay">
+                    <div class="checkmark">&#10003;</div>
+                    <div class="msg">登录成功</div>
+                    <div class="sub">Cookie 已保存，可以启动爬虫</div>
+                </div>
             </div>
 
-            <!-- 二维码区域 -->
-            <div class="qrcode-area">
-                <!-- 闲置状态 -->
-                <template v-if="state.status === 'idle'">
-                    <div class="qrcode-placeholder">点击下方按钮开始</div>
-                </template>
-
-                <!-- 启动中 -->
-                <template v-if="state.status === 'starting'">
-                    <div class="spinner"></div>
-                    <span style="color: var(--text-muted); font-size: 14px;">{{ state.message }}</span>
-                </template>
-
-                <!-- 等待扫码 -->
-                <template v-if="state.status === 'waiting_scan'">
-                    <img v-if="state.qrcode"
-                         :src="qrcodeUrl"
-                         alt="QR Code"
-                         class="qrcode-img" />
-                    <div v-else-if="state.screenshot" class="screenshot-area">
-                        <img :src="screenshotUrl"
-                             alt="Login Page"
-                             class="screenshot-img"
-                             @click="showFullscreen = true" />
-                        <div class="screenshot-label">点击图片放大查看</div>
-                    </div>
-                    <div v-else class="qrcode-placeholder">等待二维码...</div>
-                    <span style="font-size: 14px; color: var(--warning);">请用小红书APP扫码</span>
-                </template>
-
-                <!-- 成功 -->
-                <template v-if="state.status === 'success'">
-                    <div class="success-checkmark">&#10003;</div>
-                    <span style="font-size: 16px; font-weight: 600; color: var(--success);">登录成功</span>
-                    <span style="font-size: 13px; color: var(--text-muted);">Cookie已保存，可以开始爬取</span>
-                </template>
-
-                <!-- 失败 -->
-                <template v-if="state.status === 'failed'">
-                    <div style="text-align:center;">
-                        <div style="font-size: 40px; margin-bottom: 12px;">&#9888;</div>
-                        <span style="font-size: 15px; color: var(--danger);">{{ state.message }}</span>
-                    </div>
-                </template>
+            <!-- 文本输入栏（用于短信验证码等） -->
+            <div v-if="isLive" style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+                <input ref="textInput"
+                       v-model="inputText"
+                       type="text"
+                       placeholder="输入验证码/文字，按回车发送"
+                       @keydown.enter="sendText"
+                       style="flex:1; padding:10px 14px; background:var(--bg); color:var(--text);
+                              border:1px solid var(--border); border-radius:8px; font-size:14px; outline:none;"
+                       @focus="inputFocused=true" @blur="inputFocused=false" />
+                <button class="btn btn-primary" @click="sendText"
+                        style="flex:none; padding:10px 16px;">
+                    发送
+                </button>
+                <button class="btn btn-secondary" @click="sendBackspace"
+                        title="删除远程输入框中的一个字符"
+                        style="flex:none; padding:10px 12px; font-size:13px;">
+                    退格
+                </button>
+                <button class="btn btn-secondary" @click="sendSelectAllDelete"
+                        title="全选并删除远程输入框中的内容"
+                        style="flex:none; padding:10px 12px; font-size:13px;">
+                    清空
+                </button>
             </div>
 
-            <!-- 操作按钮 -->
+            <!-- 按钮 -->
             <div class="btn-group">
-                <button v-if="!isActive" class="btn btn-primary" @click="startLogin" :disabled="loading">
-                    {{ state.status === 'failed' || state.status === 'success' ? '重新登录' : '开始登录' }}
+                <button v-if="!isLive && !loginSuccess"
+                        class="btn btn-primary"
+                        @click="startBrowser"
+                        :disabled="state === 'connecting'">
+                    {{ state === 'error' || state === 'closed' ? '重新连接' : '启动远程浏览器' }}
                 </button>
-                <button v-if="state.status === 'waiting_scan'" class="btn btn-secondary" @click="refreshQR" :disabled="loading">
-                    刷新二维码
+                <button v-if="isLive" class="btn btn-secondary" @click="navigateHome">
+                    刷新页面
                 </button>
-                <button v-if="isActive" class="btn btn-danger" @click="cancelLogin">
-                    取消
+                <button v-if="isLive" class="btn btn-danger" @click="closeBrowser">
+                    关闭浏览器
+                </button>
+                <button v-if="loginSuccess" class="btn btn-secondary" @click="closeBrowser">
+                    关闭浏览器
+                </button>
+                <button v-if="loginSuccess || state === 'closed'" class="btn btn-primary" @click="startBrowser">
+                    重新连接
                 </button>
             </div>
         </div>
@@ -427,187 +359,304 @@
         <div class="info-card">
             <h3>使用说明</h3>
             <ul class="info-list">
-                <li>点击「开始登录」后，服务端会自动打开浏览器并加载登录页面</li>
-                <li>二维码出现后，用对应平台 APP 扫码即可完成登录</li>
-                <li>登录成功后 Cookie 会自动保存，后续爬取无需重复登录</li>
-                <li>如二维码过期，点击「刷新二维码」获取新的二维码</li>
-                <li>服务器地址: 浏览器访问 <code style="color:var(--primary);">http://服务器IP:8088/login</code></li>
+                <li>点击「启动远程浏览器」，服务器会打开小红书页面</li>
+                <li>画面中显示的是服务器浏览器的实时画面，可以直接鼠标操作</li>
+                <li>用手机扫描画面中的二维码完成登录；如遇滑块验证，可直接拖拽操作</li>
+                <li>登录成功后 Cookie 自动保存，可直接启动爬虫</li>
             </ul>
         </div>
 
-        <a href="/" class="back-link">&larr; 返回控制台</a>
-
-        <!-- 全屏预览 -->
-        <div v-if="showFullscreen" class="fullscreen-overlay" @click="showFullscreen = false">
-            <img :src="screenshotUrl" alt="Full screenshot" />
-        </div>
+        <a href="/dashboard" class="back-link">&larr; 返回 Dashboard</a>
     </div>
 
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
-    const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+    (function() {
+        const { createApp, ref, computed, onUnmounted, nextTick } = Vue;
 
-    createApp({
-        setup() {
-            const platform = ref('xhs');
-            const loading = ref(false);
-            const showFullscreen = ref(false);
-            const state = ref({
-                status: 'idle',
-                qrcode: '',
-                screenshot: '',
-                message: '',
-                elapsed: 0,
-            });
+        createApp({
+            setup() {
+                const state = ref('idle');        // idle | connecting | live | success | error | closed
+                const message = ref('');
+                const loginSuccess = ref(false);
+                const canvas = ref(null);
+                const browserWrapper = ref(null);
+                const fps = ref(0);
+                const inputText = ref('');
+                const inputFocused = ref(false);
+                const textInput = ref(null);
 
-            let pollTimer = null;
+                let ws = null;
+                let frameCount = 0;
+                let fpsTimer = null;
+                let serverWidth = 1280;
+                let serverHeight = 800;
+                let isDragging = false;
 
-            const isActive = computed(() =>
-                ['starting', 'waiting_scan'].includes(state.value.status)
-            );
+                const isLive = computed(() => state.value === 'live');
 
-            const statusClass = computed(() => {
-                const map = {
-                    idle: 'idle',
-                    starting: 'starting',
-                    waiting_scan: 'waiting',
-                    success: 'success',
-                    failed: 'failed',
-                    cancelled: 'failed',
-                };
-                return map[state.value.status] || 'idle';
-            });
+                const statusClass = computed(() => {
+                    const map = {
+                        idle: 'idle',
+                        connecting: 'connecting',
+                        live: 'live',
+                        success: 'success',
+                        error: 'error',
+                        closed: 'closed',
+                    };
+                    return map[state.value] || 'idle';
+                });
 
-            const statusText = computed(() => {
-                const map = {
-                    idle: '就绪 - 等待开始',
-                    starting: '启动中...',
-                    waiting_scan: '等待扫码...',
-                    success: '登录成功',
-                    failed: '登录失败',
-                    cancelled: '已取消',
-                };
-                return map[state.value.status] || state.value.message;
-            });
+                const statusText = computed(() => {
+                    const map = {
+                        idle: '就绪 - 点击开始',
+                        connecting: '连接中...',
+                        live: '远程浏览器 - 实时画面',
+                        success: '登录成功',
+                        error: '连接异常',
+                        closed: '会话已结束',
+                    };
+                    if (state.value === 'connecting' && message.value) return message.value;
+                    if (state.value === 'error' && message.value) return '异常: ' + message.value;
+                    return map[state.value] || '';
+                });
 
-            const timerText = computed(() => {
-                const s = state.value.elapsed;
-                if (!s) return '';
-                const remaining = Math.max(0, 300 - s);
-                const min = Math.floor(remaining / 60);
-                const sec = remaining % 60;
-                return min > 0 ? `剩余 ${min}m${sec}s` : `剩余 ${sec}s`;
-            });
-
-            const qrcodeUrl = computed(() =>
-                state.value.qrcode ? `data:image/png;base64,${state.value.qrcode}` : ''
-            );
-
-            const screenshotUrl = computed(() =>
-                state.value.screenshot ? `data:image/png;base64,${state.value.screenshot}` : ''
-            );
-
-            // 从 URL 参数中获取 api_key（访问: /login?api_key=xxx）
-            const urlParams = new URLSearchParams(window.location.search);
-            const apiKey = urlParams.get('api_key') || '';
-
-            async function apiCall(url, method = 'GET') {
-                const separator = url.includes('?') ? '&' : '?';
-                const fullUrl = `/api/login${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
-                const resp = await fetch(fullUrl, { method });
-                if (resp.status === 401) {
-                    state.value.status = 'failed';
-                    state.value.message = '认证失败：请在URL中添加 ?api_key=你的密钥';
-                    stopPolling();
-                    return { status: 'failed', message: '认证失败' };
+                // ── 坐标换算 ──
+                function toServerCoords(e) {
+                    const c = canvas.value;
+                    if (!c) return { x: 0, y: 0 };
+                    const rect = c.getBoundingClientRect();
+                    const scaleX = serverWidth / rect.width;
+                    const scaleY = serverHeight / rect.height;
+                    return {
+                        x: Math.round((e.clientX - rect.left) * scaleX),
+                        y: Math.round((e.clientY - rect.top) * scaleY),
+                    };
                 }
-                return resp.json();
-            }
 
-            async function startLogin() {
-                loading.value = true;
-                try {
-                    await apiCall(`/start?platform=${platform.value}`, 'POST');
-                    startPolling();
-                } catch (e) {
-                    state.value.status = 'failed';
-                    state.value.message = '请求失败: ' + e.message;
-                } finally {
-                    loading.value = false;
-                }
-            }
-
-            async function cancelLogin() {
-                await apiCall('/cancel', 'POST');
-                stopPolling();
-                state.value.status = 'cancelled';
-                state.value.message = '已取消';
-            }
-
-            async function refreshQR() {
-                loading.value = true;
-                try {
-                    await apiCall('/refresh', 'POST');
-                    await pollStatus();
-                } finally {
-                    loading.value = false;
-                }
-            }
-
-            async function pollStatus() {
-                try {
-                    const data = await apiCall('/qrcode');
-                    state.value.status = data.status;
-                    state.value.qrcode = data.qrcode || '';
-                    state.value.screenshot = data.screenshot || '';
-                    state.value.message = data.message || '';
-                    state.value.elapsed = data.elapsed || 0;
-
-                    if (['success', 'failed', 'cancelled', 'idle'].includes(data.status)) {
-                        stopPolling();
+                function sendEvent(evt) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify(evt));
                     }
-                } catch (e) {
-                    // 网络错误，继续轮询
                 }
-            }
 
-            function startPolling() {
-                stopPolling();
-                pollTimer = setInterval(pollStatus, 1500);
-                pollStatus(); // 立即轮询一次
-            }
+                // ── 鼠标事件 ──
+                let downPos = null;
+                let moveCount = 0;
 
-            function stopPolling() {
-                if (pollTimer) {
-                    clearInterval(pollTimer);
-                    pollTimer = null;
+                function onMouseDown(e) {
+                    if (!isLive.value) return;
+                    const { x, y } = toServerCoords(e);
+                    downPos = { x, y };
+                    moveCount = 0;
+                    isDragging = true;
+                    sendEvent({ type: 'mousedown', x, y });
                 }
-            }
 
-            // 初始化: 检查是否有活跃的登录会话
-            onMounted(async () => {
-                try {
-                    const data = await apiCall('/qrcode');
-                    if (['starting', 'waiting_scan'].includes(data.status)) {
-                        state.value.status = data.status;
-                        state.value.qrcode = data.qrcode || '';
-                        state.value.screenshot = data.screenshot || '';
-                        state.value.message = data.message || '';
-                        state.value.elapsed = data.elapsed || 0;
-                        startPolling();
+                function onMouseMove(e) {
+                    if (!isLive.value || !isDragging) return;
+                    moveCount++;
+                    // 只在有明显移动时才发送（节省带宽，用于拖拽滑块等）
+                    if (moveCount % 2 === 0) {
+                        const { x, y } = toServerCoords(e);
+                        sendEvent({ type: 'mousemove', x, y });
                     }
-                } catch(e) {}
-            });
+                }
 
-            onUnmounted(() => stopPolling());
+                function onMouseUp(e) {
+                    if (!isLive.value) return;
+                    isDragging = false;
+                    const { x, y } = toServerCoords(e);
 
-            return {
-                platform, loading, showFullscreen, state,
-                isActive, statusClass, statusText, timerText,
-                qrcodeUrl, screenshotUrl,
-                startLogin, cancelLogin, refreshQR,
-            };
-        }
-    }).mount('#app');
+                    if (moveCount < 4 && downPos) {
+                        // 移动量小 → 视为点击
+                        sendEvent({ type: 'mouseup', x, y });
+                        sendEvent({ type: 'click', x: downPos.x, y: downPos.y });
+                    } else {
+                        // 有明显拖拽
+                        sendEvent({ type: 'mouseup', x, y });
+                    }
+                    downPos = null;
+                    moveCount = 0;
+                }
+
+                function onWheel(e) {
+                    if (!isLive.value) return;
+                    sendEvent({ type: 'scroll', deltaX: e.deltaX, deltaY: e.deltaY });
+                }
+
+                // ── 渲染帧 ──
+                function renderFrame(blob) {
+                    const c = canvas.value;
+                    if (!c) return;
+                    const ctx = c.getContext('2d');
+                    const img = new Image();
+                    const url = URL.createObjectURL(blob);
+                    img.onload = () => {
+                        // 首次或分辨率变化时调整 canvas
+                        if (c.width !== img.width || c.height !== img.height) {
+                            c.width = img.width;
+                            c.height = img.height;
+                            serverWidth = img.width;
+                            serverHeight = img.height;
+                        }
+                        ctx.drawImage(img, 0, 0);
+                        URL.revokeObjectURL(url);
+                        frameCount++;
+                    };
+                    img.src = url;
+                }
+
+                // ── WebSocket 连接 ──
+                function startBrowser() {
+                    if (ws) {
+                        ws.close();
+                        ws = null;
+                    }
+
+                    loginSuccess.value = false;
+                    state.value = 'connecting';
+                    message.value = '正在连接服务器...';
+
+                    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const url = `${proto}//${location.host}/api/login/ws/browser`;
+                    ws = new WebSocket(url);
+
+                    ws.binaryType = 'blob';
+
+                    ws.onopen = () => {
+                        message.value = '已连接，等待浏览器启动...';
+                        // FPS 计数
+                        frameCount = 0;
+                        fpsTimer = setInterval(() => {
+                            fps.value = frameCount;
+                            frameCount = 0;
+                        }, 1000);
+                    };
+
+                    ws.onmessage = (e) => {
+                        if (e.data instanceof Blob) {
+                            // 二进制帧 = 截图
+                            if (state.value !== 'live') {
+                                state.value = 'live';
+                            }
+                            renderFrame(e.data);
+                        } else {
+                            // JSON 控制消息
+                            try {
+                                const msg = JSON.parse(e.data);
+                                if (msg.type === 'status') {
+                                    message.value = msg.message || '';
+                                    if (msg.width) serverWidth = msg.width;
+                                    if (msg.height) serverHeight = msg.height;
+                                } else if (msg.type === 'login_success') {
+                                    state.value = 'success';
+                                    loginSuccess.value = true;
+                                    message.value = msg.message || '登录成功';
+                                } else if (msg.type === 'browser_closed') {
+                                    state.value = 'closed';
+                                    message.value = msg.message || '浏览器已关闭';
+                                    loginSuccess.value = false;
+                                } else if (msg.type === 'error') {
+                                    state.value = 'error';
+                                    message.value = msg.message || '未知错误';
+                                }
+                            } catch(err) {}
+                        }
+                    };
+
+                    ws.onclose = () => {
+                        if (state.value === 'live') {
+                            state.value = 'closed';
+                            message.value = '';
+                        } else if (state.value !== 'success' && state.value !== 'error') {
+                            state.value = 'closed';
+                        }
+                        if (fpsTimer) { clearInterval(fpsTimer); fpsTimer = null; }
+                    };
+
+                    ws.onerror = () => {
+                        state.value = 'error';
+                        message.value = '连接失败，请检查服务器是否运行';
+                    };
+                }
+
+                function closeBrowser() {
+                    // 通知服务器关闭浏览器
+                    sendEvent({ type: 'close_browser' });
+                    // 延迟后关闭 WS
+                    setTimeout(() => {
+                        if (ws) { ws.close(); ws = null; }
+                        state.value = 'closed';
+                        loginSuccess.value = false;
+                    }, 500);
+                }
+
+                function disconnect() {
+                    if (ws) { ws.close(); ws = null; }
+                    state.value = 'closed';
+                }
+
+                function sendText() {
+                    const text = inputText.value.trim();
+                    if (!text) return;
+                    sendEvent({ type: 'type', text: text });
+                    inputText.value = '';
+                }
+
+                function sendBackspace() {
+                    sendEvent({ type: 'keypress', key: 'Backspace' });
+                }
+
+                function sendSelectAllDelete() {
+                    // Ctrl+A 全选，然后 Backspace 删除
+                    sendEvent({ type: 'select_all_delete' });
+                }
+
+                function navigateHome() {
+                    sendEvent({ type: 'navigate', url: 'https://www.xiaohongshu.com' });
+                }
+
+                // ── 键盘事件（全局监听） ──
+                function onKeyDown(e) {
+                    if (!isLive.value || inputFocused.value) return;
+                    if (document.activeElement === canvas.value) {
+                        e.preventDefault();
+                        sendEvent({ type: 'keydown', key: e.key });
+                    }
+                }
+                function onKeyUp(e) {
+                    if (!isLive.value || inputFocused.value) return;
+                    if (document.activeElement === canvas.value) {
+                        e.preventDefault();
+                        sendEvent({ type: 'keyup', key: e.key });
+                    }
+                }
+
+                // 注册全局键盘事件
+                if (typeof window !== 'undefined') {
+                    window.addEventListener('keydown', onKeyDown);
+                    window.addEventListener('keyup', onKeyUp);
+                }
+
+                onUnmounted(() => {
+                    if (ws) ws.close();
+                    if (fpsTimer) clearInterval(fpsTimer);
+                    window.removeEventListener('keydown', onKeyDown);
+                    window.removeEventListener('keyup', onKeyUp);
+                });
+
+                return {
+                    state, message, loginSuccess, canvas, browserWrapper, fps,
+                    inputText, inputFocused, textInput,
+                    isLive, statusClass, statusText,
+                    startBrowser, disconnect, closeBrowser, navigateHome,
+                    sendText, sendBackspace, sendSelectAllDelete,
+                    onMouseDown, onMouseMove, onMouseUp, onWheel,
+                };
+            }
+        }).mount('#app');
+    })();
     </script>
 </body>
 </html>

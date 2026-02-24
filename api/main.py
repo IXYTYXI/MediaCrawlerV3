@@ -22,7 +22,10 @@ Start command: uvicorn api.main:app --port 8080 --reload
 Or: python -m api.main
 """
 import asyncio
+import hashlib
+import hmac
 import os
+import secrets
 import subprocess
 import uvicorn
 from fastapi import FastAPI, Request
@@ -30,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
-from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router
+from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -51,12 +54,71 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==================== 访问密码保护 ====================
+# 修改这里设置你的密码（请改成你自己的复杂密码）
+DASHBOARD_PASSWORD = os.environ.get("MC_DASHBOARD_PWD", "changeme")
+
+_PASSWORD_HASH = hashlib.sha256(DASHBOARD_PASSWORD.encode()).hexdigest()
+_auth_tokens: set = set()
+
+_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico"}
+
+
+@app.post("/api/auth/login")
+async def auth_login(request: Request):
+    try:
+        body = await request.json()
+        password = body.get("password", "")
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "message": "请求格式错误"})
+
+    input_hash = hashlib.sha256(password.encode()).hexdigest()
+    if not hmac.compare_digest(input_hash, _PASSWORD_HASH):
+        return JSONResponse(status_code=401, content={"success": False, "message": "密码错误"})
+
+    token = secrets.token_hex(32)
+    _auth_tokens.add(token)
+    return {"success": True, "token": token}
+
+
+@app.get("/api/auth/check")
+async def auth_check(request: Request):
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    return {"success": True, "authenticated": token in _auth_tokens}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    if path in _PUBLIC_PATHS:
+        return await call_next(request)
+
+    if path.startswith("/assets/") or path.endswith((".js", ".css", ".png", ".ico", ".svg", ".woff", ".woff2")):
+        return await call_next(request)
+
+    if "upgrade" in request.headers.get("upgrade", "").lower() or path.endswith("/ws"):
+        token = request.query_params.get("token", "")
+        if token in _auth_tokens:
+            return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "未授权"})
+
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if token in _auth_tokens:
+        return await call_next(request)
+
+    accept = request.headers.get("Accept", "")
+    if "text/html" in accept:
+        return await call_next(request)
+
+    return JSONResponse(status_code=401, content={"success": False, "message": "请先登录"})
 # Register routers
 app.include_router(crawler_router, prefix="/api")
 app.include_router(data_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(login_router, prefix="/api")
+app.include_router(control_router, prefix="/api")
 
 
 @app.get("/")
@@ -95,6 +157,15 @@ async def serve_login_page():
     return {"message": "Login page not found"}
 
 
+@app.get("/control")
+async def serve_control_page():
+    """Return crawler control panel page"""
+    control_path = os.path.join(os.path.dirname(__file__), "control.html")
+    if os.path.exists(control_path):
+        return FileResponse(control_path, media_type="text/html")
+    return {"message": "Control panel not found"}
+
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
@@ -106,7 +177,8 @@ async def check_environment():
     try:
         # Run uv run main.py --help command to check environment
         process = await asyncio.create_subprocess_exec(
-            "uv", "run", "main.py", "--help",
+            "conda", "run", "--no-capture-output", "-n", "uvenv",
+            "python", "-u", "main.py", "--help",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd="."  # Project root directory

@@ -35,7 +35,7 @@ from tools import utils
 if TYPE_CHECKING:
     from proxy.proxy_ip_pool import ProxyIpPool
 
-from .exception import DataFetchError, IPBlockError
+from .exception import DataFetchError, IPBlockError, SessionExpiredError
 from .field import SearchNoteType, SearchSortType
 from .help import get_search_id
 from .extractor import XiaoHongShuExtractor
@@ -624,14 +624,46 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         notes_cursor = ""
         consecutive_errors = 0
         max_consecutive_errors = 3
+        batch_count = 0          # 批次计数（用于 pong 探活）
+        pong_every_n_batches = 3  # 每 N 个批次做 1 次 pong 探活
         
         while notes_has_more and len(result) < config.CRAWLER_MAX_NOTES_COUNT:
+            # ========== 第 4 层：每 N 批次 pong() 探活 ==========
+            batch_count += 1
+            if batch_count > 1 and batch_count % pong_every_n_batches == 0:
+                try:
+                    pong_ok = await self.pong()
+                    if not pong_ok:
+                        msg = (
+                            f"pong() 探活失败（第 {batch_count} 批次），"
+                            f"session 可能已失效，已获取 {len(result)} 条"
+                        )
+                        utils.logger.error(
+                            f"[XiaoHongShuClient.get_all_notes_by_creator] ⚡ {msg}"
+                        )
+                        raise SessionExpiredError(msg)
+                    else:
+                        utils.logger.info(
+                            f"[XiaoHongShuClient.get_all_notes_by_creator] "
+                            f"pong() 探活成功（第 {batch_count} 批次）"
+                        )
+                except SessionExpiredError:
+                    raise
+                except Exception as e:
+                    utils.logger.warning(
+                        f"[XiaoHongShuClient.get_all_notes_by_creator] "
+                        f"pong() 探活异常: {e}，继续爬取"
+                    )
+            
             try:
                 notes_res = await self.get_notes_by_creator(
                     user_id, notes_cursor, xsec_token=xsec_token, xsec_source=xsec_source
                 )
                 consecutive_errors = 0  # 成功后重置错误计数
                 
+            except SessionExpiredError:
+                # SessionExpiredError 直接向上抛，不被吞掉
+                raise
             except Exception as e:
                 consecutive_errors += 1
                 utils.logger.error(
@@ -677,6 +709,16 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             if callback:
                 await callback(notes_to_add)
 
+                # 检查回调是否请求提前停止（日期超出范围）
+                cb_self = getattr(callback, '__self__', None)
+                if cb_self and getattr(cb_self, '_early_stop_requested', False):
+                    utils.logger.info(
+                        f"[XiaoHongShuClient.get_all_notes_by_creator] "
+                        f"回调请求提前停止（连续批次日期超出范围），已获取 {len(result) + len(notes_to_add)} 条"
+                    )
+                    result.extend(notes_to_add)
+                    break
+
             result.extend(notes_to_add)
             # Dynamic random sleep for each request
             actual_sleep = crawl_interval + random.uniform(0, crawl_interval * 0.5) if crawl_interval > 0 else random.uniform(0.5, 1.5)
@@ -696,6 +738,20 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                     pause_time = generate_random_wait(pause_min, pause_max, "lognormal")
                     utils.logger.info(f"[XiaoHongShuClient] 批次暂停: 等待 {pause_time:.1f}s (已爬取 {len(result)} 条)")
                     await asyncio.sleep(pause_time)
+
+            # Big pause strategy: long pause every N items
+            if getattr(config, "BIG_PAUSE_ENABLED", False):
+                big_n = getattr(config, "BIG_PAUSE_EVERY_N", 300)
+                if len(result) > 0 and len(result) % big_n == 0:
+                    big_min = getattr(config, "BIG_PAUSE_MIN_SEC", 240.0)
+                    big_max = getattr(config, "BIG_PAUSE_MAX_SEC", 360.0)
+                    from tools.anti_crawl_utils import generate_random_wait
+                    big_pause_time = generate_random_wait(big_min, big_max, "uniform")
+                    utils.logger.info(
+                        f"[XiaoHongShuClient] 大暂停: 已爬取 {len(result)} 条，"
+                        f"休息 {big_pause_time:.0f}s ({big_pause_time/60:.1f}分钟)"
+                    )
+                    await asyncio.sleep(big_pause_time)
 
         utils.logger.info(
             f"[XiaoHongShuClient.get_all_notes_by_creator] Finished getting notes for user {user_id}, total: {len(result)}"

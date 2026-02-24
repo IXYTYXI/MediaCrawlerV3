@@ -42,7 +42,7 @@ from tools.cdp_browser import CDPBrowserManager
 from var import crawler_type_var, source_keyword_var
 
 from .client import XiaoHongShuClient
-from .exception import DataFetchError
+from .exception import DataFetchError, SessionExpiredError
 from .field import SearchSortType
 from .help import parse_note_info_from_note_url, parse_creator_info_from_url, get_search_id
 from .login import XiaoHongShuLogin
@@ -63,6 +63,27 @@ class XiaoHongShuCrawler(AbstractCrawler):
         self.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+
+    @staticmethod
+    def _load_shared_cookie() -> str:
+        """从共享 cookie 文件读取最新的 web_session（远程扫码登录写入的）"""
+        import json as _json
+        cookie_file = os.path.join(os.getcwd(), "data", "cookies", "xhs_cookies.json")
+        try:
+            if not os.path.exists(cookie_file):
+                return ""
+            with open(cookie_file, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+            ws = data.get("web_session", "")
+            if ws:
+                utils.logger.info(
+                    f"[XiaoHongShuCrawler] 读取共享 cookie 文件: "
+                    f"更新于 {data.get('updated_at', '?')}, 来源: {data.get('source', '?')}"
+                )
+            return ws
+        except Exception as e:
+            utils.logger.warning(f"[XiaoHongShuCrawler] 读取共享 cookie 文件失败: {e}")
+            return ""
 
     def _get_sleep_seconds(self, *, for_comments: bool = False) -> float:
         """使用高级随机分布生成等待时间"""
@@ -173,15 +194,82 @@ class XiaoHongShuCrawler(AbstractCrawler):
             # Create a client to interact with the Xiaohongshu website.
             self.xhs_client = await self.create_xhs_client(httpx_proxy_format)
             if not await self.xhs_client.pong():
-                login_obj = XiaoHongShuLogin(
-                    login_type=config.LOGIN_TYPE,
-                    login_phone="",  # input your phone number
-                    browser_context=self.browser_context,
-                    context_page=self.context_page,
-                    cookie_str=config.COOKIES,
-                )
-                await login_obj.begin()
-                await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                # Step 1: 检查浏览器持久化目录是否已有有效 session（自动续期的 cookie）
+                browser_cookies = await self.browser_context.cookies()
+                _, browser_cookie_dict = utils.convert_cookies(browser_cookies)
+                saved_web_session = browser_cookie_dict.get("web_session", "")
+
+                if saved_web_session:
+                    utils.logger.info(
+                        f"[XiaoHongShuCrawler] 发现浏览器持久化 session: {saved_web_session[:16]}...，尝试复用"
+                    )
+                    # 用浏览器已有的 session 重新创建 client 并验证
+                    await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                    if await self.xhs_client.pong():
+                        utils.logger.info("[XiaoHongShuCrawler] ✅ 浏览器持久化 session 有效，免登录")
+                    else:
+                        utils.logger.info("[XiaoHongShuCrawler] 持久化 session 已过期，尝试注入 config cookie")
+                        saved_web_session = ""  # 标记无效，走下面的注入逻辑
+
+                # Step 2: 尝试从共享 cookie 文件读取（远程扫码登录保存的最新 session）
+                if not saved_web_session:
+                    shared_cookie = self._load_shared_cookie()
+                    if shared_cookie:
+                        utils.logger.info(
+                            f"[XiaoHongShuCrawler] 发现共享 cookie 文件 (web_session={shared_cookie[:16]}...)，尝试注入"
+                        )
+                        shared_cookie_str = f"web_session={shared_cookie}"
+                        login_obj_shared = XiaoHongShuLogin(
+                            login_type="cookie",
+                            login_phone="",
+                            browser_context=self.browser_context,
+                            context_page=self.context_page,
+                            cookie_str=shared_cookie_str,
+                        )
+                        await login_obj_shared.begin()
+                        await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                        if await self.xhs_client.pong():
+                            utils.logger.info("[XiaoHongShuCrawler] ✅ 共享 cookie 文件中的 session 有效，免登录")
+                            saved_web_session = shared_cookie  # 标记有效，跳过后续步骤
+
+                # Step 3: 共享文件也没有或无效，注入 config 中的 cookie
+                if not saved_web_session:
+                    if config.COOKIES:
+                        utils.logger.info("[XiaoHongShuCrawler] 注入 config cookie 并验证...")
+                        login_obj = XiaoHongShuLogin(
+                            login_type="cookie",
+                            login_phone="",
+                            browser_context=self.browser_context,
+                            context_page=self.context_page,
+                            cookie_str=config.COOKIES,
+                        )
+                        await login_obj.begin()
+                        await self.xhs_client.update_cookies(browser_context=self.browser_context)
+
+                        if not await self.xhs_client.pong():
+                            utils.logger.warning("[XiaoHongShuCrawler] ⚠️ config cookie 也已过期，回退到原始登录方式")
+                            login_obj2 = XiaoHongShuLogin(
+                                login_type=config.LOGIN_TYPE,
+                                login_phone="",
+                                browser_context=self.browser_context,
+                                context_page=self.context_page,
+                                cookie_str=config.COOKIES,
+                            )
+                            await login_obj2.begin()
+                            await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                        else:
+                            utils.logger.info("[XiaoHongShuCrawler] ✅ config cookie 有效")
+                    else:
+                        # 没有 config cookie，直接用原始登录方式
+                        login_obj = XiaoHongShuLogin(
+                            login_type=config.LOGIN_TYPE,
+                            login_phone="",
+                            browser_context=self.browser_context,
+                            context_page=self.context_page,
+                            cookie_str=config.COOKIES,
+                        )
+                        await login_obj.begin()
+                        await self.xhs_client.update_cookies(browser_context=self.browser_context)
 
             crawler_type_var.set(config.CRAWLER_TYPE)
             if config.CRAWLER_TYPE == "search":
@@ -277,6 +365,10 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 utils.logger.info(f"[XiaoHongShuCrawler] 解析作者URL: {creator_info}")
                 user_id = creator_info.user_id
                 
+                # ========== 初始化日期停止标记 ==========
+                self._early_stop_requested = False
+                self._consecutive_old_batches = 0
+
                 # ========== 断点续爬：初始化进度管理器 ==========
                 self._progress_manager: CrawlProgressManager = get_progress_manager("xhs", "creator")
                 self._crawled_note_ids = self._progress_manager.load_progress(user_id)
@@ -423,6 +515,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
         success_count = 0
         fail_count = 0
         skip_count = 0
+        consecutive_fail_count = 0  # 连续失败计数（用于 session 失效熔断）
+        max_consecutive_fails = 5   # 连续失败熔断阈值
         save_interval = 10  # 每10条保存一次进度
         
         # 按日期提前停止
@@ -431,6 +525,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         crawl_date_start = getattr(config, 'CRAWL_DATE_START', '')
         consecutive_old_count = 0  # 连续超出日期范围的计数
         early_stopped = False
+        batch_has_old_notes = False  # 本批次是否有超期笔记
         
         is_parallel_mode = comments_mode == 'parallel' and enable_comments
         
@@ -462,7 +557,15 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     xsec_token
                 )
                 
-                if note_detail:
+                # ========== 第 1 层：笔记数据校验门 ==========
+                # 校验核心字段，空壳/无效数据不落盘
+                note_valid = (
+                    note_detail
+                    and note_detail.get("note_id")
+                    and note_detail.get("user", {}).get("user_id")
+                )
+                
+                if note_valid:
                     note_detail.update({
                         "xsec_token": xsec_token,
                         "xsec_source": post_item.get("xsec_source", "")
@@ -471,15 +574,26 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     await xhs_store.update_xhs_note(note_detail)
                     await self.get_notice_media(note_detail)
                     success_count += 1
+                    consecutive_fail_count = 0  # 成功，重置连续失败计数
                     
                     # 断点续爬：记录成功
                     if progress_manager:
                         progress_manager.add_crawled(note_id)
                     self._new_crawled_ids.add(note_id)
                     
-                    # 进度显示
+                    # 进度显示（含笔记发布日期）
                     crawled_so_far = len(getattr(self, '_new_crawled_ids', set())) + len(crawled_ids)
-                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}... [累计: {crawled_so_far}]")
+                    note_ts = note_detail.get("time", 0)
+                    note_date_str = ""
+                    if note_ts and isinstance(note_ts, (int, float)):
+                        try:
+                            from datetime import datetime as _dt
+                            _ts = note_ts / 1000 if note_ts > 1e12 else note_ts
+                            note_date_str = _dt.fromtimestamp(_ts).strftime("%Y-%m-%d")
+                        except Exception:
+                            pass
+                    date_tag = f" | {note_date_str}" if note_date_str else ""
+                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}...{date_tag} [累计: {crawled_so_far}]")
                     
                     # ========== 按日期提前停止检查 ==========
                     if early_stop_enabled and crawl_date_start:
@@ -491,14 +605,15 @@ class XiaoHongShuCrawler(AbstractCrawler):
                                 start_date = _dt.strptime(crawl_date_start, "%Y-%m-%d")
                                 if publish_date < start_date:
                                     consecutive_old_count += 1
+                                    batch_has_old_notes = True
                                     utils.logger.info(
                                         f"[详情获取] 作品日期 {publish_date.strftime('%Y-%m-%d')} "
-                                        f"早于 {crawl_date_start}，连续 {consecutive_old_count}/{early_stop_threshold}"
+                                        f"早于 {crawl_date_start}，本批次内连续 {consecutive_old_count} 条"
                                     )
                                     if consecutive_old_count >= early_stop_threshold:
                                         utils.logger.info(
                                             f"[详情获取] ⏹ 连续 {early_stop_threshold} 条作品早于 {crawl_date_start}，"
-                                            f"提前停止爬取该作者剩余作品"
+                                            f"提前停止当前批次"
                                         )
                                         early_stopped = True
                                 else:
@@ -515,25 +630,49 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         )
                         comment_tasks.append(task)
                 else:
-                    # 详情获取失败，保存基本信息，记录到失败列表
-                    await xhs_store.update_xhs_note_basic(post_item)
+                    # 数据无效（空响应或缺少核心字段），不保存到磁盘
+                    consecutive_fail_count += 1
                     self._failed_note_ids.add(note_id)
                     if progress_manager:
                         progress_manager.add_failed(note_id)
                     fail_count += 1
-                    utils.logger.warning(f"[详情获取] ({idx}/{total}) ✗ {display_title}... (保存基本信息)")
+                    utils.logger.warning(
+                        f"[详情获取] ({idx}/{total}) ✗ {display_title}... "
+                        f"(数据无效，不落盘，连续失败: {consecutive_fail_count}/{max_consecutive_fails})"
+                    )
                     
+                    # ========== 第 2 层：连续失败熔断器 ==========
+                    if consecutive_fail_count >= max_consecutive_fails:
+                        msg = (
+                            f"连续 {consecutive_fail_count} 次获取笔记详情失败/数据无效，"
+                            f"疑似 session 失效，触发熔断"
+                        )
+                        utils.logger.error(f"[详情获取] ⚡ {msg}")
+                        raise SessionExpiredError(msg)
+                    
+            except SessionExpiredError:
+                # SessionExpiredError 不捕获，直接向上抛出
+                raise
             except Exception as e:
-                # 异常时尝试保存基本信息，记录到失败列表
+                # 异常时不保存基本信息（可能是 session 失效导致的）
+                consecutive_fail_count += 1
                 self._failed_note_ids.add(note_id)
                 if progress_manager:
                     progress_manager.add_failed(note_id)
                 fail_count += 1
-                utils.logger.warning(f"[详情获取] ({idx}/{total}) ✗ {display_title}... 错误: {e}")
-                try:
-                    await xhs_store.update_xhs_note_basic(post_item)
-                except Exception as save_err:
-                    utils.logger.error(f"[详情获取] 保存基本信息也失败: {save_err}")
+                utils.logger.warning(
+                    f"[详情获取] ({idx}/{total}) ✗ {display_title}... 错误: {e} "
+                    f"(连续失败: {consecutive_fail_count}/{max_consecutive_fails})"
+                )
+                
+                # ========== 第 2 层：连续失败熔断器（异常路径） ==========
+                if consecutive_fail_count >= max_consecutive_fails:
+                    msg = (
+                        f"连续 {consecutive_fail_count} 次获取笔记详情异常，"
+                        f"疑似 session 失效，触发熔断"
+                    )
+                    utils.logger.error(f"[详情获取] ⚡ {msg}")
+                    raise SessionExpiredError(msg)
             
             # 等待
             sleep_seconds = self._get_sleep_seconds()
@@ -556,6 +695,24 @@ class XiaoHongShuCrawler(AbstractCrawler):
         if progress_manager:
             progress_manager.save_progress()
         
+        # ========== 批次级别日期停止信号 ==========
+        # 设置实例标记，让外层 get_all_notes_by_creator 能感知到
+        if batch_has_old_notes:
+            if not hasattr(self, '_consecutive_old_batches'):
+                self._consecutive_old_batches = 0
+            self._consecutive_old_batches += 1
+            utils.logger.info(
+                f"[日期检测] 本批次包含超期笔记，连续超期批次: {self._consecutive_old_batches}/2"
+            )
+            if self._consecutive_old_batches >= 2:
+                self._early_stop_requested = True
+                utils.logger.info(
+                    f"[日期检测] ⏹ 连续 2 个批次包含早于 {crawl_date_start} 的笔记，"
+                    f"通知外层停止该作者的爬取"
+                )
+        else:
+            self._consecutive_old_batches = 0  # 本批次没有超期，重置
+
         early_stop_msg = f", 提前停止(早于{crawl_date_start})" if early_stopped else ""
         utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}, 总计 {total}{early_stop_msg}")
     

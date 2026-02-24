@@ -1,0 +1,231 @@
+{
+  "crawl_settings": {
+    "platform": "xhs",
+    "crawler_type": "creator",
+    "keywords": "",
+    "creator_ids": [
+      "https://www.xiaohongshu.com/user/profile/62b114a100000000190287f0?xsec_token=ABX8KxypB1alFmwrxytkd8t-M2Ey8I0dMudU3GCnS7OMk%3D&xsec_source=pc_search"
+    ],
+    "max_notes_count": 3000,
+    "enable_get_comments": false,
+    "enable_get_sub_comments": false,
+    "comments_fetch_mode": "parallel",
+    "comments_delay_sec": 1,
+    "max_comments_per_note": 500,
+    "comments_concurrency": 2,
+    "_platform_desc": "xhs=xiaohongshu, dy=douyin, ks=kuaishou, bili=bilibili, wb=weibo",
+    "_crawler_type_desc": "search=keyword search, creator=author page, detail=specific post",
+    "_keywords_desc": "search keywords, comma separated, only works when crawler_type=search",
+    "_creator_ids_desc": "author page URLs, only works when crawler_type=creator",
+    "_max_notes_count_desc": "max number of posts to crawl",
+    "_enable_get_comments_desc": "whether to get comments: true/false",
+    "_enable_get_sub_comments_desc": "whether to get sub-comments (replies): true/false",
+    "_comments_fetch_mode_desc": "parallel=边爬作品边爬评论, sequential=先爬完作品再爬评论",
+    "_comments_delay_sec_desc": "并行模式下，获取作品详情后延迟多少秒再获取评论",
+    "_max_comments_per_note_desc": "每个作品最多获取多少条评论",
+    "_comments_concurrency_desc": "评论获取的并发数（建议1-3）"
+  },
+  "随机等待策略": {
+    "enabled": true,
+    "min_sec": 8,
+    "max_sec": 23,
+    "distribution": "lognormal",
+    "_distribution_options": [
+      "uniform",
+      "normal",
+      "lognormal"
+    ],
+    "_说明": "distribution: uniform=均匀分布, normal=正态分布, lognormal=对数正态分布(推荐)"
+  },
+  "批次暂停策略": {
+    "enabled": true,
+    "every_n_min": 16,
+    "every_n_max": 30,
+    "min_sec": 30,
+    "max_sec": 60,
+    "_说明": "every_n 现在是随机范围，每 16-30 条触发一次暂停"
+  },
+  "动态调整策略": {
+    "enabled": true,
+    "success_threshold": 10,
+    "speed_up_factor": 0.8,
+    "slow_down_factor": 2,
+    "super_sleep_on_block": true,
+    "super_sleep_min_sec": 300,
+    "super_sleep_max_sec": 600,
+    "_说明": "连续成功N次后加速，遇到限流则减速，遇到验证码触发超级休眠(5-10分钟)"
+  },
+  "假动作策略": {
+    "enabled": true,
+    "probability": 0.15,
+    "min_sec": 2,
+    "max_sec": 5,
+    "keywords": [
+      "美食",
+      "旅行",
+      "穿搭",
+      "护肤",
+      "健身",
+      "摄影",
+      "宠物",
+      "家居",
+      "数码",
+      "音乐",
+      "电影",
+      "书籍",
+      "咖啡",
+      "甜点",
+      "打卡",
+      "探店"
+    ],
+    "enable_scroll": true,
+    "enable_mouse_move": true,
+    "enable_click_profile": true,
+    "enable_input_simulation": true,
+    "_说明": "增加滚动、鼠标移动、点击头像、模拟输入等行为"
+  },
+  "并发控制": {
+    "max_concurrency": 3,
+    "_说明": "建议 2-3，太高容易触发反爬"
+  },
+  "浏览器控制": {
+    "auto_close_browser": false,
+    "remove_webdriver_flag": true,
+    "spoof_canvas_fingerprint": true,
+    "spoof_webgl_fingerprint": true,
+    "browser_launch_timeout": 120,
+    "_说明": "消除自动化痕迹，伪装浏览器指纹"
+  },
+  "断点续爬": {
+    "enabled": true,
+    "auto_save_interval": 10,
+    "retry_failed": true,
+    "use_sqlite": false,
+    "_enabled_desc": "是否启用断点续爬功能",
+    "_auto_save_interval_desc": "每爬取N条自动保存一次进度",
+    "_retry_failed_desc": "是否自动重试之前失败的记录",
+    "_use_sqlite_desc": "使用SQLite存储进度(适合>10万条数据)，false则用JSON",
+    "_性能说明": "查找使用Set哈希集合，复杂度O(1)，比二分法O(log n)更快"
+  },
+  "batch_crawl": {
+    "enabled": false,
+    "excel_path": "redbookaccontidandresult.xlsx",
+    "max_notes_per_creator": 3000,
+    "enable_comments": false,
+    "wait_between_creators_sec": 10,
+    "resume": true,
+    "min_interaction": 50,
+    "export_format": "excel",
+    "export_dir": "data/xiaohongshu/excel",
+    "task_id": "task_20260210",
+    "_task_id_desc": "任务ID，不同任务的进度和数据互相独立，新任务改个新ID即可",
+    "reuse_history": true,
+    "_reuse_history_desc": "是否复用历史已爬数据: true=已爬完的作者直接复用不再爬取, false=全部重新爬取",
+    "crawl_mode": "date_range",
+    "_crawl_mode_desc": "爬取模式: full=全量爬取, date_range=指定日期范围爬取",
+    "date_start": "2025-01-01",
+    "date_end": "2026-02-10",
+    "_date_desc": "日期范围，格式YYYY-MM-DD，仅crawl_mode=date_range时生效，留空=不限制",
+    "_enabled_desc": "是否启用批量爬取模式",
+    "_excel_path_desc": "excel作者链接路径",
+    "_max_notes_per_creator_desc": "每个作者最多爬取多少条笔记",
+    "_wait_between_creators_sec_desc": "作者之间的等待时间（秒）",
+    "_min_interaction_desc": "互动量过滤阈值（点赞+评论+收藏），低于此值不保存，0=不过滤",
+    "_export_format_desc": "导出格式: excel/json/csv",
+    "_export_dir_desc": "导出文件保存目录"
+  },
+  "feishu": {
+    "enabled": true,
+    "app_id": "cli_a9006c0b96395bd3",
+    "app_secret": "tul9PNh3aSjIbcqcoB25vh8HLYP2HmPx",
+    "folder_token": "LLTwf1fRUl3tH9dxr2PcMqplnAh",
+    "image_mode": "image",
+    "_image_mode_desc": "图片写入模式: link=写入链接文本, image=下载图片上传为附件显示缩略图",
+    "image_threads": 2,
+    "_image_threads_desc": "图片上传并发线程数(仅image模式)",
+    "_enabled_desc": "是否在爬取完成后自动写入飞书多维表格",
+    "_app_id_desc": "飞书开放平台 App ID",
+    "_app_secret_desc": "飞书开放平台 App Secret",
+    "_folder_token_desc": "飞书文件夹 token（可选，为空则创建在根目录）"
+  },
+  "_desc": "Config file - auto loaded before each crawl",
+  "评论随机等待": {
+    "min_sec": 3,
+    "max_sec": 6,
+    "distribution": "lognormal"
+  },
+  "情境化等待": {
+    "enabled": true,
+    "page_load_sec": [
+      5,
+      10
+    ],
+    "user_interaction_sec": [
+      1,
+      3
+    ],
+    "api_retry_sec": [
+      0.3,
+      0.8
+    ],
+    "_说明": "根据不同操作类型使用不同等待时间"
+  },
+  "大暂停策略": {
+    "enabled": true,
+    "every_n": 300,
+    "min_sec": 240,
+    "max_sec": 360,
+    "_说明": "每爬取 N 条后长时间暂停（4-6分钟），降低被风控的概率"
+  },
+  "分批爬取": {
+    "_说明": "最大作品数量已移至'爬取设置'中"
+  },
+  "容错机制": {
+    "exponential_backoff": {
+      "enabled": true,
+      "initial_delay_sec": 2,
+      "max_delay_sec": 120,
+      "multiplier": 2,
+      "max_retries": 5
+    },
+    "recoverable_errors": [
+      408,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "unrecoverable_errors": [
+      401,
+      403
+    ],
+    "_说明": "可恢复错误使用指数退避重试，不可恢复错误立即停止"
+  },
+  "parallel": {
+    "mode": "single",
+    "_mode_desc": "运行模式: single=单线程, multi=多线程同IP, multi_proxy=多线程+独立代理",
+    "workers": [
+      {
+        "name": "worker_1",
+        "cookie_dir": "browser_data/cdp_xhs_user_data_dir",
+        "proxy": "",
+        "_desc": "默认worker，无代理，使用当前Cookie"
+      },
+      {
+        "name": "worker_2",
+        "cookie_dir": "browser_data/cdp_xhs_account_2",
+        "proxy": "http://127.0.0.1:7890",
+        "_desc": "第2个账号，走Clash Party代理"
+      },
+      {
+        "name": "worker_3",
+        "cookie_dir": "browser_data/cdp_xhs_account_3",
+        "proxy": "http://127.0.0.1:7891",
+        "_desc": "第3个账号，走Clash Verge代理"
+      }
+    ],
+    "wait_sec_per_worker": 8,
+    "_wait_sec_desc": "每个worker的请求间隔（秒），多线程时可降低"
+  }
+}

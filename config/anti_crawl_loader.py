@@ -78,6 +78,14 @@ def apply_anti_crawl_config(target_config) -> None:
         target_config.BATCH_PAUSE_MIN_SEC = batch_pause.get("min_sec", 30.0)
         target_config.BATCH_PAUSE_MAX_SEC = batch_pause.get("max_sec", 60.0)
     
+    # ==================== 大暂停策略 ====================
+    big_pause = config_data.get("大暂停策略", {})
+    if big_pause:
+        target_config.BIG_PAUSE_ENABLED = big_pause.get("enabled", True)
+        target_config.BIG_PAUSE_EVERY_N = big_pause.get("every_n", 300)
+        target_config.BIG_PAUSE_MIN_SEC = big_pause.get("min_sec", 240.0)
+        target_config.BIG_PAUSE_MAX_SEC = big_pause.get("max_sec", 360.0)
+
     # ==================== 动态调整策略 ====================
     dynamic = config_data.get("动态调整策略", {})
     if dynamic:
@@ -232,6 +240,11 @@ def _log_current_config(target_config) -> None:
     max_n = getattr(target_config, "BATCH_PAUSE_EVERY_N_MAX", 12)
     utils.logger.info(f"  批次暂停: 每 {min_n}~{max_n} 条暂停 {target_config.BATCH_PAUSE_MIN_SEC}s ~ {target_config.BATCH_PAUSE_MAX_SEC}s")
     
+    # 大暂停
+    if getattr(target_config, "BIG_PAUSE_ENABLED", False):
+        big_n = getattr(target_config, "BIG_PAUSE_EVERY_N", 300)
+        utils.logger.info(f"  大暂停: 每 {big_n} 条暂停 {target_config.BIG_PAUSE_MIN_SEC}s ~ {target_config.BIG_PAUSE_MAX_SEC}s")
+
     # 动态调整
     if getattr(target_config, "DYNAMIC_ADJUST_ENABLED", False):
         utils.logger.info(f"  动态调整: 已启用 (成功{getattr(target_config, 'DYNAMIC_SUCCESS_THRESHOLD', 10)}次后加速)")

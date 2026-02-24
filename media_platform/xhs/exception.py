@@ -27,3 +27,7 @@ class DataFetchError(RequestError):
 
 class IPBlockError(RequestError):
     """fetch so fast that the server block us ip"""
+
+
+class SessionExpiredError(Exception):
+    """Session 失效：连续多次获取数据失败，疑似 session 过期或被服务端清除"""
