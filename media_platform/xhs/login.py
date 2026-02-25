@@ -157,8 +157,8 @@ class XiaoHongShuLogin(AbstractLogin):
         try:
             await self.check_login_state(no_logged_in_session)
         except RetryError:
-            utils.logger.info("[XiaoHongShuLogin.login_by_mobile] Login xiaohongshu failed by mobile login method ...")
-            sys.exit()
+            utils.logger.error("[XiaoHongShuLogin.login_by_mobile] Mobile login timeout")
+            raise Exception("Mobile login failed: verification timeout")
 
         wait_redirect_seconds = 5
         utils.logger.info(f"[XiaoHongShuLogin.login_by_mobile] Login successful then wait for {wait_redirect_seconds} seconds redirect ...")
@@ -167,16 +167,13 @@ class XiaoHongShuLogin(AbstractLogin):
     async def login_by_qrcode(self):
         """login xiaohongshu website and keep webdriver login state"""
         utils.logger.info("[XiaoHongShuLogin.login_by_qrcode] Begin login xiaohongshu by qrcode ...")
-        # login_selector = "div.login-container > div.left > div.qrcode > img"
         qrcode_img_selector = "xpath=//img[@class='qrcode-img']"
-        # find login qrcode
         base64_qrcode_img = await utils.find_login_qrcode(
             self.context_page,
             selector=qrcode_img_selector
         )
         if not base64_qrcode_img:
             utils.logger.info("[XiaoHongShuLogin.login_by_qrcode] login failed , have not found qrcode please check ....")
-            # if this website does not automatically popup login dialog box, we will manual click login button
             await asyncio.sleep(0.5)
             login_button_ele = self.context_page.locator("xpath=//*[@id='app']/div[1]/div[2]/div[1]/ul/div[1]/button")
             await login_button_ele.click()
@@ -185,17 +182,13 @@ class XiaoHongShuLogin(AbstractLogin):
                 selector=qrcode_img_selector
             )
             if not base64_qrcode_img:
-                sys.exit()
+                utils.logger.error("[XiaoHongShuLogin.login_by_qrcode] QR code not found, login aborted")
+                raise Exception("QR code login failed: qrcode element not found")
 
-        # get not logged session
         current_cookie = await self.browser_context.cookies()
         _, cookie_dict = utils.convert_cookies(current_cookie)
         no_logged_in_session = cookie_dict.get("web_session")
 
-        # show login qrcode
-        # fix issue #12
-        # we need to use partial function to call show_qrcode function and run in executor
-        # then current asyncio event loop will not be blocked
         partial_show_qrcode = functools.partial(utils.show_qrcode, base64_qrcode_img)
         asyncio.get_running_loop().run_in_executor(executor=None, func=partial_show_qrcode)
 
@@ -203,8 +196,8 @@ class XiaoHongShuLogin(AbstractLogin):
         try:
             await self.check_login_state(no_logged_in_session)
         except RetryError:
-            utils.logger.info("[XiaoHongShuLogin.login_by_qrcode] Login xiaohongshu failed by qrcode login method ...")
-            sys.exit()
+            utils.logger.error("[XiaoHongShuLogin.login_by_qrcode] QR code scan timeout (120s)")
+            raise Exception("QR code login failed: scan timeout after 120s")
 
         wait_redirect_seconds = 5
         utils.logger.info(f"[XiaoHongShuLogin.login_by_qrcode] Login successful then wait for {wait_redirect_seconds} seconds redirect ...")

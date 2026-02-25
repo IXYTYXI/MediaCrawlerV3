@@ -24,7 +24,14 @@ _IS_LINUX = _platform.system() == "Linux"
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = "web_session=040069b95f580579a23ea008b83b4b8a1ae284"
+COOKIES = "web_session=040069b8083b3cc3b8d6ce3bab3b4b03744aea"
+
+# ==================== 手动 Session 回退 ====================
+# 当扫码登录失败、shared cookie 过期、浏览器 session 过期时，
+# 程序会检查此值作为最后的回退手段。
+# 使用方法：在浏览器中登录小红书，F12 → Application → Cookies → 复制 web_session 的值粘贴到这里。
+# 也可以直接编辑 data/cookies/manual_web_session.txt（一行纯文本，仅放 web_session 值）。
+MANUAL_WEB_SESSION = ""
 CRAWLER_TYPE = (
     "creator"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )

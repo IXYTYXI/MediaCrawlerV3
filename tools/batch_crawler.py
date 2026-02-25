@@ -23,6 +23,7 @@ import httpx
 
 from tools import utils
 from tools.excel_reader import ExcelCreatorReader, load_creators_from_excel
+from tools.progress_validator import preflight_validate_progress
 
 import signal
 
@@ -2136,16 +2137,78 @@ def _validate_crawled_data(
 
 # ==================== Session 健康检查 ====================
 
+_last_known_expired_ws: str = ""
+
+
+def _extract_web_session(cookie_str: str) -> str:
+    """从 cookie 字符串中提取 web_session 值"""
+    if not cookie_str:
+        return ""
+    if "web_session=" in cookie_str:
+        return cookie_str.split("web_session=")[-1].split(";")[0].strip()
+    if "=" not in cookie_str:
+        return cookie_str.strip()
+    return ""
+
+
+def mark_session_expired():
+    """爬取失败时调用，标记当前 config cookie 为已知过期"""
+    global _last_known_expired_ws
+    try:
+        import config as app_config
+        ws = _extract_web_session(getattr(app_config, "COOKIES", "") or "")
+        if ws:
+            _last_known_expired_ws = ws
+    except Exception:
+        pass
+
+
 async def _check_session_health() -> bool:
     """
-    检查当前 session 是否有效（通过创建临时 XHS client 执行 pong）
+    检查当前 session 是否有效。
+    检查顺序：
+      1. config.COOKIES（支持 UI 手动更新的 web_session）
+      2. 共享 cookie 文件 (xhs_cookies.json)
+      3. 浏览器持久化上下文中的 cookie
 
-    Returns:
-        True=session 有效, False=已失效
+    如果 config cookie 与上次失败时相同，视为已过期，跳过。
     """
+    global _last_known_expired_ws
     try:
-        from playwright.async_api import async_playwright
         import config as app_config
+
+        # ===== 1. 检查 config.COOKIES（UI 手动更新写入此处）=====
+        config_ws = _extract_web_session(getattr(app_config, "COOKIES", "") or "")
+        if config_ws and len(config_ws) > 20:
+            if config_ws == _last_known_expired_ws:
+                utils.logger.debug(
+                    "[SessionCheck] config web_session 与上次失败相同，跳过"
+                )
+            else:
+                utils.logger.info(
+                    f"[SessionCheck] config 中检测到新 web_session "
+                    f"({config_ws[:8]}...{config_ws[-4:]}) ✓"
+                )
+                return True
+
+        # ===== 2. 检查共享 cookie 文件 =====
+        shared_cookie_file = os.path.join("data", "cookies", "xhs_cookies.json")
+        if os.path.exists(shared_cookie_file):
+            try:
+                with open(shared_cookie_file, "r", encoding="utf-8") as f:
+                    shared_data = json.load(f)
+                shared_ws = shared_data.get("web_session", "")
+                if shared_ws and len(shared_ws) > 20 and shared_ws != _last_known_expired_ws:
+                    utils.logger.info(
+                        f"[SessionCheck] 共享 cookie 文件中检测到 web_session "
+                        f"({shared_ws[:8]}...{shared_ws[-4:]}) ✓"
+                    )
+                    return True
+            except Exception:
+                pass
+
+        # ===== 3. 检查浏览器持久化上下文 =====
+        from playwright.async_api import async_playwright
 
         browser_data_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -2165,20 +2228,31 @@ async def _check_session_health() -> bool:
                 ),
             )
 
-            # 检查是否有 web_session cookie
             cookies = await ctx.cookies()
-            has_session = any(c.get("name") == "web_session" for c in cookies)
+            session_cookie = next(
+                (c for c in cookies if c.get("name") == "web_session"), None
+            )
             await ctx.close()
 
-            if not has_session:
-                utils.logger.warning("[SessionCheck] 浏览器中无 web_session cookie")
+            if not session_cookie:
+                utils.logger.warning(
+                    "[SessionCheck] 未检测到有效 web_session"
+                    "（config / 共享文件 / 浏览器均无）"
+                )
                 return False
 
-            utils.logger.info("[SessionCheck] Session 检查通过 ✓")
+            browser_ws = session_cookie.get("value", "")
+            if browser_ws == _last_known_expired_ws:
+                utils.logger.warning(
+                    "[SessionCheck] 浏览器 web_session 与上次失败相同"
+                )
+                return False
+
+            utils.logger.info("[SessionCheck] 浏览器中检测到 web_session ✓")
             return True
 
         except Exception as e:
-            utils.logger.warning(f"[SessionCheck] 检查失败: {e}")
+            utils.logger.warning(f"[SessionCheck] 浏览器检查失败: {e}")
             return False
         finally:
             try:
@@ -2402,6 +2476,15 @@ async def run_batch_crawl(
     task_dir = os.path.join("data", "xhs", "json", task_id)
     os.makedirs(task_dir, exist_ok=True)
 
+
+    # 5a. 进度文件预检：检测跨作者 crawled_ids 重复等异常
+    creator_uids = []
+    for c in creators:
+        u = c.get("url", "")
+        if "/user/profile/" in u:
+            creator_uids.append(u.split("/user/profile/")[1].split("?")[0])
+    preflight_validate_progress(platform="xhs", creator_ids=creator_uids or None)
+
     # 注册优雅退出信号处理
     _install_signal_handlers()
     _GracefulShutdown.current_task_dir = task_dir
@@ -2450,6 +2533,11 @@ async def run_batch_crawl(
                 f"[BatchCrawler] [{idx}/{total}] 重新爬取（上次中止未完成）: {creator_name}"
             )
             progress.clear_partial(creator_url)
+
+        # 提前记录当前作者（供优雅退出时使用，即使在 session 等待期间也能识别）
+        _GracefulShutdown.current_creator_name = creator_name
+        _GracefulShutdown.current_creator_url = creator_url
+        _GracefulShutdown.current_user_id = user_id
 
         # ========== 复用历史数据检查 ==========
         if reuse_history and user_id:

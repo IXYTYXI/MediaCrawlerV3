@@ -247,29 +247,58 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         await self.xhs_client.update_cookies(browser_context=self.browser_context)
 
                         if not await self.xhs_client.pong():
-                            utils.logger.warning("[XiaoHongShuCrawler] ⚠️ config cookie 也已过期，回退到原始登录方式")
-                            login_obj2 = XiaoHongShuLogin(
-                                login_type=config.LOGIN_TYPE,
-                                login_phone="",
-                                browser_context=self.browser_context,
-                                context_page=self.context_page,
-                                cookie_str=config.COOKIES,
-                            )
-                            await login_obj2.begin()
-                            await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                            utils.logger.warning("[XiaoHongShuCrawler] ⚠️ config cookie 也已过期")
                         else:
                             utils.logger.info("[XiaoHongShuCrawler] ✅ config cookie 有效")
-                    else:
-                        # 没有 config cookie，直接用原始登录方式
-                        login_obj = XiaoHongShuLogin(
+                            saved_web_session = "ok"
+
+                # Step 4: 检查手动配置的 web_session
+                if not saved_web_session:
+                    manual_ws = self._load_manual_web_session()
+                    if manual_ws:
+                        utils.logger.info(
+                            f"[XiaoHongShuCrawler] 尝试注入手动 web_session: {manual_ws[:12]}..."
+                        )
+                        login_obj_manual = XiaoHongShuLogin(
+                            login_type="cookie",
+                            login_phone="",
+                            browser_context=self.browser_context,
+                            context_page=self.context_page,
+                            cookie_str=f"web_session={manual_ws}",
+                        )
+                        await login_obj_manual.begin()
+                        await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                        if await self.xhs_client.pong():
+                            utils.logger.info("[XiaoHongShuCrawler] ✅ 手动 web_session 有效")
+                            saved_web_session = manual_ws
+                        else:
+                            utils.logger.warning("[XiaoHongShuCrawler] ⚠️ 手动 web_session 也无效")
+
+                # Step 5: 所有 cookie 方式都失败，回退到原始登录方式（扫码/手机号）
+                if not saved_web_session:
+                    utils.logger.warning(
+                        f"[XiaoHongShuCrawler] 所有 cookie/session 均无效，"
+                        f"回退到原始登录方式 (LOGIN_TYPE={config.LOGIN_TYPE})"
+                    )
+                    try:
+                        login_obj_final = XiaoHongShuLogin(
                             login_type=config.LOGIN_TYPE,
                             login_phone="",
                             browser_context=self.browser_context,
                             context_page=self.context_page,
                             cookie_str=config.COOKIES,
                         )
-                        await login_obj.begin()
+                        await login_obj_final.begin()
                         await self.xhs_client.update_cookies(browser_context=self.browser_context)
+                    except Exception as login_err:
+                        utils.logger.error(
+                            f"[XiaoHongShuCrawler] ❌ 原始登录方式也失败: {login_err}\n"
+                            f"  💡 请手动更新 session：\n"
+                            f"     方式1: 编辑 config/base_config.py → MANUAL_WEB_SESSION\n"
+                            f"     方式2: 写入 data/cookies/manual_web_session.txt\n"
+                            f"     方式3: 更新 config/base_config.py → COOKIES 字段"
+                        )
+                        raise SessionExpiredError(f"All login methods failed: {login_err}")
 
             crawler_type_var.set(config.CRAWLER_TYPE)
             if config.CRAWLER_TYPE == "search":

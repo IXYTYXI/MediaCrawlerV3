@@ -704,22 +704,44 @@ async def update_session_cookie(request: CookieUpdateRequest):
         raise HTTPException(status_code=404, detail="配置文件不存在")
 
     content = config_path.read_text(encoding="utf-8")
-    new_content = re.sub(
-        r'COOKIES\s*=\s*"[^"]*"',
-        f'COOKIES = "{new_cookie}"',
-        content,
-    )
 
-    if new_content == content:
-        raise HTTPException(status_code=500, detail="未找到 COOKIES 配置项")
+    # 兼容双引号和单引号两种格式
+    pattern = re.compile(r"""COOKIES\s*=\s*(['"])(.*?)\1""")
+    match = pattern.search(content)
+    if not match:
+        raise HTTPException(
+            status_code=500,
+            detail="未找到 COOKIES 配置项，请检查 base_config.py 格式",
+        )
 
-    config_path.write_text(new_content, encoding="utf-8")
+    old_value = match.group(2)
+    if old_value != new_cookie:
+        new_content = pattern.sub(f'COOKIES = "{new_cookie}"', content, count=1)
+        config_path.write_text(new_content, encoding="utf-8")
 
     # 同时更新运行时 config
     import config as cfg
     cfg.COOKIES = new_cookie
 
-    return {"success": True, "message": "Cookie 已更新"}
+    # 同步写入共享 cookie 文件，让 batch_crawler 子进程也能读到
+    web_session_val = new_cookie.replace("web_session=", "").strip()
+    cookie_dir = PROJECT_ROOT / "data" / "cookies"
+    cookie_dir.mkdir(parents=True, exist_ok=True)
+    import time as _time
+    shared_data = {
+        "web_session": web_session_val,
+        "cookie_str": new_cookie,
+        "updated_at": _time.strftime("%Y-%m-%d %H:%M:%S"),
+        "source": "dashboard_ui",
+    }
+    try:
+        shared_file = cookie_dir / "xhs_cookies.json"
+        with open(shared_file, "w", encoding="utf-8") as f:
+            json.dump(shared_data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    return {"success": True, "message": f"Cookie 已更新 ({web_session_val[:8]}...)"}
 
 
 @router.post("/session/verify")
