@@ -1,6 +1,7 @@
 # ============================================================
 # MediaCrawler Docker Image
 # 基于 Python 3.11，内置 Playwright Chromium 浏览器
+# 单镜像同时承载 API 和爬虫（爬虫由 API 按需 subprocess 启动）
 # ============================================================
 FROM python:3.11-slim AS base
 
@@ -22,34 +23,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- Python 依赖 ----
+# ---- Python 依赖（用 tomllib 正确解析 pyproject.toml）----
 COPY pyproject.toml ./
 RUN pip install --upgrade pip \
     && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
-       $(python -c "
-import ast, pathlib
-data = pathlib.Path('pyproject.toml').read_text()
-in_deps = False
-deps = []
-for line in data.splitlines():
-    if line.strip().startswith('dependencies'):
-        in_deps = True
-        continue
-    if in_deps:
-        if line.strip() == ']':
-            break
-        dep = line.strip().strip(',').strip('\"').strip(\"'\")
-        if dep:
-            deps.append(dep)
-print(' '.join(deps))
-")
+       $(python -c "import tomllib,pathlib;d=tomllib.loads(pathlib.Path('pyproject.toml').read_text());print(' '.join(d['project']['dependencies']))")
 
 # ---- Playwright Chromium ----
 RUN playwright install chromium && playwright install-deps
 
-# ---- conda shim（让现有 conda run 命令在容器内正常执行） ----
-RUN printf '#!/bin/bash\nshift  # consume "run"\nwhile [[ "$1" == --* ]] || [[ "$1" == -n ]] || [[ "$1" == uvenv ]]; do\n  [[ "$1" == -n ]] && shift  # skip -n and its arg\n  shift\ndone\nexec "$@"\n' > /usr/local/bin/conda \
-    && chmod +x /usr/local/bin/conda
+# ---- conda shim（让代码中 conda run -n uvenv ... 在容器内透传执行）----
+RUN printf '#!/bin/bash\nshift\nwhile [[ $# -gt 0 ]]; do\n  case "$1" in\n    --*) shift ;;\n    -n)  shift; shift ;;\n    *)   break ;;\n  esac\ndone\nexec "$@"\n' \
+    > /usr/local/bin/conda && chmod +x /usr/local/bin/conda
 
 # ---- 复制项目代码 ----
 COPY . .
@@ -65,5 +50,8 @@ RUN if [ -f docs/STZHONGS.TTF ]; then \
 RUN mkdir -p data/cookies data/xhs browser_data logs
 
 EXPOSE 9001
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -sf http://localhost:9001/api/health || exit 1
 
 CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "9001"]

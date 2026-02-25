@@ -13,14 +13,19 @@ services:
       - ./browser_data:/app/browser_data
       - ./config:/app/config
       - ./logs:/app/logs
-      - ./.env:/app/.env:ro
+    env_file:
+      - path: ./.env
+        required: false
     environment:
       - MC_DASHBOARD_PWD=${MC_DASHBOARD_PWD:-changeme}
       - PYTHONIOENCODING=utf-8
       - LC_ALL=C.UTF-8
     restart: unless-stopped
-    mem_limit: 4g
     shm_size: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 4g
 
   # Redis（可选，默认不启动，需要时用 --profile with-redis）
   # 启动方式: docker compose --profile with-redis up -d
