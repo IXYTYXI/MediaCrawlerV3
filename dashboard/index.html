@@ -161,6 +161,9 @@
           class="block w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-center mt-1.5">
           🖥 终端日志
         </a>
+        <a href="/control" class="block w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-center mt-1.5">
+          ⚡ 控制面板
+        </a>
       </div>
     </nav>
 
@@ -452,6 +455,13 @@
         <div class="grid grid-cols-3 gap-4">
           <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">Excel 路径</label>
             <input type="text" v-model="config.batch_crawl.excel_path" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">爬取模式</label>
+            <select v-model="config.batch_crawl.crawl_mode" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+              <option value="full">全量爬取</option>
+              <option value="date_range">日期范围</option>
+              <option value="incremental">增量更新</option>
+            </select>
+            <p class="text-[10px] text-gray-600 mt-1">增量=仅爬上次之后的新内容</p></div>
           <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">每作者最多作品</label>
             <input type="number" v-model.number="config.batch_crawl.max_notes_per_creator" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
           <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">互动量阈值</label>
@@ -465,6 +475,12 @@
             <input type="text" v-model="config.batch_crawl.export_dir" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
           <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">作者间等待 (秒)</label>
             <input type="number" v-model.number="config.batch_crawl.wait_between_creators_sec" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+          <template v-if="config.batch_crawl.crawl_mode === 'date_range'">
+            <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">开始日期</label>
+              <input type="date" v-model="config.batch_crawl.date_start" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+            <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">结束日期</label>
+              <input type="date" v-model="config.batch_crawl.date_end" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
+          </template>
         </div>
 
         <!-- 作者列表 -->
@@ -501,6 +517,11 @@
             <div class="flex items-end pb-1">
               <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
                 <input type="checkbox" v-model="batchForm.enable_comments" class="w-3.5 h-3.5 rounded"> 爬取评论
+              </label>
+            </div>
+            <div class="flex items-end pb-1">
+              <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+                <input type="checkbox" v-model="batchForm.force_recrawl" class="w-3.5 h-3.5 rounded"> 每次全量（重置进度，全部重爬）
               </label>
             </div>
           </div>
@@ -712,9 +733,13 @@
                 <div>
                   <span class="text-sm text-gray-200">{{ f.name }}</span>
                   <span class="text-[10px] text-gray-600 ml-2">{{ (f.size / 1024).toFixed(1) }} KB</span>
+                  <span v-if="f.note_count" class="text-[10px] text-gray-500 ml-1">({{ f.note_count }} 条)</span>
                 </div>
               </div>
-              <span class="text-[11px] text-gray-600">{{ f.modified }}</span>
+              <div class="flex items-center gap-2">
+                <button v-if="f.viewable" @click="openFileView(f)" class="px-2 py-1 rounded text-[11px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition">查看</button>
+                <span class="text-[11px] text-gray-600">{{ f.modified }}</span>
+              </div>
             </div>
           </div>
           <div v-else class="text-center py-8 text-gray-700 text-sm">暂无文件</div>
@@ -722,6 +747,47 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- 数据文件预览弹窗 -->
+  <div v-if="fileView.visible" class="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="closeFileView">
+    <div class="bg-gray-900 border border-gray-700 rounded-xl w-[90%] max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+        <span class="text-sm font-medium text-gray-200 truncate">{{ fileView.name }}</span>
+        <div class="flex items-center gap-2">
+          <span v-if="fileView.data" class="text-xs text-gray-500">共 {{ fileView.data.total }} 条</span>
+          <button @click="closeFileView" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300">关闭</button>
+        </div>
+      </div>
+      <div v-if="fileView.loading" class="p-8 text-center text-gray-500">加载中...</div>
+      <div v-else-if="fileView.data?.type === 'list'" class="flex-1 overflow-auto p-4">
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs border-collapse">
+            <thead><tr class="border-b border-gray-700">
+              <th v-for="fd in fileView.data.fields" :key="fd" class="text-left py-2 px-2 font-medium text-gray-400">{{ fd }}</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="(row, i) in fileView.data.items" :key="i" class="border-b border-gray-800 hover:bg-gray-800/50">
+                <td v-for="fd in fileView.data.fields" :key="fd" class="py-2 px-2 text-gray-300 max-w-[200px] truncate" :title="String(row[fd] ?? '')">{{ row[fd] }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-700">
+          <button @click="fileViewPrevPage" :disabled="fileView.data.offset <= 0" class="px-3 py-1 rounded text-xs bg-gray-700 disabled:opacity-40 text-gray-300">上一页</button>
+          <span class="text-xs text-gray-500">{{ fileView.data.offset + 1 }}-{{ Math.min(fileView.data.offset + fileView.data.limit, fileView.data.total) }} / {{ fileView.data.total }}</span>
+          <button @click="fileViewNextPage" :disabled="!fileView.data.has_more" class="px-3 py-1 rounded text-xs bg-gray-700 disabled:opacity-40 text-gray-300">下一页</button>
+        </div>
+      </div>
+      <div v-else-if="fileView.data?.type === 'dict'" class="flex-1 overflow-auto p-4">
+        <pre class="text-xs text-gray-300 whitespace-pre-wrap">{{ JSON.stringify(fileView.data.content, null, 2) }}</pre>
+      </div>
+      <div v-else-if="fileView.data?.type === 'raw'" class="flex-1 overflow-auto p-4">
+        <pre class="text-xs text-gray-400 whitespace-pre-wrap">{{ fileView.data.content }}</pre>
+        <p v-if="fileView.data.truncated" class="text-xs text-gray-500 mt-2">已截断（仅显示前 10000 字符）</p>
+      </div>
+      <div v-else-if="fileView.error" class="p-8 text-center text-red-400">{{ fileView.error }}</div>
+    </div>
   </div>
 
   <!-- Toast -->
@@ -763,7 +829,7 @@ createApp({
       '并发控制': { max_concurrency: 3 },
       '浏览器控制': { auto_close_browser: false, remove_webdriver_flag: true, spoof_canvas_fingerprint: true, spoof_webgl_fingerprint: true },
       '断点续爬': { enabled: true, auto_save_interval: 10, retry_failed: true, use_sqlite: false },
-      batch_crawl: { enabled: false, excel_path: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '' },
+      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '' },
       feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '' },
     }
 
@@ -784,10 +850,11 @@ createApp({
     const creators = ref([])
     const batchStatus = reactive({ status: 'idle', started_at: null, message: '' })
     const batchLogs = ref([])
-    const batchForm = reactive({ limit: 0, min_interaction: 0, enable_comments: false })
+    const batchForm = reactive({ limit: 0, min_interaction: 0, enable_comments: false, force_recrawl: false })
     const files = ref([])
     const toast = reactive({ show: false, message: '', type: 'info' })
     const logContainer = ref(null)
+    const fileView = reactive({ visible: false, name: '', path: '', data: null, loading: false, error: '', offset: 0, limit: 50 })
 
     // Session 管理
     const sessionStatus = reactive({
@@ -925,6 +992,41 @@ createApp({
     }
 
     async function loadFiles() { const res = await api('/files'); if (res?.success) files.value = res.data }
+
+    function openFileView(f) {
+      fileView.visible = true
+      fileView.name = f.name
+      fileView.path = f.path
+      fileView.offset = 0
+      fileView.limit = 50
+      fileView.data = null
+      fileView.error = ''
+      loadFilePage()
+    }
+    async function loadFilePage() {
+      fileView.loading = true
+      fileView.error = ''
+      try {
+        const url = `/files/view?path=${encodeURIComponent(fileView.path)}&offset=${fileView.offset}&limit=${fileView.limit}`
+        const res = await api(url)
+        if (res?.success) fileView.data = res.data
+        else fileView.error = res?.detail || '加载失败'
+      } catch (e) { fileView.error = e.message }
+      finally { fileView.loading = false }
+    }
+    function fileViewPrevPage() {
+      const limit = fileView.data?.limit || fileView.limit
+      if (fileView.offset <= 0) return
+      fileView.offset = Math.max(0, fileView.offset - limit)
+      loadFilePage()
+    }
+    function fileViewNextPage() {
+      const limit = fileView.data?.limit || fileView.limit
+      if (!fileView.data?.has_more) return
+      fileView.offset = fileView.offset + limit
+      loadFilePage()
+    }
+    function closeFileView() { fileView.visible = false }
 
     // Session 管理函数
     async function loadSessionStatus() {
@@ -1103,6 +1205,10 @@ createApp({
       loadConfig(); loadCreators(); loadFiles(); loadSessionStatus()
     }
 
+    watch(activeTab, (tab) => {
+      if (tab === 'logs') { refreshLogs(); loadFiles() }
+    })
+
     onMounted(async () => {
       if (_authToken) {
         const valid = await checkAuth()
@@ -1118,12 +1224,12 @@ createApp({
         if (!authenticated.value) return
         const res = await api('/batch/status')
         if (res?.success) Object.assign(batchStatus, res.data)
-        if (batchStatus.status === 'running') refreshLogs()
+        if (batchStatus.status === 'running' || activeTab.value === 'logs') refreshLogs()
       }, 5000)
       setInterval(() => { if (authenticated.value) loadSessionStatus() }, 30000)
     })
 
-    return { config, configDirty, saving, activeTab, tabs, creators, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout }
+    return { config, configDirty, saving, activeTab, tabs, creators, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout }
   }
 }).mount('#app')
 </script>

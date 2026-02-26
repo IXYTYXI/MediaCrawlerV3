@@ -235,6 +235,8 @@ def _build_batch_crawler_cmd() -> list:
 
         if not batch.get("resume", True):
             cmd.append("--no-resume")
+        if batch.get("force_recrawl", False):
+            cmd.append("--force-recrawl")
 
     except Exception:
         pass

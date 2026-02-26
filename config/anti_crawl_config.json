@@ -122,7 +122,7 @@
     "reuse_history": true,
     "_reuse_history_desc": "是否复用历史已爬数据: true=已爬完的作者直接复用不再爬取, false=全部重新爬取",
     "crawl_mode": "date_range",
-    "_crawl_mode_desc": "爬取模式: full=全量爬取, date_range=指定日期范围爬取",
+    "_crawl_mode_desc": "爬取模式: full=全量爬取, date_range=指定日期范围, incremental=增量更新(仅爬上次之后的新内容)",
     "date_start": "2025-01-01",
     "date_end": "2026-02-10",
     "_date_desc": "日期范围，格式YYYY-MM-DD，仅crawl_mode=date_range时生效，留空=不限制",

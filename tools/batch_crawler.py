@@ -468,6 +468,38 @@ def save_reuse_data(task_dir: str, user_id: str, notes: List[Dict]):
     utils.logger.info(f"[复用] 保存 {len(notes)} 条到 {filepath}")
 
 
+def get_last_crawl_date_for_creator(task_dir: str, user_id: str) -> str:
+    """
+    从任务目录下该作者的 contents/reuse 文件中获取最新笔记日期
+    Returns: "YYYY-MM-DD" 或 ""（无数据）
+    """
+    if not task_dir or not user_id:
+        return ""
+    max_ts = 0
+    for suffix in ["_contents.json", "_reuse.json"]:
+        fp = os.path.join(task_dir, f"creator_{user_id}{suffix}")
+        if not os.path.exists(fp):
+            continue
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, list):
+                continue
+            for item in data:
+                t = item.get("last_update_time") or item.get("time", 0)
+                if t and isinstance(t, (int, float)):
+                    max_ts = max(max_ts, t)
+        except Exception:
+            pass
+    if max_ts <= 0:
+        return ""
+    try:
+        dt = datetime.fromtimestamp(max_ts / 1000)
+        return dt.strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
 def check_creator_history_status(user_id: str) -> str:
     """
     检查作者在历史爬取中的状态
@@ -2469,6 +2501,11 @@ async def run_batch_crawl(
         config.DATE_EARLY_STOP_THRESHOLD = 5  # 连续5条超出范围后停止
         config.CRAWL_DATE_START = date_start
         utils.logger.info(f"[BatchCrawler] 日期提前停止已启用: 连续5条早于 {date_start} 时自动跳过")
+    elif crawl_mode == "incremental":
+        utils.logger.info(
+            "[BatchCrawler] 增量更新模式: 已完成的作者将只爬取上次爬取日期之后的新内容"
+        )
+        config.DATE_EARLY_STOP_ENABLED = False  # 每个作者的日期由 get_last_crawl_date 动态设置
     else:
         config.DATE_EARLY_STOP_ENABLED = False
 
@@ -2519,13 +2556,38 @@ async def run_batch_crawl(
         if "/user/profile/" in creator_url:
             user_id = creator_url.split("/user/profile/")[1].split("?")[0]
 
-        # 断点续爬：跳过当前任务已完成的
+        # 每作者开始时恢复日期停止配置（增量模式会在下面覆盖）
+        if crawl_mode == "date_range" and date_start:
+            config.DATE_EARLY_STOP_ENABLED = True
+            config.CRAWL_DATE_START = date_start
+        else:
+            config.DATE_EARLY_STOP_ENABLED = False
+
+        # 断点续爬：跳过当前任务已完成的（增量模式除外）
+        incremental_this_creator = False
         if resume and progress.is_completed(creator_url):
-            utils.logger.info(
-                f"[BatchCrawler] [{idx}/{total}] 跳过已完成: {creator_name}"
-            )
-            skipped += 1
-            continue
+            if crawl_mode == "incremental":
+                last_date = get_last_crawl_date_for_creator(task_dir, user_id)
+                if not last_date:
+                    utils.logger.info(
+                        f"[BatchCrawler] [{idx}/{total}] [增量] 无历史数据，跳过: {creator_name}"
+                    )
+                    skipped += 1
+                    continue
+                incremental_this_creator = True
+                config.DATE_EARLY_STOP_ENABLED = True
+                config.DATE_EARLY_STOP_THRESHOLD = 5
+                config.CRAWL_DATE_START = last_date
+                utils.logger.info(
+                    f"[BatchCrawler] [{idx}/{total}] [增量更新] {creator_name}，"
+                    f"只爬 {last_date} 之后的新内容"
+                )
+            else:
+                utils.logger.info(
+                    f"[BatchCrawler] [{idx}/{total}] 跳过已完成: {creator_name}"
+                )
+                skipped += 1
+                continue
 
         # 部分完成的作者：有部分数据但需要重新完整爬取
         if progress.is_partial(creator_url):
@@ -2539,8 +2601,8 @@ async def run_batch_crawl(
         _GracefulShutdown.current_creator_url = creator_url
         _GracefulShutdown.current_user_id = user_id
 
-        # ========== 复用历史数据检查 ==========
-        if reuse_history and user_id:
+        # ========== 复用历史数据检查 ==========（增量模式不复用，直接爬新内容）
+        if reuse_history and user_id and not incremental_this_creator:
             history_status = check_creator_history_status(user_id)
 
             if history_status == "completed":
@@ -2635,14 +2697,42 @@ async def run_batch_crawl(
                 data_dir, session_ts, creator_name, min_interaction=0,
                 user_id=user_id
             )
-            if new_notes:
-                contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+            contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+            if incremental_this_creator:
+                # 增量模式：合并新旧数据（无新内容时也保持已完成状态）
+                existing: Dict[str, Dict] = {}
+                for suffix in ["_contents.json", "_reuse.json"]:
+                    fp = os.path.join(task_dir, f"creator_{user_id}{suffix}")
+                    if os.path.exists(fp):
+                        try:
+                            with open(fp, "r", encoding="utf-8") as f:
+                                arr = json.load(f)
+                            if isinstance(arr, list):
+                                for it in arr:
+                                    nid = it.get("note_id")
+                                    if nid:
+                                        existing[nid] = it
+                        except Exception:
+                            pass
+                for n in new_notes:
+                    nid = n.get("note_id")
+                    if nid:
+                        existing[nid] = n
+                merged = sorted(existing.values(), key=lambda x: _safe_int(x.get("time", 0)), reverse=True)
+                with open(contents_file, "w", encoding="utf-8") as f:
+                    json.dump(merged, f, ensure_ascii=False, indent=2)
+                if new_notes:
+                    utils.logger.info(f"  增量合并: 新增 {len(new_notes)} 条，合计 {len(merged)} 条")
+                else:
+                    utils.logger.info(f"  增量: 无新内容，保持原有 {len(merged)} 条")
+            elif new_notes:
                 with open(contents_file, "w", encoding="utf-8") as f:
                     json.dump(new_notes, f, ensure_ascii=False, indent=2)
                 utils.logger.info(f"  新爬 {len(new_notes)} 条保存到 {contents_file}")
 
             # 合并：如果之前有 partial 的旧数据，与新数据合并（按 note_id 去重）
-            _merge_partial_data(task_dir, user_id, new_notes)
+            if not incremental_this_creator:
+                _merge_partial_data(task_dir, user_id, new_notes)
 
             # 标记完成
             progress.mark_completed(creator_url)

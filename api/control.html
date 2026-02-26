@@ -306,6 +306,7 @@
             <button class="tab-btn" :class="{ active: tab === 'config' }" @click="tab = 'config'">配置管理</button>
             <button class="tab-btn" :class="{ active: tab === 'launch' }" @click="tab = 'launch'">启动控制</button>
             <button class="tab-btn" :class="{ active: tab === 'log' }" @click="switchToLog">实时日志</button>
+            <button class="tab-btn" :class="{ active: tab === 'files' }" @click="switchToFiles">文件管理</button>
         </div>
 
         <!-- ============ 配置 Tab ============ -->
@@ -328,6 +329,7 @@
                         <select class="form-select" v-model="config.batch_crawl.crawl_mode">
                             <option value="full">全量爬取</option>
                             <option value="date_range">日期范围</option>
+                            <option value="incremental">增量更新（仅爬新内容）</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -382,6 +384,13 @@
                             <label class="form-label">复用历史数据</label>
                             <div class="switch" :class="{ on: config.batch_crawl.reuse_history }"
                                  @click="config.batch_crawl.reuse_history = !config.batch_crawl.reuse_history"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">每次全量（重置进度，全部重爬）</label>
+                            <div class="switch" :class="{ on: config.batch_crawl.force_recrawl }"
+                                 @click="config.batch_crawl.force_recrawl = !config.batch_crawl.force_recrawl"></div>
                         </div>
                     </div>
                 </div>
@@ -655,6 +664,78 @@
                     <div v-for="(line, i) in logLines" :key="i" class="log-line">{{ line }}</div>
                 </div>
             </div>
+        </div>
+
+        <!-- ============ 文件管理 Tab ============ -->
+        <div v-show="tab === 'files'">
+            <div class="card">
+                <div class="card-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>数据文件</span>
+                    <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;" @click="loadFiles">刷新</button>
+                </div>
+                <div v-if="files.length" class="progress-table" style="margin: 0;">
+                    <table>
+                        <thead>
+                            <tr><th>文件名</th><th>大小</th><th>修改时间</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="f in files" :key="f.name">
+                                <td>
+                                    <span :style="f.type === 'excel' ? 'color: var(--success)' : ''">{{ f.type === 'excel' ? '📗' : '📄' }}</span>
+                                    <span style="margin-left: 6px;">{{ f.name }}</span>
+                                    <span v-if="f.note_count" style="font-size: 11px; color: var(--text-dim);">({{ f.note_count }} 条)</span>
+                                </td>
+                                <td>{{ (f.size / 1024).toFixed(1) }} KB</td>
+                                <td>{{ f.modified }}</td>
+                                <td>
+                                    <button v-if="f.viewable" class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;"
+                                            @click="openFileView(f)">查看</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div v-else style="text-align: center; padding: 40px; color: var(--text-dim);">暂无数据文件</div>
+            </div>
+        </div>
+
+        <!-- 文件预览弹窗 -->
+        <div v-if="fileView.visible" style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px;"
+             @click.self="closeFileView">
+        <div style="background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 900px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border);">
+                <span style="font-size: 14px; font-weight: 500;">{{ fileView.name }}</span>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span v-if="fileView.data" style="font-size: 12px; color: var(--text-dim);">共 {{ fileView.data.total }} 条</span>
+                    <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;" @click="closeFileView">关闭</button>
+                </div>
+            </div>
+            <div v-if="fileView.loading" style="padding: 40px; text-align: center; color: var(--text-dim);">加载中...</div>
+            <div v-else-if="fileView.data?.type === 'list'" style="flex: 1; overflow: auto; padding: 16px;">
+                <div style="overflow-x: auto;">
+                    <table class="progress-table" style="font-size: 12px;">
+                        <thead><tr><th v-for="fd in fileView.data.fields" :key="fd">{{ fd }}</th></tr></thead>
+                        <tbody>
+                            <tr v-for="(row, i) in fileView.data.items" :key="i">
+                                <td v-for="fd in fileView.data.fields" :key="fd" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="String(row[fd] ?? '')">{{ row[fd] }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" @click="fileViewPrevPage" :disabled="fileView.data.offset <= 0">上一页</button>
+                    <span style="font-size: 12px; color: var(--text-dim);">{{ fileView.data.offset + 1 }}-{{ Math.min(fileView.data.offset + fileView.data.limit, fileView.data.total) }} / {{ fileView.data.total }}</span>
+                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" @click="fileViewNextPage" :disabled="!fileView.data?.has_more">下一页</button>
+                </div>
+            </div>
+            <div v-else-if="fileView.data?.type === 'dict'" style="flex: 1; overflow: auto; padding: 16px; font-size: 12px;">
+                <pre style="white-space: pre-wrap; color: var(--text-muted);">{{ JSON.stringify(fileView.data.content, null, 2) }}</pre>
+            </div>
+            <div v-else-if="fileView.data?.type === 'raw'" style="flex: 1; overflow: auto; padding: 16px; font-size: 12px;">
+                <pre style="white-space: pre-wrap; color: var(--text-muted);">{{ fileView.data.content }}</pre>
+            </div>
+            <div v-else-if="fileView.error" style="padding: 40px; text-align: center; color: var(--danger);">{{ fileView.error }}</div>
+        </div>
         </div>
 
     </div>
@@ -951,6 +1032,65 @@
                     connectLogWs();
                 }
 
+                // ── 文件管理 ──
+                const files = ref([]);
+                const fileView = reactive({ visible: false, name: '', path: '', data: null, loading: false, error: '', offset: 0, limit: 50 });
+
+                async function loadFiles() {
+                    try {
+                        const res = await authFetch('/api/dashboard/files');
+                        const data = await res.json();
+                        if (data.success) files.value = data.data || [];
+                    } catch (e) {
+                        showToast('加载文件列表失败', 'error');
+                    }
+                }
+
+                function openFileView(f) {
+                    fileView.visible = true;
+                    fileView.name = f.name;
+                    fileView.path = f.path;
+                    fileView.offset = 0;
+                    fileView.limit = 50;
+                    fileView.data = null;
+                    fileView.error = '';
+                    loadFilePage();
+                }
+
+                async function loadFilePage() {
+                    fileView.loading = true;
+                    fileView.error = '';
+                    try {
+                        const url = `/api/dashboard/files/view?path=${encodeURIComponent(fileView.path)}&offset=${fileView.offset}&limit=${fileView.limit}`;
+                        const res = await authFetch(url);
+                        const data = await res.json();
+                        if (data.success) fileView.data = data.data;
+                        else fileView.error = data.detail || '加载失败';
+                    } catch (e) { fileView.error = e.message || '请求失败'; }
+                    finally { fileView.loading = false; }
+                }
+
+                function fileViewPrevPage() {
+                    const limit = fileView.data?.limit || fileView.limit;
+                    if (fileView.offset <= 0) return;
+                    fileView.offset = Math.max(0, fileView.offset - limit);
+                    loadFilePage();
+                }
+
+                function fileViewNextPage() {
+                    const limit = fileView.data?.limit || fileView.limit;
+                    if (!fileView.data?.has_more) return;
+                    fileView.offset = fileView.offset + limit;
+                    loadFilePage();
+                }
+
+                function closeFileView() { fileView.visible = false; }
+
+                function switchToFiles() {
+                    tab.value = 'files';
+                    loadFiles();
+                }
+
                 // ── 生命周期 ──
                 onMounted(async () => {
                     const ok = await checkAuth();
@@ -980,6 +1120,7 @@
                     showToast, loadConfig, saveConfig,
                     startCrawler, stopCrawler, formatDuration,
                     clearLogs, switchToLog,
+                    files, fileView, loadFiles, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, switchToFiles,
                 };
             }
         }).mount('#app');

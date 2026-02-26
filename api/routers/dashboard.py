@@ -119,6 +119,7 @@ class BatchStartRequest(BaseModel):
     skip_feishu: bool = True
     enable_comments: bool = False
     max_notes: int = 3000
+    force_recrawl: bool = False
 
 
 @router.post("/batch/start")
@@ -141,6 +142,8 @@ async def start_batch_crawl(request: BatchStartRequest):
     cmd.extend(["--max-notes", str(request.max_notes)])
     if request.enable_comments:
         cmd.append("--enable-comments")
+    if request.force_recrawl:
+        cmd.append("--force-recrawl")
 
     try:
         _batch_process = subprocess.Popen(
@@ -230,11 +233,42 @@ async def get_batch_status():
     }
 
 
+CRAWLER_LOG_PATH = PROJECT_ROOT / "logs" / "crawler.log"
+
+
+def _read_crawler_log_tail(n: int = 500) -> list:
+    """从 crawler.log 读取最后 n 行，转为 Dashboard 日志格式（控制面板/外部启动时用）"""
+    if not CRAWLER_LOG_PATH.exists():
+        return []
+    try:
+        with open(CRAWLER_LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            chunk = min(size, 512 * 1024)
+            f.seek(max(0, size - chunk))
+            raw = f.read()
+        lines = [ln.rstrip("\n\r") for ln in raw.splitlines() if ln.strip()][-n:]
+        result = []
+        for line in lines:
+            time_part = "--"
+            msg_part = line
+            if len(line) >= 19 and line[4] == "-" and line[7] == "-" and line[10] == " " and line[13] == ":":
+                time_part = line[11:19]
+                msg_part = line[20:] if len(line) > 20 else line
+            result.append({"time": time_part, "message": msg_part})
+        return result
+    except Exception:
+        return []
+
+
 @router.get("/batch/logs")
-async def get_batch_logs(limit: int = 100, offset: int = 0):
-    """获取批量爬取日志"""
-    logs = _batch_logs[offset:offset + limit] if limit > 0 else _batch_logs[offset:]
-    return {"success": True, "data": logs, "total": len(_batch_logs)}
+async def get_batch_logs(limit: int = 500, offset: int = 0):
+    """获取批量爬取日志。Dashboard 启动时用 _batch_logs；否则从 crawler.log 读取（控制面板/外部启动）"""
+    if _batch_logs:
+        logs = _batch_logs[offset:offset + limit] if limit > 0 else _batch_logs[offset:]
+        return {"success": True, "data": logs, "total": len(_batch_logs)}
+    fallback = _read_crawler_log_tail(limit)
+    return {"success": True, "data": fallback, "total": len(fallback)}
 
 
 async def _read_batch_output():
@@ -670,9 +704,18 @@ async def get_session_status():
         result["config_cookie"] = ws_val
     result["config_cookie_raw"] = ws_val
 
-    # 爬虫进程状态
+    # 爬虫进程状态：Dashboard 启动 / 控制面板启动 / 外部 CLI 启动
     if _batch_process and _batch_process.poll() is None:
         result["crawler_running"] = True
+    else:
+        try:
+            from .control import _crawler_process, _detect_external_crawler
+            if _crawler_process and _crawler_process.returncode is None:
+                result["crawler_running"] = True
+            elif _detect_external_crawler():
+                result["crawler_running"] = True
+        except Exception:
+            pass
 
     # Login 路由的登录流程状态
     try:
