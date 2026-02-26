@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
-from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router
+from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router, terminal_router, shell_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -60,8 +60,10 @@ DASHBOARD_PASSWORD = os.environ.get("MC_DASHBOARD_PWD", "changeme")
 
 _PASSWORD_HASH = hashlib.sha256(DASHBOARD_PASSWORD.encode()).hexdigest()
 _auth_tokens: set = set()
+_shell_tokens: set = set()
+_shell_challenges: dict = {}  # nonce -> expiry_time
 
-_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico"}
+_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico", "/api/shell/challenge", "/api/shell/auth"}
 
 
 @app.post("/api/auth/login")
@@ -87,6 +89,55 @@ async def auth_check(request: Request):
     return {"success": True, "authenticated": token in _auth_tokens}
 
 
+# ==================== Shell 命令行独立认证（challenge-response，无明文密码） ====================
+
+@app.get("/api/shell/challenge")
+async def shell_challenge():
+    """获取随机 nonce，用于 challenge-response 认证"""
+    import time
+    now = time.time()
+    expired = [k for k, v in _shell_challenges.items() if v < now]
+    for k in expired:
+        del _shell_challenges[k]
+    nonce = secrets.token_hex(32)
+    _shell_challenges[nonce] = now + 300  # 5 分钟有效
+    return {"nonce": nonce}
+
+
+@app.post("/api/shell/auth")
+async def shell_auth(request: Request):
+    """
+    命令行解锁：客户端发送 response = SHA256(nonce + SHA256(password))，
+    服务端用存储的 hash 验证，密码永不传至网络。
+    """
+    import time
+    try:
+        body = await request.json()
+        nonce = body.get("nonce", "")
+        response = body.get("response", "")
+    except Exception:
+        return JSONResponse(status_code=400, content={"success": False, "message": "请求格式错误"})
+
+    if not nonce or not response:
+        return JSONResponse(status_code=400, content={"success": False, "message": "缺少参数"})
+
+    now = time.time()
+    if nonce not in _shell_challenges:
+        return JSONResponse(status_code=401, content={"success": False, "message": "挑战已过期，请刷新"})
+    if _shell_challenges[nonce] < now:
+        del _shell_challenges[nonce]
+        return JSONResponse(status_code=401, content={"success": False, "message": "挑战已过期"})
+    del _shell_challenges[nonce]
+
+    expected = hashlib.sha256((nonce + _PASSWORD_HASH).encode()).hexdigest()
+    if not hmac.compare_digest(response, expected):
+        return JSONResponse(status_code=401, content={"success": False, "message": "解锁失败"})
+
+    token = secrets.token_hex(32)
+    _shell_tokens.add(token)
+    return {"success": True, "token": token}
+
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
@@ -99,7 +150,10 @@ async def auth_middleware(request: Request, call_next):
 
     if "upgrade" in request.headers.get("upgrade", "").lower() or path.endswith("/ws"):
         token = request.query_params.get("token", "")
-        if token in _auth_tokens:
+        if path == "/api/shell/ws":
+            if token in _shell_tokens:
+                return await call_next(request)
+        elif token in _auth_tokens:
             return await call_next(request)
         return JSONResponse(status_code=401, content={"detail": "未授权"})
 
@@ -119,6 +173,8 @@ app.include_router(websocket_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(login_router, prefix="/api")
 app.include_router(control_router, prefix="/api")
+app.include_router(terminal_router, prefix="/api")
+app.include_router(shell_router, prefix="/api")
 
 
 @app.get("/")
@@ -164,6 +220,24 @@ async def serve_control_page():
     if os.path.exists(control_path):
         return FileResponse(control_path, media_type="text/html")
     return {"message": "Control panel not found"}
+
+
+@app.get("/terminal")
+async def serve_terminal_page():
+    """Return web terminal log viewer page"""
+    terminal_path = os.path.join(os.path.dirname(__file__), "terminal.html")
+    if os.path.exists(terminal_path):
+        return FileResponse(terminal_path, media_type="text/html")
+    return {"message": "Terminal page not found"}
+
+
+@app.get("/shell")
+async def serve_shell_page():
+    """Return shell command line page (password protected)"""
+    shell_path = os.path.join(os.path.dirname(__file__), "shell.html")
+    if os.path.exists(shell_path):
+        return FileResponse(shell_path, media_type="text/html")
+    return {"message": "Shell page not found"}
 
 
 @app.get("/api/health")

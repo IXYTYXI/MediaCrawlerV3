@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaCrawler - 命令行</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0c0c0c;
+            --toolbar-bg: #1a1a2e;
+            --border: #2a2a3e;
+            --text: #e0e0e0;
+            --text-muted: #888;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--toolbar-bg);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .toolbar-title { font-size: 13px; font-weight: 600; color: var(--primary); }
+        .spacer { flex: 1; }
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+        .status-dot.connected { background: var(--success); }
+        .status-dot.disconnected { background: var(--danger); }
+        .status-dot.connecting { background: var(--warning); animation: pulse 1.5s infinite; }
+        .status-text { font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .link-btn {
+            font-size: 12px; color: var(--text-muted); text-decoration: none;
+            padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+        }
+        .link-btn:hover { color: var(--text); border-color: #555; }
+
+        #terminal-container { flex: 1; padding: 4px; overflow: hidden; min-height: 200px; }
+        .xterm { height: 100%; }
+
+        .login-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+        .login-overlay * { pointer-events: auto; }
+
+        .login-box {
+            background: var(--toolbar-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            width: 360px;
+            text-align: center;
+        }
+
+        .login-box h2 { margin-bottom: 8px; font-size: 18px; }
+        .login-box p { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+        .login-box input {
+            width: 100%; padding: 10px 14px; border-radius: 8px;
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text); font-size: 14px; margin-bottom: 12px;
+            outline: none;
+        }
+        .login-box .error { color: var(--danger); font-size: 13px; margin-bottom: 12px; }
+        .login-box button {
+            width: 100%; padding: 10px; border-radius: 8px;
+            border: none; background: var(--primary); color: #fff;
+            font-size: 14px; cursor: pointer;
+        }
+        .login-box button:hover { opacity: 0.9; }
+
+    </style>
+</head>
+<body>
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <h2>🔐 命令行解锁</h2>
+            <p>请输入密码解锁，密码不会以明文传输</p>
+            <input type="password" id="pwdInput" placeholder="密码" autocomplete="off" tabindex="1" autofocus />
+            <div class="error" id="loginError"></div>
+            <button id="loginBtn">解锁</button>
+        </div>
+    </div>
+
+    <div id="mainArea" style="display:none; flex-direction:column; height:100vh;">
+        <div class="toolbar">
+            <span class="toolbar-title">Shell</span>
+            <span class="spacer"></span>
+            <span class="status-dot" id="statusDot"></span>
+            <span class="status-text" id="statusText">未连接</span>
+            <a href="/control" class="link-btn" style="margin-left:12px;">控制面板</a>
+            <a href="/dashboard" class="link-btn">仪表盘</a>
+        </div>
+        <div id="terminal-container"></div>
+    </div>
+
+    <!-- 纯 JS SHA256，HTTP 环境下 crypto.subtle 不可用时仍能工作 -->
+    <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.9.0/src/sha256.min.js"></script>
+    <script>
+    (function() {
+        let ws = null;
+        let term = null;
+        let fitAddon = null;
+        let inputBuffer = '';
+        let shellToken = '';
+        let xtermLoaded = false;
+
+        function setStatus(state) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (dot) dot.className = 'status-dot ' + state;
+            if (text) text.textContent = { connected: '已连接', disconnected: '已断开', connecting: '连接中...' }[state] || state;
+        }
+
+        function sha256Hex(str) {
+            return typeof sha256 === 'function' ? Promise.resolve(sha256(str)) : Promise.reject(new Error('SHA256 不可用'));
+        }
+
+        async function doUnlock() {
+            const pwdEl = document.getElementById('pwdInput');
+            const pwd = pwdEl ? pwdEl.value.trim() : '';
+            const errEl = document.getElementById('loginError');
+            if (errEl) errEl.textContent = '';
+            if (!pwd) {
+                if (errEl) errEl.textContent = '请输入密码';
+                return;
+            }
+            const btn = document.getElementById('loginBtn');
+            if (btn) { btn.disabled = true; btn.textContent = '验证中...'; }
+            try {
+                const challengeRes = await fetch('/api/shell/challenge');
+                const challengeData = await challengeRes.json();
+                const nonce = challengeData.nonce;
+                if (!nonce) {
+                    if (errEl) errEl.textContent = '获取挑战失败';
+                    return;
+                }
+                const pwdHash = await sha256Hex(pwd);
+                const response = await sha256Hex(nonce + pwdHash);
+                const authRes = await fetch('/api/shell/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nonce, response }),
+                });
+                const data = await authRes.json();
+                if (data.success && data.token) {
+                    shellToken = data.token;
+                    sessionStorage.setItem('shell_token', shellToken);
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('mainArea').style.display = 'flex';
+                    loadXtermAndConnect();
+                } else {
+                    if (errEl) errEl.textContent = data.message || '解锁失败';
+                }
+            } catch (e) {
+                if (errEl) errEl.textContent = '请求失败: ' + (e.message || String(e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '解锁'; }
+                if (pwdEl) setTimeout(() => pwdEl.focus(), 50);
+            }
+        }
+
+        function disposeTerminal() {
+            if (term) {
+                term.dispose();
+                term = null;
+                fitAddon = null;
+            }
+        }
+
+        function loadXtermAndConnect() {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css';
+            document.head.appendChild(link);
+            const s1 = document.createElement('script');
+            s1.src = 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js';
+            s1.onload = () => {
+                const s2 = document.createElement('script');
+                s2.src = 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js';
+                s2.onload = () => { xtermLoaded = true; initTerminal(); connect(); };
+                document.body.appendChild(s2);
+            };
+            document.body.appendChild(s1);
+        }
+
+        function initTerminal() {
+            if (term) return;
+            term = new window.Terminal({
+                theme: {
+                    background: '#0c0c0c',
+                    foreground: '#d4d4d4',
+                    cursor: '#10b981',
+                    cursorAccent: '#0c0c0c',
+                    selectionBackground: 'rgba(255,255,255,0.2)',
+                    black: '#1e1e1e', red: '#f44747', green: '#6a9955', yellow: '#dcdcaa',
+                    blue: '#569cd6', magenta: '#c586c0', cyan: '#4ec9b0', white: '#d4d4d4',
+                    brightBlack: '#808080', brightRed: '#f44747', brightGreen: '#6a9955',
+                    brightYellow: '#dcdcaa', brightBlue: '#569cd6', brightMagenta: '#c586c0',
+                    brightCyan: '#4ec9b0', brightWhite: '#ffffff',
+                },
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', Menlo, Consolas, monospace",
+                lineHeight: 1.35,
+                cursorBlink: true,
+                cursorStyle: 'bar',
+                scrollback: 10000,
+                convertEol: true,
+                disableStdin: false,
+            });
+            fitAddon = new window.FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(document.getElementById('terminal-container'));
+            fitAddon.fit();
+            window.addEventListener('resize', () => fitAddon && fitAddon.fit());
+
+            term.onData(data => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                if (data === '\x03' || data === '\x1b') {
+                    inputBuffer = '';
+                    ws.send(data);
+                } else if (data === '\r' || data === '\n') {
+                    if (inputBuffer.trim()) {
+                        ws.send(inputBuffer);
+                        inputBuffer = '';
+                    }
+                    term.write('\r\n');
+                } else if (data === '\u007F' || data === '\b') {
+                    if (inputBuffer.length > 0) {
+                        inputBuffer = inputBuffer.slice(0, -1);
+                        term.write('\b \b');
+                    }
+                } else {
+                    inputBuffer += data;
+                    term.write(data);
+                }
+            });
+        }
+
+        function connect() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                ws.close();
+            }
+            setStatus('connecting');
+            let opened = false;
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = `${proto}//${location.host}/api/shell/ws?token=${encodeURIComponent(shellToken)}`;
+            ws = new WebSocket(url);
+
+            ws.onopen = () => { opened = true; setStatus('connected'); };
+            ws.onmessage = (e) => { if (term) term.write(e.data); };
+            ws.onclose = (e) => {
+                setStatus('disconnected');
+                if (!opened && (e.code === 4001 || e.code === 1006)) {
+                    sessionStorage.removeItem('shell_token');
+                    shellToken = '';
+                    document.getElementById('mainArea').style.display = 'none';
+                    document.getElementById('loginOverlay').style.display = 'flex';
+                    disposeTerminal();
+                    setTimeout(() => {
+                        const inp = document.getElementById('pwdInput');
+                        if (inp) inp.focus();
+                    }, 100);
+                }
+            };
+            ws.onerror = () => setStatus('disconnected');
+        }
+
+        // Startup：直接显示解锁界面，不加载 xterm，避免任何键盘抢占
+        (function() {
+            document.getElementById('loginBtn').onclick = doUnlock;
+            document.getElementById('pwdInput').onkeydown = (e) => { if (e.key === 'Enter') doUnlock(); };
+            document.getElementById('pwdInput').focus();
+        })();
+    })();
+    </script>
+</body>
+</html>

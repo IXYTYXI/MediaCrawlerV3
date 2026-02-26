@@ -265,6 +265,26 @@
 </head>
 <body>
     <div id="app" class="container">
+        <!-- 认证检查中 -->
+        <div v-if="authChecking" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;">
+            <p style="color:var(--text-muted);font-size:14px;">正在验证登录状态...</p>
+        </div>
+
+        <!-- 登录遮罩 -->
+        <div v-if="!authChecking && !authenticated" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;">
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:340px;text-align:center;">
+                <h2 style="margin-bottom:8px;">控制面板登录</h2>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">请输入管理密码</p>
+                <input v-model="loginPassword" type="password" placeholder="密码" ref="pwdInput"
+                       @keyup.enter="doLogin"
+                       style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;margin-bottom:12px;outline:none;" />
+                <div v-if="loginError" style="color:#ef4444;font-size:13px;margin-bottom:12px;">{{ loginError }}</div>
+                <button @click="doLogin" style="width:100%;padding:10px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer;">
+                    登录
+                </button>
+            </div>
+        </div>
+
         <!-- Toast -->
         <div class="toast" :class="[toast.type, toast.show ? 'show' : '']">{{ toast.msg }}</div>
 
@@ -276,6 +296,7 @@
 
         <!-- Nav -->
         <div class="nav-links">
+            <a href="/shell">命令行</a>
             <a href="/login">远程登录</a>
             <a href="/dashboard">数据仪表盘</a>
         </div>
@@ -570,29 +591,32 @@
         <div v-show="tab === 'launch'">
             <div class="card">
                 <div class="launch-panel">
-                    <!-- 状态 -->
-                    <div class="status-badge" :class="crawlerStatus">
-                        <div class="status-dot" :class="crawlerStatus"></div>
+                    <!-- 状态（使用 displayStatus 保证图标与文字一致） -->
+                    <div class="status-badge" :class="displayStatus">
+                        <div class="status-dot" :class="displayStatus"></div>
                         {{ statusText }}
+                    </div>
+                    <div v-if="statusFetchError" class="launch-info" style="color:var(--warning);">
+                        状态获取失败，请 <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" @click="refreshStatus">刷新</button>
                     </div>
 
                     <!-- 运行信息 -->
-                    <div class="launch-info" v-if="crawlerStatus === 'running'">
+                    <div class="launch-info" v-if="displayStatus === 'running'">
                         PID: <span>{{ crawlerPid }}</span> &nbsp;|&nbsp;
                         运行时间: <span>{{ formatDuration(runningSeconds) }}</span>
                     </div>
-                    <div class="launch-info" v-if="crawlerStatus === 'stopped' && exitCode !== null">
+                    <div class="launch-info" v-if="displayStatus === 'stopped' && exitCode !== null">
                         退出码: <span :style="{ color: exitCode === 0 ? 'var(--success)' : 'var(--danger)' }">{{ exitCode }}</span>
                     </div>
 
                     <!-- 按钮 -->
                     <div style="display: flex; gap: 12px;">
                         <button class="btn btn-success" @click="startCrawler"
-                                :disabled="crawlerStatus === 'running' || starting">
+                                :disabled="displayStatus === 'running' || starting">
                             {{ starting ? '启动中...' : '启动爬虫' }}
                         </button>
                         <button class="btn btn-danger" @click="stopCrawler"
-                                :disabled="crawlerStatus !== 'running' || stopping">
+                                :disabled="displayStatus !== 'running' || stopping">
                             {{ stopping ? '停止中...' : '停止爬虫' }}
                         </button>
                     </div>
@@ -611,8 +635,8 @@
             <div class="card" style="padding: 16px;">
                 <div class="log-toolbar">
                     <div class="left">
-                        <div class="status-badge" :class="crawlerStatus" style="font-size: 12px; padding: 4px 10px;">
-                            <div class="status-dot" :class="crawlerStatus" style="width: 6px; height: 6px;"></div>
+                        <div class="status-badge" :class="displayStatus" style="font-size: 12px; padding: 4px 10px;">
+                            <div class="status-dot" :class="displayStatus" style="width: 6px; height: 6px;"></div>
                             {{ statusText }}
                         </div>
                         <span style="font-size: 12px; color: var(--text-dim);">{{ logLines.length }} 行</span>
@@ -642,6 +666,67 @@
 
         createApp({
             setup() {
+                // ── 认证状态 ──
+                const authChecking = ref(true);
+                const authenticated = ref(false);
+                const loginPassword = ref('');
+                const loginError = ref('');
+                const pwdInput = ref(null);
+                let authToken = localStorage.getItem('mc_token') || '';
+
+                async function doLogin() {
+                    loginError.value = '';
+                    try {
+                        const res = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: loginPassword.value }),
+                        });
+                        const data = await res.json();
+                        if (data.success && data.token) {
+                            authToken = data.token;
+                            localStorage.setItem('mc_token', authToken);
+                            authenticated.value = true;
+                            loginPassword.value = '';
+                            loadConfig();
+                            fetchStatus();
+                            statusTimer = setInterval(fetchStatus, 5000);
+                        } else {
+                            loginError.value = data.message || '登录失败';
+                        }
+                    } catch (e) {
+                        loginError.value = '请求失败: ' + e.message;
+                    }
+                }
+
+                async function checkAuth() {
+                    if (!authToken) return false;
+                    try {
+                        const res = await fetch('/api/auth/check', {
+                            headers: { 'Authorization': 'Bearer ' + authToken },
+                        });
+                        const data = await res.json();
+                        return data.authenticated === true;
+                    } catch { return false; }
+                }
+
+                function authHeaders(extra = {}) {
+                    return { 'Authorization': 'Bearer ' + authToken, ...extra };
+                }
+
+                async function authFetch(url, opts = {}) {
+                    opts.headers = authHeaders(opts.headers || {});
+                    const res = await fetch(url, opts);
+                    if (res.status === 401) {
+                        if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+                        authenticated.value = false;
+                        authToken = '';
+                        localStorage.removeItem('mc_token');
+                        throw new Error('认证已过期，请重新登录');
+                    }
+                    return res;
+                }
+
                 // ── 基础状态 ──
                 const tab = ref('launch');
                 const config = reactive({});
@@ -679,10 +764,9 @@
                 // ── 配置 ──
                 async function loadConfig() {
                     try {
-                        const res = await fetch(API + '/config');
+                        const res = await authFetch(API + '/config');
                         const data = await res.json();
                         if (data.success) {
-                            // 深拷贝进 reactive
                             Object.keys(data.config).forEach(k => { config[k] = data.config[k]; });
                             showToast('配置已加载');
                         } else {
@@ -698,7 +782,7 @@
                     try {
                         // 深拷贝去除 reactive 代理
                         const raw = JSON.parse(JSON.stringify(config));
-                        const res = await fetch(API + '/config', {
+                        const res = await authFetch(API + '/config', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(raw),
@@ -717,21 +801,34 @@
                 }
 
                 // ── 爬虫控制 ──
+                const statusFetchError = ref(false);
                 async function fetchStatus() {
                     try {
-                        const res = await fetch(API + '/status');
+                        const res = await authFetch(API + '/status');
                         const data = await res.json();
-                        crawlerStatus.value = data.status;
+                        statusFetchError.value = false;
                         crawlerPid.value = data.pid;
                         runningSeconds.value = data.running_seconds || 0;
                         exitCode.value = data.exit_code;
-                    } catch (e) {}
+                        // API 返回 pid 且 running_seconds>0 时，视为运行中（兜底外部检测）
+                        const effectiveStatus = (data.pid && (data.running_seconds || 0) > 0)
+                            ? 'running' : data.status;
+                        crawlerStatus.value = effectiveStatus;
+                    } catch (e) {
+                        if (e.message !== '认证已过期，请重新登录') statusFetchError.value = true;
+                    }
+                }
+
+                async function refreshStatus() {
+                    await fetchStatus();
+                    if (statusFetchError.value) showToast('状态刷新失败，请检查 API', 'error');
+                    else showToast('状态已刷新');
                 }
 
                 async function startCrawler() {
                     starting.value = true;
                     try {
-                        const res = await fetch(API + '/start', { method: 'POST' });
+                        const res = await authFetch(API + '/start', { method: 'POST' });
                         const data = await res.json();
                         if (data.success) {
                             showToast('爬虫已启动, PID: ' + data.pid);
@@ -755,7 +852,7 @@
                 async function stopCrawler() {
                     stopping.value = true;
                     try {
-                        const res = await fetch(API + '/stop', { method: 'POST' });
+                        const res = await authFetch(API + '/stop', { method: 'POST' });
                         const data = await res.json();
                         if (data.success) {
                             showToast('爬虫已停止');
@@ -781,8 +878,13 @@
                     return `${s}s`;
                 }
 
+                // 显示用状态：有 pid+运行时长时优先显示运行中，避免状态不同步
+                const displayStatus = computed(() => {
+                    if (crawlerPid.value && runningSeconds.value > 0) return 'running';
+                    return crawlerStatus.value;
+                });
                 const statusText = computed(() => {
-                    switch (crawlerStatus.value) {
+                    switch (displayStatus.value) {
                         case 'running': return '运行中';
                         case 'stopped': return '已停止';
                         default: return '未启动';
@@ -794,7 +896,7 @@
                     if (logWs && logWs.readyState <= 1) return; // 已连接
 
                     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    const url = `${proto}//${location.host}/api/control/ws/log`;
+                    const url = `${proto}//${location.host}/api/control/ws/log?token=${encodeURIComponent(authToken)}`;
                     logWs = new WebSocket(url);
 
                     logWs.onmessage = (evt) => {
@@ -811,10 +913,15 @@
                                 }
                                 scrollToBottom();
                             } else if (msg.type === 'status') {
-                                crawlerStatus.value = msg.status;
+                                statusFetchError.value = false;
                                 if (msg.exit_code !== undefined) exitCode.value = msg.exit_code;
                                 if (msg.pid) crawlerPid.value = msg.pid;
                                 if (msg.running_seconds) runningSeconds.value = msg.running_seconds;
+                                // 有 exit_code 表示已退出，用 stopped；否则 pid+running_seconds>0 时视为运行中（兜底）
+                                const effective = (msg.exit_code !== undefined)
+                                    ? msg.status
+                                    : ((msg.pid && (msg.running_seconds || 0) > 0) ? 'running' : msg.status);
+                                crawlerStatus.value = effective;
                             }
                         } catch (e) {}
                     };
@@ -845,13 +952,17 @@
                 }
 
                 // ── 生命周期 ──
-                onMounted(() => {
-                    loadConfig();
-                    fetchStatus();
-                    // 定时刷新状态
-                    statusTimer = setInterval(() => {
+                onMounted(async () => {
+                    const ok = await checkAuth();
+                    authChecking.value = false;
+                    if (ok) {
+                        authenticated.value = true;
+                        loadConfig();
                         fetchStatus();
-                    }, 5000);
+                        statusTimer = setInterval(fetchStatus, 5000);
+                    } else {
+                        nextTick(() => { if (pwdInput.value) pwdInput.value.focus(); });
+                    }
                 });
 
                 onUnmounted(() => {
@@ -860,14 +971,14 @@
                 });
 
                 return {
+                    authChecking, authenticated, loginPassword, loginError, pwdInput, doLogin,
                     tab, config, saving, toast,
                     crawlerStatus, crawlerPid, runningSeconds, exitCode,
-                    starting, stopping, statusText,
-                    progressTasks, progressLoading,
+                    displayStatus, statusFetchError,
+                    starting, stopping, statusText, fetchStatus, refreshStatus,
                     logLines, autoScroll, logEl,
                     showToast, loadConfig, saveConfig,
                     startCrawler, stopCrawler, formatDuration,
-                    loadProgress, clearFailed, resetProgress,
                     clearLogs, switchToLog,
                 };
             }

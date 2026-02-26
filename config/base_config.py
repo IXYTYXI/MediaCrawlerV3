@@ -24,7 +24,7 @@ _IS_LINUX = _platform.system() == "Linux"
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = "web_session=040069b8083b3cc3b8d6ce3bab3b4b03744aea"
+COOKIES = "web_session=040069b8083b3cc3b8d61fe4aa3b4b31c37ce7"
 
 # ==================== 手动 Session 回退 ====================
 # 当扫码登录失败、shared cookie 过期、浏览器 session 过期时，

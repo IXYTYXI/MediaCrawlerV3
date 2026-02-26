@@ -22,5 +22,7 @@ from .websocket import router as websocket_router
 from .dashboard import router as dashboard_router
 from .login import router as login_router
 from .control import router as control_router
+from .terminal import router as terminal_router
+from .shell import router as shell_router
 
-__all__ = ["crawler_router", "data_router", "websocket_router", "dashboard_router", "login_router", "control_router"]
+__all__ = ["crawler_router", "data_router", "websocket_router", "dashboard_router", "login_router", "control_router", "terminal_router", "shell_router"]

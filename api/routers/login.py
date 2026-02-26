@@ -122,6 +122,54 @@ async def cancel_login():
     return {"success": True, "message": "登录已取消"}
 
 
+@router.post("/clear-browser-cache")
+async def clear_browser_cache(platform: str = "xhs"):
+    """
+    清除浏览器持久化数据（Cache、Cookie、LocalStorage 等）。
+    会先关闭所有活跃的浏览器实例，然后删除整个 user_data_dir。
+    """
+    import shutil
+    import config as cfg
+
+    # 1. 关闭远程浏览器（WebSocket 模式）
+    await _ws_cleanup_browser()
+
+    # 2. 关闭扫码登录浏览器
+    await _cleanup_browser()
+
+    # 3. 等待浏览器进程释放文件锁
+    await asyncio.sleep(1)
+
+    # 4. 删除 user_data_dir
+    user_data_dir_name = cfg.USER_DATA_DIR % platform
+    user_data_dir = os.path.join(os.getcwd(), "browser_data", user_data_dir_name)
+
+    if not os.path.exists(user_data_dir):
+        return {"success": True, "message": "浏览器数据目录不存在，无需清除", "cleared_mb": 0}
+
+    try:
+        total_size = sum(
+            f.stat().st_size for f in __import__("pathlib").Path(user_data_dir).rglob("*") if f.is_file()
+        )
+        cleared_mb = round(total_size / 1024 / 1024, 1)
+    except Exception:
+        cleared_mb = 0
+
+    try:
+        shutil.rmtree(user_data_dir)
+        return {
+            "success": True,
+            "message": f"已清除浏览器数据 ({cleared_mb} MB)，下次启动将使用全新浏览器环境",
+            "cleared_mb": cleared_mb,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"清除失败: {e}（可能有浏览器进程仍在运行，请先关闭）",
+            "cleared_mb": 0,
+        }
+
+
 @router.post("/refresh")
 async def refresh_qrcode():
     """刷新二维码（重新截图当前页面）"""
@@ -146,6 +194,11 @@ async def _run_login_flow(platform: str):
     try:
         from playwright.async_api import async_playwright
         import config
+        from config.anti_crawl_loader import apply_anti_crawl_config
+        from tools.anti_crawl_utils import get_canvas_webgl_stealth_js
+
+        # 0. 加载反爬配置（浏览器指纹伪装等）
+        apply_anti_crawl_config(config)
 
         _login_state["message"] = "正在启动浏览器..."
 
@@ -177,6 +230,12 @@ async def _run_login_flow(platform: str):
         stealth_js_path = os.path.join(os.getcwd(), "libs", "stealth.min.js")
         if os.path.exists(stealth_js_path):
             await _context_page.add_init_script(path=stealth_js_path)
+        # 增强 Canvas/WebGL 指纹伪装（当配置开启时）
+        if getattr(config, "BROWSER_SPOOF_CANVAS", True) or getattr(config, "BROWSER_SPOOF_WEBGL", True):
+            try:
+                await _context_page.add_init_script(get_canvas_webgl_stealth_js())
+            except Exception:
+                pass
 
         _login_state["message"] = "正在打开小红书..."
         await _context_page.goto("https://www.xiaohongshu.com", wait_until="domcontentloaded")
@@ -686,6 +745,10 @@ async def ws_remote_browser(ws: WebSocket):
 
             from playwright.async_api import async_playwright
             import config
+            from config.anti_crawl_loader import apply_anti_crawl_config
+            from tools.anti_crawl_utils import get_canvas_webgl_stealth_js
+
+            apply_anti_crawl_config(config)
 
             _ws_playwright = await async_playwright().start()
 
@@ -708,6 +771,11 @@ async def ws_remote_browser(ws: WebSocket):
             stealth_js_path = os.path.join(os.getcwd(), "libs", "stealth.min.js")
             if os.path.exists(stealth_js_path):
                 await _ws_page.add_init_script(path=stealth_js_path)
+            if getattr(config, "BROWSER_SPOOF_CANVAS", True) or getattr(config, "BROWSER_SPOOF_WEBGL", True):
+                try:
+                    await _ws_page.add_init_script(get_canvas_webgl_stealth_js())
+                except Exception:
+                    pass
 
             if not await _ws_safe_send_json(ws, {"type": "status", "message": "正在打开小红书..."}):
                 return

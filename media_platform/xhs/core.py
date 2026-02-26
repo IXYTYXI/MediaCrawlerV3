@@ -85,6 +85,21 @@ class XiaoHongShuCrawler(AbstractCrawler):
             utils.logger.warning(f"[XiaoHongShuCrawler] 读取共享 cookie 文件失败: {e}")
             return ""
 
+    def _load_manual_web_session(self) -> str:
+        """从 config.MANUAL_WEB_SESSION 或 data/cookies/manual_web_session.txt 读取手动配置的 web_session"""
+        ws = getattr(config, "MANUAL_WEB_SESSION", "") or ""
+        if ws:
+            return ws.strip()
+        manual_file = os.path.join(os.getcwd(), "data", "cookies", "manual_web_session.txt")
+        try:
+            if os.path.exists(manual_file):
+                with open(manual_file, "r", encoding="utf-8") as f:
+                    ws = f.read().strip()
+                return ws
+        except Exception as e:
+            utils.logger.warning(f"[XiaoHongShuCrawler] 读取 manual_web_session.txt 失败: {e}")
+        return ""
+
     def _get_sleep_seconds(self, *, for_comments: bool = False) -> float:
         """使用高级随机分布生成等待时间"""
         from tools.anti_crawl_utils import generate_random_wait, get_wait_manager

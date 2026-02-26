@@ -437,6 +437,47 @@ def get_stealth_js() -> str:
     """
 
 
+def get_canvas_webgl_stealth_js() -> str:
+    """
+    获取仅包含 Canvas 和 WebGL 指纹伪装的 JS（不包含 webdriver 等，避免与 stealth.min.js 重复）
+    用于在已有 stealth.min.js 基础上增强指纹伪装
+    """
+    return """
+    (function() {
+        if (typeof window._xhs_canvas_webgl_stealth !== 'undefined') return;
+        window._xhs_canvas_webgl_stealth = true;
+        try {
+            var originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function(type) {
+                if (type === 'image/png' || type === 'image/jpeg') {
+                    var ctx = this.getContext('2d');
+                    if (ctx) {
+                        var imageData = ctx.getImageData(0, 0, this.width, this.height);
+                        for (var i = 0; i < imageData.data.length; i += 4) {
+                            imageData.data[i] = (imageData.data[i] + Math.floor(Math.random() * 2)) % 256;
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+                }
+                return originalToDataURL.apply(this, arguments);
+            };
+            var canvas = document.createElement('canvas');
+            var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                var handler = { apply: function(t, th, args) {
+                    if (args[0] === 37445) return 'Intel Inc.';
+                    if (args[0] === 37446) return 'Intel Iris OpenGL Engine';
+                    return Reflect.apply(t, th, args);
+                }};
+                WebGLRenderingContext.prototype.getParameter = new Proxy(
+                    WebGLRenderingContext.prototype.getParameter, handler
+                );
+            }
+        } catch (e) {}
+    })();
+    """
+
+
 async def inject_stealth_scripts(page, config) -> None:
     """
     注入反检测脚本到页面

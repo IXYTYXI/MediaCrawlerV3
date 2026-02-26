@@ -163,6 +163,8 @@
         .btn-secondary:hover:not(:disabled) { background: #475569; }
         .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
         .btn-danger:hover:not(:disabled) { background: #450a0a; }
+        .btn-warning { background: transparent; color: var(--warning); border: 1px solid var(--warning); }
+        .btn-warning:hover:not(:disabled) { background: #451a03; }
 
         /* 成功覆盖层 */
         .success-overlay {
@@ -352,6 +354,12 @@
                 <button v-if="loginSuccess || state === 'closed'" class="btn btn-primary" @click="startBrowser">
                     重新连接
                 </button>
+                <button v-if="!isLive"
+                        class="btn btn-warning"
+                        @click="clearBrowserCache"
+                        :disabled="clearing || state === 'connecting'">
+                    {{ clearing ? '清除中...' : '清除浏览器缓存' }}
+                </button>
             </div>
         </div>
 
@@ -367,6 +375,7 @@
         </div>
 
         <a href="/dashboard" class="back-link">&larr; 返回 Dashboard</a>
+        <a href="/terminal" class="back-link" style="margin-left: 24px;">🖥 终端日志</a>
     </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -385,6 +394,7 @@
                 const inputText = ref('');
                 const inputFocused = ref(false);
                 const textInput = ref(null);
+                const clearing = ref(false);
 
                 let ws = null;
                 let frameCount = 0;
@@ -617,6 +627,29 @@
                     sendEvent({ type: 'navigate', url: 'https://www.xiaohongshu.com' });
                 }
 
+                async function clearBrowserCache() {
+                    if (!confirm('确认清除浏览器缓存？\n\n这将删除浏览器的所有持久化数据（Cookie、缓存、本地存储等），不会影响已爬取的数据。\n清除后需要重新扫码登录。')) return;
+
+                    clearing.value = true;
+                    message.value = '正在清除浏览器缓存...';
+
+                    try {
+                        const resp = await fetch('/api/login/clear-browser-cache', { method: 'POST' });
+                        const result = await resp.json();
+                        if (result.success) {
+                            state.value = 'idle';
+                            message.value = '';
+                            alert(result.message);
+                        } else {
+                            alert('清除失败: ' + result.message);
+                        }
+                    } catch (e) {
+                        alert('请求失败: ' + e.message);
+                    } finally {
+                        clearing.value = false;
+                    }
+                }
+
                 // ── 键盘事件（全局监听） ──
                 function onKeyDown(e) {
                     if (!isLive.value || inputFocused.value) return;
@@ -648,9 +681,10 @@
 
                 return {
                     state, message, loginSuccess, canvas, browserWrapper, fps,
-                    inputText, inputFocused, textInput,
+                    inputText, inputFocused, textInput, clearing,
                     isLive, statusClass, statusText,
                     startBrowser, disconnect, closeBrowser, navigateHome,
+                    clearBrowserCache,
                     sendText, sendBackspace, sendSelectAllDelete,
                     onMouseDown, onMouseMove, onMouseUp, onWheel,
                 };
