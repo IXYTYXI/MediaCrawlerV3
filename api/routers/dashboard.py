@@ -391,7 +391,7 @@ def _resolve_progress_path() -> Path:
 
 def _get_task_summary() -> dict:
     """读取当前任务摘要"""
-    summary = {"task_id": "", "excel_path": "", "total_creators": 0, "completed": 0, "failed": 0, "partial": 0, "remaining": 0}
+    summary = {"task_id": "", "excel_path": "", "total_creators": 0, "completed": 0, "failed": 0, "partial": 0, "skipped": 0, "remaining": 0}
     try:
         if CONFIG_PATH.exists():
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -423,9 +423,10 @@ def _get_task_summary() -> dict:
             summary["completed"] = len(prog.get("completed", []))
             summary["failed"] = len(prog.get("failed", {}))
             summary["partial"] = len(prog.get("partial", {}))
+            summary["skipped"] = len(prog.get("skipped", {}))
     except Exception:
         pass
-    summary["remaining"] = max(0, summary["total_creators"] - summary["completed"])
+    summary["remaining"] = max(0, summary["total_creators"] - summary["completed"] - summary["skipped"])
     # partial 作者虽然有部分数据，但仍需重新爬取，也算在 remaining 里
     return summary
 

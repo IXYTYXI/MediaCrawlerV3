@@ -1,0 +1,28 @@
+{
+  "session_id": "20260227_115545",
+  "completed": [
+    "https://www.xiaohongshu.com/user/profile/649a8fdf000000001f0060ff?xsec_token=AB_qIAhR5BD9jBu8CMyQrnnpz7Tqc1QpD29k3gjr_-ZfA%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/61b2fc7e000000001000f059?xsec_token=ABQbA2jfbtHRkm9ZR9qrHBX82eEF9XrpDAaSfKyQ7GJwE%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/61b2c64e0000000010007500?xsec_token=ABQbA2jfbtHRkm9ZR9qrHBXz7vppg8mr_xgD-HMLJluBY%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/64740b96000000000f006adf?xsec_token=ABCs_kSHJnIumJb8ljNZdvgTLxYBd3dJJEmKunc4S3avI%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/649a70220000000010036bfc?xsec_token=AB_qIAhR5BD9jBu8CMyQrnnpibKag82SYNPUD6MYF5K_E%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/642a3b7f000000001102347e?xsec_token=ABQYAZcJFqLSVNO7sPgqg1MAjLCcqtCHFmHfhU7fg5mro%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/66c854d2000000001d022cac?xsec_token=AB3fFtBtFfy31iC5R2VyPBngZ7jc4MKnWSvVJCQAun8r8%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/649e933900000000140344d9?xsec_token=ABE7IMTH_dsTUPE7nS4I0X9V45tyBMDjl5bns295kNBXw%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/6504601f0000000017021a03?xsec_token=ABC4Vv622sP46BO2rIcQnhgqe3qa69-dXTyi34EGyy_7o%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/636b58ff000000001f01a10d?xsec_token=ABfdrt_O7s1QqiR7bsfFJo8JMGhL40VY-MlyF3MKNrIck%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/62b16791000000001501b2ca?xsec_token=ABcuAQdC6Rl_JEnJBu4zyKSt2rWnqOGZziFsERDZ75E34%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/66c8466d000000001d02328b?xsec_token=AB3fFtBtFfy31iC5R2VyPBnmZxZZNhwvy0iRS4APcvvA0%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/5ff43d2b0000000001001995?xsec_token=AByizwCWrT0j9ZFadOJIHNUN2WGVEqO2X9fzCpLg6qtYw%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/642ba9780000000012011a80?xsec_token=ABdM_4WwX6A2aWcBGvarVBatEbJ_qWS2j_gQnWFhqMy44%3D&xsec_source=pc_search",
+    "https://www.xiaohongshu.com/user/profile/6735499c000000001600b1b9?xsec_token=ABpQZMVSjkTk5dn-0UHKi84HnZZCUk8uvGqqUpRPjDasw%3D&xsec_source=pc_search"
+  ],
+  "failed": {
+    "https://www.xiaohongshu.com/user/profile/649a8e5f000000001001c410?xsec_token=AB_qIAhR5BD9jBu8CMyQrnnt-yYvcj9ZQWyCHgZ4O4Lto%3D&xsec_source=pc_search": "Session 失效熔断: pong() 探活失败（第 33 批次），session 可能已失效，已获取 901 条"
+  },
+  "partial": {},
+  "skipped": {
+    "https://www.xiaohongshu.com/user/profile/66dea45e000000000d026777?xsec_token=AB9bVijV-V2KufmqZfN14BbvrWmHmgnTcoD0LXF6mlLAc%3D&xsec_source=pc_search": "作者隐藏所有作品（学而思网校官方账号）"
+  },
+  "last_update": "2026-02-27 11:56:09"
+}

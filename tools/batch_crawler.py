@@ -134,6 +134,7 @@ class BatchProgress:
         self._completed: Set[str] = set()  # 已完成的作者 URL
         self._failed: Dict[str, str] = {}  # 失败记录 {url: error_msg}
         self._partial: Dict[str, str] = {}  # 部分完成 {url: "265 notes saved"}
+        self._skipped: Dict[str, str] = {}  # 永久跳过 {url: reason}（如作者隐藏所有作品）
         self._session_id: str = ""
         self._load()
 
@@ -154,10 +155,13 @@ class BatchProgress:
                 self._session_id = data.get("session_id", "")
                 raw_partial = data.get("partial", {})
                 self._partial = raw_partial if isinstance(raw_partial, dict) else {}
+                raw_skipped = data.get("skipped", {})
+                self._skipped = raw_skipped if isinstance(raw_skipped, dict) else {}
                 utils.logger.info(
                     f"[BatchProgress] 加载进度: {len(self._completed)} 完成, "
                     f"{len(self._partial)} 部分完成, "
-                    f"{len(self._failed)} 失败"
+                    f"{len(self._failed)} 失败, "
+                    f"{len(self._skipped)} 跳过"
                 )
             except Exception as e:
                 utils.logger.warning(f"[BatchProgress] 加载进度失败: {e}")
@@ -170,6 +174,7 @@ class BatchProgress:
             "completed": list(self._completed),
             "failed": self._failed,
             "partial": self._partial,
+            "skipped": self._skipped,
             "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         with open(self.progress_file, "w", encoding="utf-8") as f:
@@ -196,6 +201,18 @@ class BatchProgress:
         self._failed[url] = error
         self.save()
 
+    def mark_skipped(self, url: str, reason: str):
+        """永久跳过（如作者隐藏所有作品），后续不再爬取"""
+        self._skipped[url] = reason
+        self._completed.discard(url)
+        self._ensure_failed_is_dict()
+        self._failed.pop(url, None)
+        self._partial.pop(url, None)
+        self.save()
+
+    def is_skipped(self, url: str) -> bool:
+        return url in self._skipped
+
     def mark_partial(self, url: str, info: str):
         """标记为部分完成（优雅中止时使用，下次会重新爬取）"""
         self._partial[url] = info
@@ -220,7 +237,7 @@ class BatchProgress:
         self._session_id = session_id
 
     def reset(self):
-        """重置进度（重新开始）"""
+        """重置进度（重新开始），skipped 保留（永久跳过不受 reset 影响）"""
         self._completed.clear()
         self._failed.clear()
         self._partial.clear()
@@ -2569,6 +2586,15 @@ async def run_batch_crawl(
         else:
             config.DATE_EARLY_STOP_ENABLED = False
 
+        # 永久跳过（作者隐藏所有作品等）
+        if progress.is_skipped(creator_url):
+            reason = progress._skipped.get(creator_url, "")
+            utils.logger.info(
+                f"[BatchCrawler] [{idx}/{total}] 跳过（{reason}）: {creator_name}"
+            )
+            skipped += 1
+            continue
+
         # 断点续爬：跳过当前任务已完成的（增量模式除外）
         incremental_this_creator = False
         if resume and progress.is_completed(creator_url):
@@ -2769,11 +2795,12 @@ async def run_batch_crawl(
                     f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
                 )
             else:
-                progress.mark_failed(creator_url, "爬取完成但数据为空（0条笔记）")
+                # API 成功返回但 0 笔记 → 作者隐藏了所有作品，永久跳过
+                progress.mark_skipped(creator_url, "作者隐藏所有作品（API返回0笔记）")
                 _GracefulShutdown.reset_current()
-                fail += 1
+                skipped += 1
                 utils.logger.warning(
-                    f"[BatchCrawler] [{idx}/{total}] 数据为空，标记失败: {creator_name}"
+                    f"[BatchCrawler] [{idx}/{total}] 作者隐藏所有作品，永久跳过: {creator_name}"
                 )
 
         except SessionExpiredError as se:
