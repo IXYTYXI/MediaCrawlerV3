@@ -202,6 +202,7 @@ def apply_anti_crawl_config(target_config) -> None:
         target_config.BATCH_CRAWL_ENABLE_COMMENTS = batch_cfg.get("enable_comments", False)
         target_config.BATCH_CRAWL_WAIT_SEC = batch_cfg.get("wait_between_creators_sec", 10)
         target_config.BATCH_CRAWL_RESUME = batch_cfg.get("resume", True)
+        target_config.ENABLE_STATS_UPDATE_FOR_CRAWLED = batch_cfg.get("stats_update_for_crawled", False)
         target_config.CRAWL_MODE = batch_cfg.get("crawl_mode", "full")
         target_config.CRAWL_DATE_START = batch_cfg.get("date_start", "")
         target_config.CRAWL_DATE_END = batch_cfg.get("date_end", "")

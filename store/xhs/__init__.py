@@ -141,7 +141,7 @@ async def update_xhs_note(note_item: Dict):
         if img.get('url_default') != '':
             img.update({'url': img.get('url_default')})
 
-    video_url = ','.join(get_video_url_arr(note_item))
+    video_url = ','.join(get_video_url_arr(note_item)) or note_item.get('video_url', '') or ''
 
     local_db_item = {
         "note_id": note_item.get("note_id"),  # Note ID

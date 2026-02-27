@@ -164,6 +164,20 @@ class CrawlProgressManager:
         self._current_task_id = task_id
         self._start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # 切换作者时必须清空上一个作者残留的状态，防止跨作者污染
+        self._crawled_ids = set()
+        self._failed_ids = set()
+        self._comment_crawled_ids = set()
+        self._pending_crawled = set()
+        self._pending_failed = set()
+        self._pending_comment_crawled = set()
+        if self._db_conn:
+            try:
+                self._db_conn.close()
+            except Exception:
+                pass
+            self._db_conn = None
+        
         # SQLite 模式
         if self.use_sqlite:
             db_file = self.get_db_file(task_id)

@@ -288,7 +288,14 @@ async def start_crawler():
     if _crawler_process and _crawler_process.returncode is None:
         return JSONResponse(
             status_code=409,
-            content={"success": False, "message": "爬虫正在运行中，请先停止再启动"}
+            content={"success": False, "message": "爬虫正在运行中（本面板启动），请先停止再启动"}
+        )
+
+    ext = _detect_external_crawler()
+    if ext:
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "message": f"爬虫已在运行中（pid={ext['pid']}），请先停止再启动"}
         )
 
     _log_lines = []
@@ -304,6 +311,7 @@ async def start_crawler():
             stderr=asyncio.subprocess.STDOUT,
             cwd=PROJECT_ROOT,
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            start_new_session=True,
         )
         _crawler_start_time = time.time()
 
@@ -331,18 +339,26 @@ async def stop_crawler():
     """优雅停止爬虫进程（SIGTERM → 等待数据保存 → 退出）"""
     global _crawler_process
 
-    # 面板启动的进程
+    # 面板启动的进程（通过进程组确保 conda 包装和实际 python 进程都收到信号）
     if _crawler_process and _crawler_process.returncode is None:
         try:
             pid = _crawler_process.pid
             _log_lines.append("[控制面板] 正在优雅停止，保存当前进度...")
-            _crawler_process.terminate()
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+            except OSError:
+                _crawler_process.terminate()
             graceful = False
             try:
                 await asyncio.wait_for(_crawler_process.wait(), timeout=30)
                 graceful = True
             except asyncio.TimeoutError:
-                _crawler_process.kill()
+                try:
+                    pgid = os.getpgid(pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                except OSError:
+                    _crawler_process.kill()
                 await _crawler_process.wait()
             msg = f"爬虫已优雅停止 (pid={pid})" if graceful else f"爬虫已强制停止 (pid={pid})"
             _log_lines.append(f"[控制面板] {msg}")
@@ -357,19 +373,30 @@ async def stop_crawler():
     ext = _detect_external_crawler()
     if ext:
         try:
-            pid = ext["pid"]
-            _log_lines.append(f"[控制面板] 正在停止外部爬虫进程 (pid={pid})...")
-            os.kill(pid, signal.SIGTERM)
+            pids = ext["pids"]
+            _log_lines.append(f"[控制面板] 正在停止外部爬虫进程 (pids={pids})...")
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            graceful = False
             for _ in range(30):
                 await asyncio.sleep(1)
-                try:
-                    os.kill(pid, 0)
-                except OSError:
-                    _log_lines.append(f"[控制面板] 外部爬虫已优雅停止 (pid={pid})")
-                    return {"success": True, "message": f"爬虫已停止 (pid={pid})", "graceful": True}
-            os.kill(pid, signal.SIGKILL)
-            _log_lines.append(f"[控制面板] 外部爬虫已强制停止 (pid={pid})")
-            return {"success": True, "message": f"爬虫已强制停止 (pid={pid})", "graceful": False}
+                alive = [p for p in pids if _pid_alive(p)]
+                if not alive:
+                    graceful = True
+                    break
+            if not graceful:
+                for pid in pids:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+                await asyncio.sleep(1)
+            msg = f"爬虫已优雅停止 (pids={pids})" if graceful else f"爬虫已强制停止 (pids={pids})"
+            _log_lines.append(f"[控制面板] {msg}")
+            return {"success": True, "message": msg, "graceful": graceful}
         except Exception as e:
             return JSONResponse(
                 status_code=500,
@@ -379,13 +406,20 @@ async def stop_crawler():
     return {"success": False, "message": "爬虫未在运行"}
 
 
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 def _detect_external_crawler() -> dict | None:
-    """检测是否有外部启动的 batch_crawler 进程在运行"""
+    """检测是否有外部启动的 batch_crawler 进程在运行（返回所有相关 PID）"""
     import subprocess
     try:
-        # tools.batch_crawler 匹配爬虫；-o 取最旧进程，避免匹配到瞬间退出的 pgrep 自身
         result = subprocess.run(
-            ["pgrep", "-f", "-o", "tools.batch_crawler"],
+            ["pgrep", "-f", "tools.batch_crawler"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0:
@@ -393,10 +427,11 @@ def _detect_external_crawler() -> dict | None:
         pids = [int(p) for p in result.stdout.strip().split("\n") if p.strip()]
         if not pids:
             return None
-        pid = pids[0]  # -o 只返回一个 PID
+        # 优先取实际 python 进程的运行时间
+        main_pid = pids[-1]
         elapsed = 0
         try:
-            stat_path = f"/proc/{pid}/stat"
+            stat_path = f"/proc/{main_pid}/stat"
             if os.path.exists(stat_path):
                 with open(stat_path) as f:
                     fields = f.read().split()
@@ -408,7 +443,7 @@ def _detect_external_crawler() -> dict | None:
                 elapsed = int(uptime_sec - start_sec)
         except Exception:
             pass
-        return {"pid": pid, "running_seconds": elapsed}
+        return {"pid": main_pid, "pids": pids, "running_seconds": elapsed}
     except Exception:
         return None
 

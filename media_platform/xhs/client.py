@@ -111,27 +111,53 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         return self.headers
 
     async def _handle_rate_limit(self):
-        """处理访问频繁限流：递增等待"""
+        """处理访问频繁限流：渐进式等待确认"""
         import random
         if not hasattr(self, '_rate_limit_count'):
             self._rate_limit_count = 0
         self._rate_limit_count += 1
+        self._success_after_rate_limit = 0
 
-        wait_ranges = {1: (240, 300), 2: (480, 600), 3: (900, 1200)}
-        low, high = wait_ranges.get(self._rate_limit_count, (1500, 1800))
-        wait_sec = random.uniform(low, high)
+        wait_minutes_map = {1: 8, 2: 14, 3: 21}
+        if self._rate_limit_count <= 3:
+            base_minutes = wait_minutes_map[self._rate_limit_count]
+        else:
+            base_minutes = min(21 + (self._rate_limit_count - 3) * 7, 60)
+
+        jitter = random.uniform(-30, 30)
+        wait_sec = base_minutes * 60 + jitter
 
         utils.logger.warning(
             f"[XiaoHongShuClient] 触发访问频繁限流 (第{self._rate_limit_count}次)，"
             f"等待 {wait_sec:.0f} 秒（约{wait_sec/60:.1f}分钟）后继续..."
         )
         await asyncio.sleep(wait_sec)
-        utils.logger.info("[XiaoHongShuClient] 限流等待结束，继续爬取")
+        utils.logger.info(
+            f"[XiaoHongShuClient] 限流等待结束（第{self._rate_limit_count}次），继续爬取"
+        )
 
     def _reset_rate_limit(self):
-        """请求成功后重置限流计数"""
-        if hasattr(self, '_rate_limit_count') and self._rate_limit_count > 0:
-            self._rate_limit_count = 0
+        """请求成功后渐进式降级限流计数，避免过早归零导致反复触发"""
+        if not hasattr(self, '_rate_limit_count') or self._rate_limit_count <= 0:
+            return
+        if not hasattr(self, '_success_after_rate_limit'):
+            self._success_after_rate_limit = 0
+        self._success_after_rate_limit += 1
+
+        step_down_threshold = 5
+        if self._success_after_rate_limit >= step_down_threshold:
+            old = self._rate_limit_count
+            self._rate_limit_count = max(0, self._rate_limit_count - 1)
+            self._success_after_rate_limit = 0
+            if self._rate_limit_count > 0:
+                utils.logger.info(
+                    f"[XiaoHongShuClient] 连续 {step_down_threshold} 次成功，"
+                    f"限流等级 {old} → {self._rate_limit_count}"
+                )
+            else:
+                utils.logger.info(
+                    f"[XiaoHongShuClient] 限流计数已清零（连续 {step_down_threshold} 次成功）"
+                )
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     async def request(self, method, url, **kwargs) -> Union[str, Any]:

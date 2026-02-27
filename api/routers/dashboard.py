@@ -128,7 +128,18 @@ async def start_batch_crawl(request: BatchStartRequest):
     global _batch_process, _batch_status, _batch_logs
 
     if _batch_process and _batch_process.poll() is None:
-        raise HTTPException(status_code=400, detail="批量爬取正在运行中")
+        raise HTTPException(status_code=400, detail="批量爬取正在运行中（本面板启动）")
+
+    try:
+        from .control import _detect_external_crawler
+        ext = _detect_external_crawler()
+        if ext:
+            raise HTTPException(
+                status_code=400,
+                detail=f"爬虫已在运行中（pid={ext['pid']}），请先停止再启动"
+            )
+    except ImportError:
+        pass
 
     _batch_logs = []
 
@@ -155,6 +166,7 @@ async def start_batch_crawl(request: BatchStartRequest):
             bufsize=1,
             cwd=str(PROJECT_ROOT),
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            start_new_session=True,
         )
         _batch_status = {
             "status": "running",
@@ -176,43 +188,71 @@ async def stop_batch_crawl():
     """优雅停止批量爬取（发送 SIGTERM，等待数据保存后退出）"""
     global _batch_process, _batch_status
 
-    if not _batch_process or _batch_process.poll() is not None:
-        raise HTTPException(status_code=400, detail="没有正在运行的批量爬取")
+    # 本面板启动的进程
+    if _batch_process and _batch_process.poll() is None:
+        pid = _batch_process.pid
+        try:
+            _batch_status["message"] = "正在保存当前进度..."
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+            except OSError:
+                _batch_process.send_signal(signal.SIGTERM)
 
-    pid = _batch_process.pid
+            graceful = False
+            for _ in range(60):
+                if _batch_process.poll() is not None:
+                    graceful = True
+                    break
+                await asyncio.sleep(0.5)
+
+            if not graceful and _batch_process.poll() is None:
+                try:
+                    pgid = os.getpgid(pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                except OSError:
+                    _batch_process.kill()
+                _batch_process.wait()
+
+            _batch_status = {"status": "idle", "started_at": None, "message": "已停止"}
+            summary = _get_task_summary()
+            msg = f"已优雅停止 (pid={pid})" if graceful else f"已强制停止 (pid={pid})"
+            return {"success": True, "message": msg, "graceful": graceful, "task_summary": summary}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"停止失败: {e}")
+
+    # 兜底：其他面板或外部启动的进程
     try:
-        _batch_status["message"] = "正在保存当前进度..."
-        _batch_process.send_signal(signal.SIGTERM)
+        from .control import _detect_external_crawler, _pid_alive
+        ext = _detect_external_crawler()
+        if ext:
+            pids = ext["pids"]
+            for pid in pids:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            graceful = False
+            for _ in range(30):
+                await asyncio.sleep(1)
+                if not any(_pid_alive(p) for p in pids):
+                    graceful = True
+                    break
+            if not graceful:
+                for pid in pids:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+                await asyncio.sleep(1)
+            _batch_status = {"status": "idle", "started_at": None, "message": "已停止"}
+            summary = _get_task_summary()
+            msg = f"已优雅停止 (pids={pids})" if graceful else f"已强制停止 (pids={pids})"
+            return {"success": True, "message": msg, "graceful": graceful, "task_summary": summary}
+    except ImportError:
+        pass
 
-        # 等待优雅退出（最多 30 秒，足够保存数据）
-        graceful = False
-        for _ in range(60):
-            if _batch_process.poll() is not None:
-                graceful = True
-                break
-            await asyncio.sleep(0.5)
-
-        if not graceful and _batch_process.poll() is None:
-            _batch_process.kill()
-            _batch_process.wait()
-
-        _batch_status = {"status": "idle", "started_at": None, "message": "已停止"}
-
-        # 读取最新进度
-        summary = _get_task_summary()
-        msg = (
-            f"已优雅停止 (pid={pid})"
-            if graceful
-            else f"已强制停止 (pid={pid})"
-        )
-        return {
-            "success": True,
-            "message": msg,
-            "graceful": graceful,
-            "task_summary": summary,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"停止失败: {e}")
+    raise HTTPException(status_code=400, detail="没有正在运行的批量爬取")
 
 
 @router.get("/batch/status")

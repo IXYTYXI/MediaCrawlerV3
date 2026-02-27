@@ -156,6 +156,14 @@ BATCH_PAUSE_EVERY_N = 10  # 每 10 条
 BATCH_PAUSE_MIN_SEC = 30.0  # 暂停 30~60 秒
 BATCH_PAUSE_MAX_SEC = 60.0
 
+# 老作品只更新互动数据：已爬取过的作品仅获取最新点赞/评论数，不重新下载图片视频
+# 由 batch_crawl.stats_update_for_crawled 配置
+ENABLE_STATS_UPDATE_FOR_CRAWLED = False
+
+# 由 batch_crawler 运行时注入，供爬虫「老作品只更新互动数据」时加载已有数据
+XHS_TASK_DIR = ""
+XHS_CURRENT_USER_ID = ""
+
 # 按日期提前停止：当连续 N 条作品早于 date_start 时，停止爬取该作者剩余作品
 # 由 batch_crawler 在运行时动态设置 DATE_EARLY_STOP_THRESHOLD 和 CRAWL_DATE_START
 DATE_EARLY_STOP_ENABLED = False

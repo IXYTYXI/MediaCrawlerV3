@@ -15,7 +15,7 @@
   conda run -n uvenv python -m tools.session_keeper
 
   # 后台运行（推荐放在 tmux 里）
-  conda run -n uvenv python -m tools.session_keeper --interval 3
+  conda run -n uvenv python -m tools.session_keeper --interval 2
 
   # 自定义参数
   conda run -n uvenv python -m tools.session_keeper --interval 2 --max-retries 5
@@ -213,6 +213,17 @@ def _seconds_until_next_midnight() -> float:
     return (next_midnight - now).total_seconds()
 
 
+def _seconds_until_0318() -> float:
+    """计算距离下一个 03:18:00 还有多少秒（凌晨前置刷新，覆盖服务端 3:30 左右刷新）"""
+    from datetime import timedelta
+    now = datetime.now()
+    today_0318 = now.replace(hour=3, minute=18, second=0, microsecond=0)
+    if now < today_0318:
+        return (today_0318 - now).total_seconds()
+    next_0318 = today_0318 + timedelta(days=1)
+    return (next_0318 - now).total_seconds()
+
+
 def _do_refresh(browser_data_dir: str, consecutive_failures: int, max_retries: int, reason: str = "") -> int:
     """
     执行一次 session 刷新逻辑
@@ -260,18 +271,20 @@ def _do_refresh(browser_data_dir: str, consecutive_failures: int, max_retries: i
             return consecutive_failures
 
 
-def run_keeper(interval_hours: float = 3.0, max_retries: int = 3, midnight_refresh: bool = True):
+def run_keeper(interval_hours: float = 2.0, max_retries: int = 3, midnight_refresh: bool = True, predawn_0318: bool = True):
     """
     主循环：定期刷新 session
-    
-    支持两种刷新触发：
+
+    支持三种刷新触发：
     1. 定时刷新：每 interval_hours 小时刷新一次
-    2. 午夜刷新：每天 00:00 强制刷新（防止凌晨 session 被服务端清除）
+    2. 午夜刷新：每天 00:00 强制刷新
+    3. 凌晨前置刷新：每天 03:18 强制刷新（覆盖服务端 3:30 左右刷新）
 
     Args:
-        interval_hours: 定时刷新间隔（小时）
+        interval_hours: 定时刷新间隔（小时），默认 2
         max_retries: 连续失败最大重试次数
-        midnight_refresh: 是否开启每日午夜强制刷新（默认开启）
+        midnight_refresh: 是否开启每日 00:00 强制刷新
+        predawn_0318: 是否开启每日 03:18 凌晨前置刷新
     """
     from datetime import timedelta
 
@@ -279,7 +292,8 @@ def run_keeper(interval_hours: float = 3.0, max_retries: int = 3, midnight_refre
     _log(f"Session 保活脚本启动")
     _log(f"  浏览器数据目录: {browser_data_dir}")
     _log(f"  定时刷新间隔: {interval_hours} 小时")
-    _log(f"  每日午夜刷新: {'开启' if midnight_refresh else '关闭'}")
+    _log(f"  每日午夜(00:00)刷新: {'开启' if midnight_refresh else '关闭'}")
+    _log(f"  每日凌晨(03:18)前置刷新: {'开启' if predawn_0318 else '关闭'}")
     _log(f"  连续失败重试上限: {max_retries} 次")
 
     if not os.path.exists(browser_data_dir):
@@ -297,63 +311,56 @@ def run_keeper(interval_hours: float = 3.0, max_retries: int = 3, midnight_refre
             reason="定时刷新"
         )
 
-        # 计算下次唤醒时间：取 "定时间隔" 和 "午夜" 中较早的那个
+        # 计算下次唤醒：取 定时间隔、午夜、03:18 中最早的一个
         interval_seconds = interval_hours * 3600
-        seconds_to_midnight = _seconds_until_next_midnight()
+        seconds_to_midnight = _seconds_until_next_midnight() if midnight_refresh else float("inf")
+        seconds_to_0318 = _seconds_until_0318() if predawn_0318 else float("inf")
 
-        if midnight_refresh and seconds_to_midnight < interval_seconds:
-            # 午夜比下次定时刷新更早，先睡到午夜
-            # 加 10 秒缓冲，确保过了 00:00:00
-            sleep_seconds = seconds_to_midnight + 10
+        sleep_seconds = min(interval_seconds, seconds_to_midnight, seconds_to_0318)
+
+        # 加 10 秒缓冲，确保过了整点
+        if sleep_seconds == seconds_to_midnight:
+            sleep_seconds += 10
             next_time = datetime.now() + timedelta(seconds=sleep_seconds)
-            next_str = next_time.strftime("%H:%M:%S")
-            _log(f"下次刷新: {next_str}（午夜强制刷新，{sleep_seconds/60:.0f} 分钟后）")
-            _log("")
+            _log(f"下次刷新: {next_time.strftime('%H:%M:%S')}（午夜 00:00 强制刷新，{sleep_seconds/60:.0f} 分钟后）")
+        elif sleep_seconds == seconds_to_0318:
+            sleep_seconds += 10
+            next_time = datetime.now() + timedelta(seconds=sleep_seconds)
+            _log(f"下次刷新: {next_time.strftime('%H:%M:%S')}（凌晨 03:18 前置刷新，{sleep_seconds/60:.0f} 分钟后）")
+        else:
+            next_time = datetime.now() + timedelta(seconds=sleep_seconds)
+            _log(f"下次刷新: {next_time.strftime('%H:%M:%S')}（定时 {interval_hours}h 后）")
+        _log("")
 
-            try:
-                time.sleep(sleep_seconds)
-            except KeyboardInterrupt:
-                _log("收到中断信号，退出")
-                break
+        try:
+            time.sleep(sleep_seconds)
+        except KeyboardInterrupt:
+            _log("收到中断信号，退出")
+            break
 
-            # 午夜刷新
+        # 若是午夜或 03:18 唤醒，执行对应强制刷新（常规刷新已在循环开头做过，这里只需做"定点"的）
+        now = datetime.now()
+        if midnight_refresh and 0 <= now.hour < 1 and now.minute < 5:
             _log("-" * 50)
-            _log("🕛 每日午夜强制刷新")
+            _log("🕛 每日午夜强制刷新 (00:00)")
             consecutive_failures = _do_refresh(
                 browser_data_dir, consecutive_failures, max_retries,
-                reason="每日 00:00 午夜强制刷新（防止凌晨 session 被服务端清除）"
+                reason="每日 00:00 午夜强制刷新"
             )
-
-            # 午夜刷新后，继续按正常间隔等待
-            next_regular = datetime.now() + timedelta(seconds=interval_seconds)
-            next_regular_str = next_regular.strftime("%H:%M:%S")
-            _log(f"下次定时刷新: {next_regular_str} ({interval_hours}h 后)")
-            _log("")
-
-            try:
-                time.sleep(interval_seconds)
-            except KeyboardInterrupt:
-                _log("收到中断信号，退出")
-                break
-        else:
-            # 正常按间隔等待
-            next_time = datetime.now() + timedelta(seconds=interval_seconds)
-            next_str = next_time.strftime("%H:%M:%S")
-            _log(f"下次刷新: {next_str} ({interval_hours}h 后)")
-            _log("")
-
-            try:
-                time.sleep(interval_seconds)
-            except KeyboardInterrupt:
-                _log("收到中断信号，退出")
-                break
+        elif predawn_0318 and now.hour == 3 and 18 <= now.minute < 25:
+            _log("-" * 50)
+            _log("🌙 每日凌晨前置刷新 (03:18)")
+            consecutive_failures = _do_refresh(
+                browser_data_dir, consecutive_failures, max_retries,
+                reason="每日 03:18 凌晨前置刷新（覆盖服务端约 3:30 刷新）"
+            )
 
 
 def main():
     parser = argparse.ArgumentParser(description="小红书 Session 保活脚本")
     parser.add_argument(
-        "--interval", type=float, default=3.0,
-        help="刷新间隔，单位小时（默认 3）"
+        "--interval", type=float, default=2.0,
+        help="刷新间隔，单位小时（默认 2）"
     )
     parser.add_argument(
         "--max-retries", type=int, default=3,
@@ -362,6 +369,10 @@ def main():
     parser.add_argument(
         "--no-midnight", action="store_true",
         help="禁用每日午夜（00:00）强制刷新"
+    )
+    parser.add_argument(
+        "--no-predawn", action="store_true",
+        help="禁用每日凌晨（03:18）前置刷新"
     )
     parser.add_argument(
         "--once", action="store_true",
@@ -382,6 +393,7 @@ def main():
             interval_hours=args.interval,
             max_retries=args.max_retries,
             midnight_refresh=not args.no_midnight,
+            predawn_0318=not args.no_predawn,
         )
 
 

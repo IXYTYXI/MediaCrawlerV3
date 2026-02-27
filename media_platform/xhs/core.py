@@ -18,6 +18,7 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 import asyncio
+import json
 import os
 import random
 from asyncio import Task
@@ -559,6 +560,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         success_count = 0
         fail_count = 0
         skip_count = 0
+        stats_updated_count = 0  # 老作品只更新互动数据计数
         consecutive_fail_count = 0  # 连续失败计数（用于 session 失效熔断）
         max_consecutive_fails = 5   # 连续失败熔断阈值
         save_interval = 10  # 每10条保存一次进度
@@ -587,12 +589,68 @@ class XiaoHongShuCrawler(AbstractCrawler):
             xsec_token = post_item.get("xsec_token", "")
             display_title = post_item.get("display_title", "")[:20]
             
-            # ========== 断点续爬：跳过已爬取的 ==========
+            # ========== 断点续爬：已爬取作品 ==========
             if note_id in crawled_ids:
-                skip_count += 1
-                utils.logger.debug(f"[详情获取] ({idx}/{total}) ⏭ 跳过（已爬取）: {display_title}...")
+                # 老作品只更新互动数据：获取详情、合并、写入，不下载媒体
+                if getattr(config, 'ENABLE_STATS_UPDATE_FOR_CRAWLED', False):
+                    task_dir = getattr(config, 'XHS_TASK_DIR', '') or ''
+                    user_id = getattr(config, 'XHS_CURRENT_USER_ID', '') or ''
+                    if task_dir and user_id:
+                        try:
+                            # 懒加载已有数据（contents + reuse）
+                            _cache_key = f"_stats_existing_cache_{user_id}"
+                            if not getattr(self, _cache_key, None):
+                                cache = {}
+                                for suffix in ["_contents.json", "_reuse.json"]:
+                                    fp = os.path.join(task_dir, f"creator_{user_id}{suffix}")
+                                    if os.path.exists(fp):
+                                        try:
+                                            with open(fp, "r", encoding="utf-8") as f:
+                                                arr = json.load(f)
+                                            if isinstance(arr, list):
+                                                for it in arr:
+                                                    nid = it.get("note_id")
+                                                    if nid:
+                                                        cache[nid] = it
+                                        except Exception:
+                                            pass
+                                setattr(self, _cache_key, cache)
+                            existing = getattr(self, _cache_key, {}).get(note_id, {})
+                            note_detail = await self.xhs_client.get_note_by_id(
+                                note_id,
+                                post_item.get("xsec_source", "pc_feed"),
+                                xsec_token
+                            )
+                            if note_detail and note_detail.get("note_id"):
+                                note_detail.update({
+                                    "xsec_token": xsec_token,
+                                    "xsec_source": post_item.get("xsec_source", "")
+                                })
+                                from tools.note_merge import merge_note_metadata
+                                merged = merge_note_metadata(existing, note_detail)
+                                await xhs_store.update_xhs_note(merged)
+                                stats_updated_count += 1
+                                utils.logger.info(
+                                    f"[详情获取] ({idx}/{total}) 📊 统计更新: {display_title}... [累计: {stats_updated_count}]"
+                                )
+                            else:
+                                skip_count += 1
+                                utils.logger.debug(f"[详情获取] ({idx}/{total}) ⏭ 跳过（详情无效）: {display_title}...")
+                            # 统计更新也需要等待和假动作，防止限流
+                            sleep_seconds = self._get_sleep_seconds()
+                            await asyncio.sleep(sleep_seconds)
+                            await self._maybe_do_fake_action()
+                        except Exception as e:
+                            utils.logger.warning(f"[详情获取] 统计更新失败 {note_id}: {e}")
+                            skip_count += 1
+                    else:
+                        skip_count += 1
+                        utils.logger.debug(f"[详情获取] ({idx}/{total}) ⏭ 跳过（已爬取）: {display_title}...")
+                else:
+                    skip_count += 1
+                    utils.logger.debug(f"[详情获取] ({idx}/{total}) ⏭ 跳过（已爬取）: {display_title}...")
                 continue
-            
+
             try:
                 # 获取详情
                 note_detail = await self.xhs_client.get_note_by_id(
@@ -757,8 +815,18 @@ class XiaoHongShuCrawler(AbstractCrawler):
         else:
             self._consecutive_old_batches = 0  # 本批次没有超期，重置
 
+        # ========== 跳过批次：防限流延迟 ==========
+        if total > 0 and skip_count > total * 0.5:
+            skip_delay = random.uniform(0.3, 0.8) * skip_count
+            utils.logger.info(
+                f"[详情获取] 本批次大量跳过 ({skip_count}/{total})，"
+                f"等待 {skip_delay:.1f}s 防限流"
+            )
+            await asyncio.sleep(skip_delay)
+
         early_stop_msg = f", 提前停止(早于{crawl_date_start})" if early_stopped else ""
-        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}, 总计 {total}{early_stop_msg}")
+        stats_msg = f", 统计更新 {stats_updated_count}" if stats_updated_count > 0 else ""
+        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}{stats_msg}, 总计 {total}{early_stop_msg}")
     
     async def _fetch_comments_with_delay(
         self, 

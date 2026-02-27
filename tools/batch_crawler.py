@@ -373,6 +373,12 @@ def collect_crawled_data(data_dir: str, session_timestamp: str,
     return notes
 
 
+def _merge_note_metadata(existing: Dict, update: Dict) -> Dict:
+    """委托给 tools.note_merge.merge_note_metadata"""
+    from tools.note_merge import merge_note_metadata
+    return merge_note_metadata(existing, update)
+
+
 def _merge_partial_data(task_dir: str, user_id: str, new_notes: list):
     """
     合并 partial 旧数据与新爬取数据（按 note_id 去重）
@@ -2682,6 +2688,10 @@ async def run_batch_crawl(
             from tools.crawl_statistics import reset_statistics
             reset_statistics(platform="xhs")
 
+            # 供爬虫「老作品只更新互动数据」时加载已有数据
+            config.XHS_TASK_DIR = task_dir
+            config.XHS_CURRENT_USER_ID = user_id
+
             # 创建并运行爬虫
             from media_platform.xhs import XiaoHongShuCrawler
             from media_platform.xhs.exception import SessionExpiredError
@@ -2717,7 +2727,10 @@ async def run_batch_crawl(
                 for n in new_notes:
                     nid = n.get("note_id")
                     if nid:
-                        existing[nid] = n
+                        if nid in existing:
+                            existing[nid] = _merge_note_metadata(existing[nid], n)
+                        else:
+                            existing[nid] = n
                 merged = sorted(existing.values(), key=lambda x: _safe_int(x.get("time", 0)), reverse=True)
                 with open(contents_file, "w", encoding="utf-8") as f:
                     json.dump(merged, f, ensure_ascii=False, indent=2)
@@ -2734,13 +2747,34 @@ async def run_batch_crawl(
             if not incremental_this_creator:
                 _merge_partial_data(task_dir, user_id, new_notes)
 
-            # 标记完成
-            progress.mark_completed(creator_url)
-            _GracefulShutdown.reset_current()
-            success += 1
-            utils.logger.info(
-                f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
-            )
+            # 校验磁盘上是否有实际数据，防止 0 数据被标记为完成
+            _has_data = False
+            for _suffix in ["_contents.json", "_reuse.json"]:
+                _fp = os.path.join(task_dir, f"creator_{user_id}{_suffix}")
+                if os.path.exists(_fp):
+                    try:
+                        with open(_fp, "r", encoding="utf-8") as _f:
+                            _arr = json.load(_f)
+                        if isinstance(_arr, list) and len(_arr) > 0:
+                            _has_data = True
+                            break
+                    except Exception:
+                        pass
+
+            if _has_data:
+                progress.mark_completed(creator_url)
+                _GracefulShutdown.reset_current()
+                success += 1
+                utils.logger.info(
+                    f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
+                )
+            else:
+                progress.mark_failed(creator_url, "爬取完成但数据为空（0条笔记）")
+                _GracefulShutdown.reset_current()
+                fail += 1
+                utils.logger.warning(
+                    f"[BatchCrawler] [{idx}/{total}] 数据为空，标记失败: {creator_name}"
+                )
 
         except SessionExpiredError as se:
             # ========== Session 失效熔断：暂停等待恢复 ==========
@@ -2980,8 +3014,14 @@ async def run_batch_crawl(
                     nid = item.get("note_id", "")
                     if not nid:
                         continue
-                    if nid not in notes_by_id or _note_completeness(item) > _note_completeness(notes_by_id[nid]):
+                    if nid not in notes_by_id:
                         notes_by_id[nid] = item
+                    else:
+                        # 按字段合并：以更完整的为基底，用另一条的互动数据更新（避免覆盖媒体字段）
+                        cur = notes_by_id[nid]
+                        base = item if _note_completeness(item) > _note_completeness(cur) else cur
+                        update = cur if base is item else item
+                        notes_by_id[nid] = _merge_note_metadata(base, update)
             except Exception:
                 pass
 
