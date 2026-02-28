@@ -233,6 +233,10 @@ def _build_batch_crawler_cmd() -> list:
                 if val:
                     cmd.extend([flag, val])
 
+        crawl_mode = batch.get("crawl_mode", "full")
+        if crawl_mode and crawl_mode != "full":
+            cmd.extend(["--mode", crawl_mode])
+
         if not batch.get("resume", True):
             cmd.append("--no-resume")
         if batch.get("force_recrawl", False):
@@ -316,7 +320,12 @@ async def start_crawler():
         _crawler_start_time = time.time()
 
         cmd_display = " ".join(cmd[5:])
-        _log_lines.append(f"[控制面板] 任务: {task_info['task_id']} | 总计: {task_info['total_creators']}个作者 | 已完成: {task_info['completed']} | 待爬取: {task_info['remaining']}")
+        mode_labels = {"full": "全量爬取", "incremental": "增量更新", "date_range": "日期范围"}
+        try:
+            _cfg_mode = _read_config().get("batch_crawl", {}).get("crawl_mode", "full")
+        except Exception:
+            _cfg_mode = "full"
+        _log_lines.append(f"[控制面板] 任务: {task_info['task_id']} | 模式: {mode_labels.get(_cfg_mode, _cfg_mode)} | 总计: {task_info['total_creators']}个作者 | 已完成: {task_info['completed']} | 待爬取: {task_info['remaining']}")
         _log_lines.append(f"[控制面板] 命令: python -u -m {cmd_display}")
 
         asyncio.create_task(_stream_output(_crawler_process.stdout, "stdout"))

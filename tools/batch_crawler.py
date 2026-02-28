@@ -396,6 +396,52 @@ def _merge_note_metadata(existing: Dict, update: Dict) -> Dict:
     return merge_note_metadata(existing, update)
 
 
+def _load_creator_notes_for_pipeline(
+    task_dir: str, user_id: str,
+    crawl_mode: str = "full", date_start: str = "", date_end: str = "",
+    min_interaction: int = 0,
+) -> List[Dict]:
+    """
+    读取单个作者在 task_dir 下的所有数据（contents + reuse），
+    合并去重后按日期/互动量过滤，用于 pipeline 模式即时写入飞书。
+    """
+    notes_by_id: Dict[str, Dict] = {}
+    for suffix in ["_contents.json", "_reuse.json"]:
+        fp = os.path.join(task_dir, f"creator_{user_id}{suffix}")
+        if not os.path.exists(fp):
+            continue
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                arr = json.load(f)
+            if not isinstance(arr, list):
+                continue
+            for item in arr:
+                nid = item.get("note_id", "")
+                if not nid:
+                    continue
+                if nid not in notes_by_id:
+                    notes_by_id[nid] = item
+                else:
+                    cur = notes_by_id[nid]
+                    base = item if _note_completeness(item) > _note_completeness(cur) else cur
+                    update = cur if base is item else item
+                    notes_by_id[nid] = _merge_note_metadata(base, update)
+        except Exception:
+            pass
+
+    result = []
+    for item in notes_by_id.values():
+        if item.get("_reused"):
+            result.append(item)
+            continue
+        if crawl_mode == "date_range" and not _check_date_range(item, date_start, date_end):
+            continue
+        if min_interaction > 0 and get_interaction_count(item) < min_interaction:
+            continue
+        result.append(item)
+    return result
+
+
 def _merge_partial_data(task_dir: str, user_id: str, new_notes: list):
     """
     合并 partial 旧数据与新爬取数据（按 note_id 去重）
@@ -509,9 +555,12 @@ def get_last_crawl_date_for_creator(task_dir: str, user_id: str) -> str:
             if not isinstance(data, list):
                 continue
             for item in data:
-                t = item.get("last_update_time") or item.get("time", 0)
+                t = item.get("time", 0)
                 if t and isinstance(t, (int, float)):
-                    max_ts = max(max_ts, t)
+                    if t > 1e12:
+                        max_ts = max(max_ts, t)
+                    elif t > 0:
+                        max_ts = max(max_ts, t * 1000)
         except Exception:
             pass
     if max_ts <= 0:
@@ -2575,6 +2624,7 @@ async def run_batch_crawl(
     patch_only: bool = False,
     patch_limit: int = 0,
     force_recrawl: bool = False,
+    crawl_mode_override: str = "",
 ) -> None:
     """
     批量爬取主流程
@@ -2704,6 +2754,17 @@ async def run_batch_crawl(
     except Exception:
         pass
 
+    if crawl_mode_override:
+        crawl_mode = crawl_mode_override
+        utils.logger.info(f"[BatchCrawler] 命令行指定爬取模式: {crawl_mode}")
+
+    _MODE_LABELS = {
+        "full": "全量爬取（爬取所有内容）",
+        "date_range": f"日期范围爬取（{date_start} ~ {date_end}）",
+        "incremental": "增量更新（已完成作者仅爬取新内容+更新互动量）",
+    }
+    utils.logger.info(f"[BatchCrawler] 当前模式: {_MODE_LABELS.get(crawl_mode, crawl_mode)}")
+
     # 5. 注入日期提前停止配置到 config（供 core.py 使用）
     if crawl_mode == "date_range" and date_start:
         config.DATE_EARLY_STOP_ENABLED = True
@@ -2754,6 +2815,26 @@ async def run_batch_crawl(
 
     # 保存完整作者列表（校验阶段需要）
     creators_original = list(creators) if not patch_only else []
+
+    # 5b. 流水线模式：每个作者完成后立即写入飞书
+    pipeline_writer = None
+    pipeline_mode = False
+    if not skip_feishu and not patch_only and feishu_app_id and feishu_app_secret:
+        try:
+            _cfg_path = os.path.join("config", "anti_crawl_config.json")
+            with open(_cfg_path, "r", encoding="utf-8") as _f:
+                _cfg_pl = json.load(_f)
+            pipeline_mode = _cfg_pl.get("feishu", {}).get("pipeline_mode", False)
+        except Exception:
+            pass
+        if pipeline_mode:
+            from tools.pipeline_feishu_writer import PipelineFeishuWriter
+            pipeline_writer = PipelineFeishuWriter(
+                feishu_app_id=feishu_app_id,
+                feishu_app_secret=feishu_app_secret,
+                folder_token=feishu_folder_token,
+            )
+            utils.logger.info("[BatchCrawler] 流水线模式已启用: 每完成一个作者立即写入飞书")
 
     # 6. 逐个作者处理
     for idx, creator in enumerate(creators, 1):
@@ -2836,6 +2917,11 @@ async def run_batch_crawl(
                     f"[BatchCrawler] [{idx}/{total}] 复用完成: {creator_name} "
                     f"({len(reuse_notes)} 条符合条件)"
                 )
+                if pipeline_writer and reuse_notes:
+                    try:
+                        pipeline_writer.write_creator(creator_name, reuse_notes)
+                    except Exception as _pw_e:
+                        utils.logger.warning(f"[Pipeline] 写入失败: {creator_name} - {_pw_e}")
                 continue
 
             elif history_status == "partial":
@@ -2980,6 +3066,19 @@ async def run_batch_crawl(
                 utils.logger.info(
                     f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
                 )
+                # 流水线模式：立即写入飞书
+                if pipeline_writer:
+                    try:
+                        _pl_notes = _load_creator_notes_for_pipeline(
+                            task_dir, user_id, crawl_mode,
+                            date_start, date_end, min_interaction,
+                        )
+                        if _pl_notes:
+                            pipeline_writer.write_creator(creator_name, _pl_notes)
+                    except Exception as _pw_e:
+                        utils.logger.warning(
+                            f"[Pipeline] 写入失败: {creator_name} - {_pw_e}"
+                        )
             else:
                 # API 成功返回但 0 笔记 → 作者隐藏了所有作品，永久跳过
                 progress.mark_skipped(creator_url, "作者隐藏所有作品（API返回0笔记）")
@@ -3282,7 +3381,17 @@ async def run_batch_crawl(
         utils.logger.info("[BatchCrawler] 没有符合条件的数据可导出")
 
     # 8. 推送到飞书
-    if not skip_feishu and all_export_notes:
+    if pipeline_writer:
+        try:
+            utils.logger.info("[Pipeline] 收尾: 等待脚本提取完成 + 最终校验...")
+            pipeline_writer.finalize()
+            if pipeline_writer.bitable_url:
+                utils.logger.info(f"[Pipeline] 飞书表格链接: {pipeline_writer.bitable_url}")
+        except Exception as e:
+            utils.logger.error(f"[Pipeline] 收尾失败: {e}")
+        finally:
+            pipeline_writer.close()
+    elif not skip_feishu and all_export_notes:
         try:
             utils.logger.info("[BatchCrawler] 开始推送到飞书多维表格...")
             bitable_url = push_to_feishu(
@@ -3477,6 +3586,9 @@ def main():
                         help="强制重新爬取：重置进度+禁用历史复用，爬取时直接下载图片")
     parser.add_argument("--patch-feishu", default="",
                         help="补写飞书表格: 传入 app_token，自动修复日期字段+提取视频脚本")
+    parser.add_argument("--mode", default="",
+                        choices=["", "full", "date_range", "incremental"],
+                        help="爬取模式: full=全量, date_range=日期范围, incremental=增量更新(覆盖配置文件)")
 
     args = parser.parse_args()
 
@@ -3569,6 +3681,7 @@ def main():
             patch_only=args.patch_only,
             patch_limit=args.patch_limit,
             force_recrawl=args.force_recrawl,
+            crawl_mode_override=args.mode,
         )
 
     async def _cleanup():

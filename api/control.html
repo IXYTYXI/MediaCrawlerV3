@@ -618,6 +618,25 @@
                         退出码: <span :style="{ color: exitCode === 0 ? 'var(--success)' : 'var(--danger)' }">{{ exitCode }}</span>
                     </div>
 
+                    <!-- 爬取模式选择 -->
+                    <div v-if="config.batch_crawl" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 24px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); min-width: 320px;">
+                        <label style="font-size: 12px; color: var(--text-muted); font-weight: 500;">爬取模式</label>
+                        <div style="display: flex; gap: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;">
+                            <button v-for="m in crawlModes" :key="m.value"
+                                    @click="setCrawlMode(m.value)"
+                                    :disabled="displayStatus === 'running'"
+                                    style="padding: 8px 18px; font-size: 13px; font-weight: 500; border: none; cursor: pointer; transition: all 0.2s;"
+                                    :style="config.batch_crawl.crawl_mode === m.value
+                                        ? 'background:var(--primary);color:#fff;'
+                                        : 'background:var(--card);color:var(--text-muted);'">
+                                {{ m.label }}
+                            </button>
+                        </div>
+                        <span style="font-size: 11px; color: var(--text-dim); text-align: center; max-width: 360px; line-height: 1.6;">
+                            {{ crawlModeDesc }}
+                        </span>
+                    </div>
+
                     <!-- 按钮 -->
                     <div style="display: flex; gap: 12px;">
                         <button class="btn btn-success" @click="startCrawler"
@@ -948,6 +967,37 @@
                     }
                 }
 
+                // ── 爬取模式 ──
+                const crawlModes = [
+                    { value: 'full', label: '全量爬取' },
+                    { value: 'incremental', label: '增量更新' },
+                    { value: 'date_range', label: '日期范围' },
+                ];
+                const crawlModeDesc = computed(() => {
+                    const mode = config.batch_crawl?.crawl_mode || 'full';
+                    const descs = {
+                        full: '爬取所有内容，适合首次使用',
+                        incremental: '只爬取上次之后的新内容，已有作品仅更新互动量',
+                        date_range: '仅爬取指定日期范围内的内容',
+                    };
+                    return descs[mode] || '';
+                });
+
+                async function setCrawlMode(mode) {
+                    if (!config.batch_crawl) return;
+                    config.batch_crawl.crawl_mode = mode;
+                    try {
+                        await authFetch(API + '/config', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ batch_crawl: { crawl_mode: mode } }),
+                        });
+                        showToast('模式已切换: ' + crawlModes.find(m => m.value === mode)?.label);
+                    } catch (e) {
+                        showToast('切换失败: ' + e.message, 'error');
+                    }
+                }
+
                 // ── 时间格式化 ──
                 function formatDuration(sec) {
                     if (!sec) return '0s';
@@ -1120,6 +1170,7 @@
                     showToast, loadConfig, saveConfig,
                     startCrawler, stopCrawler, formatDuration,
                     clearLogs, switchToLog,
+                    crawlModes, crawlModeDesc, setCrawlMode,
                     files, fileView, loadFiles, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, switchToFiles,
                 };
             }

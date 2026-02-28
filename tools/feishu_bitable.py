@@ -203,6 +203,38 @@ class FeishuBitableClient:
 
         return total_inserted
 
+    def batch_insert_records_full(self, app_token: str, table_id: str,
+                                  records: List[Dict[str, Any]],
+                                  batch_size: int = 100) -> List[Dict]:
+        """
+        批量插入记录，返回包含 record_id 的完整记录列表
+
+        Returns:
+            写入成功的记录列表 [{"record_id": "xxx", "fields": {...}}, ...]
+        """
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create"
+        all_inserted: List[Dict] = []
+
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+            body = {"records": batch}
+            try:
+                data = self._request("POST", url, json=body)
+                inserted = data.get("records", [])
+                all_inserted.extend(inserted)
+                utils.logger.info(
+                    f"[FeishuBitable] 批量写入第 {i // batch_size + 1} 批: "
+                    f"{len(inserted)} 条 (总计 {len(all_inserted)}/{len(records)})"
+                )
+            except Exception as e:
+                utils.logger.error(
+                    f"[FeishuBitable] 批量写入失败 (批次 {i // batch_size + 1}): {e}"
+                )
+            if i + batch_size < len(records):
+                time.sleep(0.5)
+
+        return all_inserted
+
     def list_fields(self, app_token: str, table_id: str) -> List[Dict]:
         """列出数据表的所有字段"""
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}/fields"
