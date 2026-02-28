@@ -102,7 +102,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         return ""
 
     def _get_sleep_seconds(self, *, for_comments: bool = False) -> float:
-        """使用高级随机分布生成等待时间"""
+        """使用高级随机分布生成等待时间，含限流冷却期加成"""
         from tools.anti_crawl_utils import generate_random_wait, get_wait_manager
         
         if not getattr(config, "RANDOM_SLEEP_ENABLED", False):
@@ -121,7 +121,20 @@ class XiaoHongShuCrawler(AbstractCrawler):
             distribution = getattr(config, "RANDOM_SLEEP_DISTRIBUTION", "lognormal")
         
         base_wait = generate_random_wait(min_sec, max_sec, distribution)
-        return base_wait * multiplier
+        
+        # 限流恢复冷却期：显著降低请求速率，避免立即再次触发
+        recovery_multiplier = 1.0
+        if hasattr(self, 'xhs_client'):
+            recovery_multiplier = self.xhs_client.get_recovery_multiplier()
+            if recovery_multiplier > 1.0:
+                remaining = getattr(self.xhs_client, '_post_recovery_remaining', 0)
+                utils.logger.debug(
+                    f"[冷却期] 等待 {base_wait * multiplier * recovery_multiplier:.1f}s "
+                    f"(基础={base_wait:.1f}s × 冷却={recovery_multiplier:.1f}x, "
+                    f"剩余 {remaining} 次)"
+                )
+        
+        return base_wait * multiplier * recovery_multiplier
 
     async def _maybe_do_fake_action(self) -> bool:
         """
@@ -443,13 +456,18 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 utils.logger.info("=" * 50)
                 utils.logger.info("[阶段1] 开始获取作品列表并获取详情（边获取边保存）...")
                 
+                # 加载保存的分页游标（跳过已枚举的页面）
+                saved_cursor, saved_enumerated = self._progress_manager.get_saved_cursor()
+                
                 crawl_interval = self._get_sleep_seconds()
                 all_notes_list = await self.xhs_client.get_all_notes_by_creator(
                     user_id=user_id,
                     crawl_interval=crawl_interval,
-                    callback=self._fetch_all_notes_detail,  # 边获取列表边保存详情
+                    callback=self._fetch_all_notes_detail,
                     xsec_token=creator_info.xsec_token,
                     xsec_source=creator_info.xsec_source,
+                    resume_cursor=saved_cursor,
+                    resume_enumerated=saved_enumerated,
                 )
                 
                 utils.logger.info(f"[阶段1] 完成！共获取 {len(all_notes_list)} 条作品")
@@ -514,9 +532,18 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 
                 utils.logger.info("=" * 50)
                 utils.logger.info(f"[完成] 作者 {user_id} 爬取完成")
+                # 正常完成：清除游标，下次从头开始
+                if hasattr(self, '_progress_manager'):
+                    self._progress_manager.clear_cursor()
                 
             except Exception as e:
                 utils.logger.error(f"[爬取异常] {e}")
+                # 异常中断：保存当前游标，下次从断点恢复
+                if hasattr(self, '_progress_manager') and hasattr(self, 'xhs_client'):
+                    cur = getattr(self.xhs_client, '_last_pagination_cursor', '')
+                    if cur:
+                        enumerated = len(getattr(self, '_new_crawled_ids', set())) + len(getattr(self, '_crawled_note_ids', set()))
+                        self._progress_manager.update_cursor(cur, enumerated)
                 raise
             finally:
                 # ========== 断点续爬：保存进度 ==========
@@ -783,8 +810,13 @@ class XiaoHongShuCrawler(AbstractCrawler):
             # 随机假动作
             await self._maybe_do_fake_action()
             
-            # ========== 断点续爬：定期保存进度 ==========
+            # ========== 断点续爬：定期保存进度 + 分页游标 ==========
             if progress_manager and (success_count + fail_count) % save_interval == 0:
+                if hasattr(self, 'xhs_client'):
+                    cur = getattr(self.xhs_client, '_last_pagination_cursor', '')
+                    if cur:
+                        enumerated = len(getattr(self, '_new_crawled_ids', set())) + len(crawled_ids)
+                        progress_manager.update_cursor(cur, enumerated)
                 progress_manager.save_progress()
         
         # ========== 等待所有评论任务完成 ==========
@@ -793,8 +825,13 @@ class XiaoHongShuCrawler(AbstractCrawler):
             await asyncio.gather(*comment_tasks, return_exceptions=True)
             utils.logger.info(f"[评论获取] 所有评论任务已完成")
         
-        # 最终保存一次进度
+        # 最终保存一次进度（含分页游标）
         if progress_manager:
+            if hasattr(self, 'xhs_client'):
+                cur = getattr(self.xhs_client, '_last_pagination_cursor', '')
+                if cur:
+                    enumerated = len(getattr(self, '_new_crawled_ids', set())) + len(crawled_ids)
+                    progress_manager.update_cursor(cur, enumerated)
             progress_manager.save_progress()
         
         # ========== 批次级别日期停止信号 ==========

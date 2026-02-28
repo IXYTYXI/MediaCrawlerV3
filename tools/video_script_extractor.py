@@ -3,7 +3,10 @@
 视频脚本提取器
 从飞书视频汇总表读取视频，调用 Gemini API 提取口播脚本，回写到飞书
 """
+import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Callable
 
 import httpx
@@ -69,9 +72,10 @@ class VideoScriptExtractor:
         gemini_model: str = "gemini-3-pro-preview",
         prompt: str = DEFAULT_PROMPT,
         max_tokens: int = 8192,
-        request_timeout: float = 180.0,
-        retry_count: int = 2,
+        request_timeout: float = 600.0,
+        retry_count: int = 3,
         interval_sec: float = 2.0,
+        concurrency: int = 5,
     ):
         self.feishu_client = FeishuBitableClient(feishu_app_id, feishu_app_secret)
         self.gemini_base_url = gemini_base_url.rstrip("/")
@@ -82,6 +86,7 @@ class VideoScriptExtractor:
         self.request_timeout = request_timeout
         self.retry_count = retry_count
         self.interval_sec = interval_sec
+        self.concurrency = concurrency
         self._http = httpx.Client(timeout=request_timeout)
 
     def close(self):
@@ -128,11 +133,30 @@ class VideoScriptExtractor:
                 )
         return text
 
+    @staticmethod
+    def _parse_sse_content(response: httpx.Response) -> str:
+        """从 SSE 流式响应中解析并拼接完整文本"""
+        parts: list[str] = []
+        for line in response.iter_lines():
+            if not line or not line.startswith("data: "):
+                continue
+            payload = line[6:]
+            if payload.strip() == "[DONE]":
+                break
+            try:
+                chunk = json.loads(payload)
+                delta = (chunk.get("choices") or [{}])[0].get("delta", {})
+                text = delta.get("content", "")
+                if text:
+                    parts.append(text)
+            except (json.JSONDecodeError, IndexError, KeyError):
+                continue
+        return "".join(parts)
+
     def _call_gemini(self, video_url: str, title: str = "",
                      account: str = "") -> str:
-        """调用 Gemini 从视频 URL 提取脚本"""
+        """传递视频 URL 给模型，流式接收结果（防止网关 504）"""
         rendered_prompt = self._render_prompt(title=title, account=account)
-
         body = {
             "model": self.gemini_model,
             "messages": [{
@@ -143,35 +167,32 @@ class VideoScriptExtractor:
                 ],
             }],
             "max_tokens": self.max_tokens,
+            "stream": True,
         }
+        headers = {
+            "Authorization": f"Bearer {self.gemini_api_key}",
+            "Content-Type": "application/json",
+        }
+        url = f"{self.gemini_base_url}/chat/completions"
 
         last_err = None
         for attempt in range(1, self.retry_count + 1):
             try:
-                resp = self._http.post(
-                    f"{self.gemini_base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.gemini_api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=body,
-                )
-                if resp.status_code != 200:
-                    last_err = f"HTTP {resp.status_code}: {resp.text[:500]}"
-                    utils.logger.warning(
-                        f"[ScriptExtractor] Gemini 请求失败 (尝试 {attempt}): {last_err}"
-                    )
-                    if attempt < self.retry_count:
-                        time.sleep(3)
-                    continue
+                with self._http.stream("POST", url, headers=headers, json=body) as resp:
+                    if resp.status_code != 200:
+                        err_body = resp.read().decode(errors="replace")[:500]
+                        last_err = f"HTTP {resp.status_code}: {err_body}"
+                        utils.logger.warning(
+                            f"[ScriptExtractor] Gemini 请求失败 (尝试 {attempt}): {last_err}"
+                        )
+                        if attempt < self.retry_count:
+                            time.sleep(5)
+                        continue
 
-                data = resp.json()
-                choices = data.get("choices", [])
-                if choices:
-                    content = choices[0].get("message", {}).get("content", "")
-                    return content.strip()
-                else:
-                    last_err = f"无 choices: {data}"
+                    content = self._parse_sse_content(resp)
+                    if content.strip():
+                        return content.strip()
+                    last_err = "流式响应未返回有效文本"
                     utils.logger.warning(
                         f"[ScriptExtractor] Gemini 响应无内容 (尝试 {attempt})"
                     )
@@ -180,8 +201,8 @@ class VideoScriptExtractor:
                 utils.logger.warning(
                     f"[ScriptExtractor] Gemini 调用异常 (尝试 {attempt}): {e}"
                 )
-                if attempt < self.retry_count:
-                    time.sleep(3)
+            if attempt < self.retry_count:
+                time.sleep(10 * attempt)
 
         return f"[提取失败] {last_err}"
 
@@ -250,14 +271,15 @@ class VideoScriptExtractor:
             if not ft:
                 continue
 
-            # 检查是否已有脚本
+            # 检查是否已有脚本（失败记录不跳过，允许重试）
             if skip_existing:
                 existing = fields.get(SCRIPT_FIELD_NAME, "")
-                if isinstance(existing, str) and existing.strip():
-                    skipped += 1
-                    continue
-                # 飞书多行文本可能是 list 格式
-                if isinstance(existing, list) and existing:
+                existing_text = ""
+                if isinstance(existing, str):
+                    existing_text = existing.strip()
+                elif isinstance(existing, list) and existing:
+                    existing_text = self._extract_text_field(existing).strip()
+                if existing_text and not existing_text.startswith("[提取失败]"):
                     skipped += 1
                     continue
 
@@ -291,12 +313,33 @@ class VideoScriptExtractor:
         all_tokens = [p["file_token"] for p in to_process]
         token_url_map = self.feishu_client.batch_get_tmp_download_url(all_tokens)
 
-        # 6. 逐条处理
+        # 6. 并发处理
         processed = 0
         failed = 0
+        counter_lock = threading.Lock()
+        write_lock = threading.Lock()
         update_batch: List[Dict] = []
+        finished_count = 0
 
-        for i, item in enumerate(to_process):
+        failed_items: List[Dict] = []
+
+        def _flush_batch(force: bool = False):
+            nonlocal update_batch
+            batch_to_write = []
+            with write_lock:
+                if len(update_batch) >= 10 or (force and update_batch):
+                    batch_to_write = update_batch[:]
+                    update_batch = []
+            if batch_to_write:
+                try:
+                    self.feishu_client.batch_update_records(
+                        app_token, table_id, batch_to_write
+                    )
+                except Exception as e:
+                    utils.logger.warning(f"[ScriptExtractor] 批量写入失败: {e}")
+
+        def _process_one(idx: int, item: Dict) -> None:
+            nonlocal processed, failed, finished_count
             record_id = item["record_id"]
             file_token = item["file_token"]
             title = item["title"]
@@ -305,53 +348,103 @@ class VideoScriptExtractor:
             video_url = token_url_map.get(file_token, "")
             if not video_url:
                 utils.logger.warning(
-                    f"[ScriptExtractor] [{i+1}/{total}] 无下载链接: {title[:50]}"
+                    f"[ScriptExtractor] [{idx+1}/{total}] 无下载链接: {title[:50]}"
                 )
-                failed += 1
-                continue
-
-            if on_progress:
-                on_progress(i + 1, total, title[:50])
+                with counter_lock:
+                    failed += 1
+                    finished_count += 1
+                return
 
             utils.logger.info(
-                f"[ScriptExtractor] [{i+1}/{total}] 处理: {title[:50]}"
+                f"[ScriptExtractor] [{idx+1}/{total}] 处理: {title[:50]}"
             )
 
             script = self._call_gemini(video_url, title=title, account=account)
 
-            if script.startswith("[提取失败]"):
-                utils.logger.error(
-                    f"[ScriptExtractor] [{i+1}/{total}] 失败: {title} -> {script}"
-                )
-                failed += 1
-            else:
+            with counter_lock:
+                finished_count += 1
+                if script.startswith("[提取失败]"):
+                    utils.logger.error(
+                        f"[ScriptExtractor] [{idx+1}/{total}] 失败: {title[:50]} -> {script[:100]}"
+                    )
+                    failed += 1
+                    failed_items.append(item)
+                else:
+                    utils.logger.info(
+                        f"[ScriptExtractor] [{idx+1}/{total}] 完成: {title[:50]} "
+                        f"({len(script)} 字) [进度 {finished_count}/{total}]"
+                    )
+                    processed += 1
+
+            if on_progress:
+                on_progress(finished_count, total, title[:50])
+
+            with write_lock:
+                update_batch.append({
+                    "record_id": record_id,
+                    "fields": {SCRIPT_FIELD_NAME: script},
+                })
+                should_flush = len(update_batch) >= 10
+            if should_flush:
+                _flush_batch()
+
+        workers = min(self.concurrency, total)
+        utils.logger.info(
+            f"[ScriptExtractor] 启动 {workers} 并发处理 {total} 条视频..."
+        )
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_process_one, i, item): i
+                for i, item in enumerate(to_process)
+            }
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    utils.logger.error(f"[ScriptExtractor] 线程异常: {e}")
+                    with counter_lock:
+                        failed += 1
+                        finished_count += 1
+
+        _flush_batch(force=True)
+
+        # 对失败项自动重试一轮（串行，避免压垮网关）
+        if failed_items:
+            retry_count = len(failed_items)
+            utils.logger.info(
+                f"[ScriptExtractor] 开始重试 {retry_count} 条失败记录..."
+            )
+            retry_ok = 0
+            for ri, item in enumerate(failed_items):
+                record_id = item["record_id"]
+                title = item["title"]
+                account = item.get("account", "")
+                video_url = token_url_map.get(item["file_token"], "")
+                if not video_url:
+                    continue
+
                 utils.logger.info(
-                    f"[ScriptExtractor] [{i+1}/{total}] 完成: {title} "
-                    f"({len(script)} 字)"
+                    f"[ScriptExtractor] 重试 [{ri+1}/{retry_count}]: {title[:50]}"
                 )
-                processed += 1
+                time.sleep(5)
+                script = self._call_gemini(video_url, title=title, account=account)
 
-            # 无论成功失败都写入（失败信息也记录）
-            update_batch.append({
-                "record_id": record_id,
-                "fields": {SCRIPT_FIELD_NAME: script},
-            })
+                if not script.startswith("[提取失败]"):
+                    utils.logger.info(
+                        f"[ScriptExtractor] 重试成功: {title[:50]} ({len(script)} 字)"
+                    )
+                    retry_ok += 1
+                    failed -= 1
+                    processed += 1
 
-            # 每 10 条批量写入一次
-            if len(update_batch) >= 10:
                 self.feishu_client.batch_update_records(
-                    app_token, table_id, update_batch
+                    app_token, table_id,
+                    [{"record_id": record_id, "fields": {SCRIPT_FIELD_NAME: script}}],
                 )
-                update_batch = []
 
-            # 请求间隔
-            if i < total - 1:
-                time.sleep(self.interval_sec)
-
-        # 写入剩余
-        if update_batch:
-            self.feishu_client.batch_update_records(
-                app_token, table_id, update_batch
+            utils.logger.info(
+                f"[ScriptExtractor] 重试完成: {retry_ok}/{retry_count} 条成功"
             )
 
         elapsed = round(time.time() - t0, 1)

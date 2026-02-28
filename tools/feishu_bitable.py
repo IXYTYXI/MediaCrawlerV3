@@ -323,6 +323,11 @@ class FeishuBitableClient:
         data = self._request("GET", url)
         return data.get("items", [])
 
+    def rename_table(self, app_token: str, table_id: str, new_name: str):
+        """重命名数据表"""
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}"
+        self._request("PATCH", url, json={"name": new_name})
+
     # ==================== 媒体上传 ====================
 
     def upload_media(self, app_token: str, file_path: str,
@@ -616,14 +621,11 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     note_type = note_data.get("type", "")
     content_type = "视频" if note_type == "video" else "图片"
 
-    # 发布时间：时间戳转日期
-    time_val = note_data.get("time", "")
-    if isinstance(time_val, (int, float)) and time_val > 0:
-        from datetime import datetime
-        try:
-            time_val = datetime.fromtimestamp(time_val / 1000).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            time_val = str(time_val)
+    # 发布时间：飞书日期字段需要毫秒时间戳
+    time_raw = note_data.get("time", "")
+    time_ms = None
+    if isinstance(time_raw, (int, float)) and time_raw > 0:
+        time_ms = int(time_raw) if time_raw > 1e12 else int(time_raw * 1000)
 
     # 图片拆分为独立字段
     image_raw = note_data.get("image_list", "")
@@ -656,7 +658,7 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
         "正文": note_data.get("desc", ""),
         "标签": note_data.get("tag_list", ""),
         "链接": {"link": note_url, "text": note_url} if note_url else "",
-        "发布时间": str(time_val),
+        "发布时间": time_ms if time_ms else "",
         "点赞数": str(liked),
         "收藏数": str(collected),
         "评论数": str(comment),

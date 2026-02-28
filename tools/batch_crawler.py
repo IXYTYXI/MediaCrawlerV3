@@ -591,13 +591,14 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
     note_type = note.get("type", "")
     content_type = "视频" if note_type == "video" else "图片"
 
-    # 发布时间
+    # 发布时间 → datetime 对象（Excel 可识别）
     time_val = note.get("time", "")
+    time_dt = None
     if isinstance(time_val, (int, float)) and time_val > 0:
         try:
-            time_val = datetime.fromtimestamp(time_val / 1000).strftime("%Y-%m-%d %H:%M:%S")
+            time_dt = datetime.fromtimestamp(time_val / 1000)
         except Exception:
-            time_val = str(time_val)
+            pass
 
     # 图片拆分为独立字段
     image_urls = _parse_image_urls(note.get("image_list", ""))
@@ -624,7 +625,7 @@ def format_note_for_export(creator_name: str, note: Dict) -> Dict[str, Any]:
         "正文": note.get("desc", ""),
         "标签": note.get("tag_list", ""),
         "链接": note.get("note_url", ""),
-        "发布时间": str(time_val),
+        "发布时间": time_dt if time_dt else "",
         "点赞数": liked,
         "收藏数": collected,
         "评论数": comment,
@@ -792,15 +793,19 @@ def _export_excel_multi_sheet(grouped: Dict[str, List[Dict]],
             cell.border = thin_border
 
         # 写数据
+        from openpyxl.styles.numbers import FORMAT_DATE_DATETIME
         for row_idx, note in enumerate(creator_notes, 2):
             formatted = format_note_for_export(creator_name, note)
             is_hot_row = formatted.get("热门", "") != ""
             for col_idx, col_name in enumerate(columns, 1):
                 value = formatted.get(col_name, "")
-                value = _sanitize_for_excel(value)
+                if not isinstance(value, datetime):
+                    value = _sanitize_for_excel(value)
                 cell = ws.cell(row=row_idx, column=col_idx, value=value)
                 cell.alignment = wrap_align
                 cell.border = thin_border
+                if isinstance(value, datetime):
+                    cell.number_format = "YYYY-MM-DD HH:MM:SS"
                 # 热门行高亮
                 if is_hot_row:
                     cell.fill = hot_fill
@@ -1645,6 +1650,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
 
             url_fields = {"链接"}
             attachment_fields = {"视频附件"}
+            date_fields = {"发布时间"}
             # image 模式：图片字段也创建为附件类型
             if is_image_mode:
                 attachment_fields.update(image_field_names)
@@ -1787,10 +1793,15 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                     utils.logger.info(f"[视频上传] 清理 {video_cleaned} 个未处理的视频字段")
 
             # 6. 构建完整字段列表（创建新表时一次性传入）
+            def _resolve_field_type(name):
+                if name in url_fields: return 15
+                if name in attachment_fields: return 17
+                if name in date_fields: return 5
+                return 1
+
             all_table_fields = []
             for field_name in ordered_fields:
-                ftype = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
-                all_table_fields.append({"field_name": field_name, "type": ftype})
+                all_table_fields.append({"field_name": field_name, "type": _resolve_field_type(field_name)})
 
             # 7. 逐作者创建数据表并写入记录
             first_creator = True
@@ -1805,13 +1816,18 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                     first_creator = False
                     
                     if tables:
+                        # 重命名默认表为第一个作者名称
+                        try:
+                            client.rename_table(app_token, table_id, safe_name)
+                            utils.logger.info(f"[飞书] 默认表已重命名为: {safe_name}")
+                        except Exception as e:
+                            utils.logger.warning(f"[飞书] 重命名默认表失败: {e}")
                         # 默认表需要逐个添加字段
                         for field_name in ordered_fields:
                             if field_name == "序号":
                                 continue
-                            ftype = 15 if field_name in url_fields else 17 if field_name in attachment_fields else 1
                             try:
-                                client.add_field(app_token, table_id, field_name, ftype)
+                                client.add_field(app_token, table_id, field_name, _resolve_field_type(field_name))
                             except Exception:
                                 pass
                 else:
@@ -2004,6 +2020,17 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                             f"[飞书] 生成视频公网链接失败（不影响已写入数据）: {e}"
                         )
 
+                    # ========== 10. 自动提取视频脚本 ==========
+                    try:
+                        _run_video_script_extraction(
+                            feishu_app_id, feishu_app_secret,
+                            app_token, summary_table_id
+                        )
+                    except Exception as e:
+                        utils.logger.warning(
+                            f"[飞书] 视频脚本提取失败（不影响已写入数据）: {e}"
+                        )
+
                 else:
                     utils.logger.info("[飞书] 没有视频记录，跳过汇总表创建")
 
@@ -2020,6 +2047,165 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
 
 
 # ==================== 数据完整性校验 ====================
+
+def _patch_feishu_tables(app_token: str, feishu_app_id: str, feishu_app_secret: str):
+    """
+    补写已有飞书表格：
+    1. 将所有数据表的「发布时间」字段从文本改为日期类型，重写值为时间戳
+    2. 对视频汇总表自动提取视频脚本
+    """
+    from tools.feishu_bitable import FeishuBitableClient
+
+    if not feishu_app_id or not feishu_app_secret:
+        print("[补写] 缺少飞书 App ID / App Secret，无法执行")
+        return
+
+    client = FeishuBitableClient(feishu_app_id, feishu_app_secret)
+    try:
+        tables = client.list_tables(app_token)
+        print(f"[补写] 找到 {len(tables)} 个数据表")
+
+        summary_table_id = ""
+
+        for table_info in tables:
+            table_id = table_info["table_id"]
+            table_name = table_info.get("name", "")
+            print(f"\n[补写] 处理表: {table_name} ({table_id})")
+
+            if "视频汇总" in table_name:
+                summary_table_id = table_id
+
+            # --- 修复日期字段 ---
+            fields = client.list_fields(app_token, table_id)
+            date_field_id = ""
+            for f in fields:
+                if f.get("field_name") == "发布时间":
+                    date_field_id = f.get("field_id", "")
+                    current_type = f.get("type", 0)
+                    break
+
+            if not date_field_id:
+                print(f"  [跳过] 未找到「发布时间」字段")
+                continue
+
+            if current_type == 5:
+                print(f"  [跳过] 「发布时间」已是日期类型")
+            else:
+                # 读取所有记录，解析文本日期 → 时间戳
+                records = client.list_all_records(app_token, table_id)
+                print(f"  读取 {len(records)} 条记录")
+
+                update_batch = []
+                for rec in records:
+                    rid = rec.get("record_id")
+                    val = rec.get("fields", {}).get("发布时间", "")
+                    if not val or not isinstance(val, str):
+                        continue
+                    try:
+                        from datetime import datetime as _dt
+                        dt = _dt.strptime(val.strip(), "%Y-%m-%d %H:%M:%S")
+                        ms = int(dt.timestamp() * 1000)
+                        update_batch.append({
+                            "record_id": rid,
+                            "fields": {"发布时间": ms}
+                        })
+                    except Exception:
+                        pass
+
+                # 先改字段类型为日期
+                try:
+                    client.update_field(app_token, table_id, date_field_id, "发布时间", 5)
+                    print(f"  ✓ 字段类型已改为日期")
+                except Exception as e:
+                    print(f"  ✗ 修改字段类型失败: {e}")
+                    continue
+
+                # 再批量更新值
+                if update_batch:
+                    updated = client.batch_update_records(app_token, table_id, update_batch)
+                    print(f"  ✓ 日期值已更新: {updated}/{len(update_batch)} 条")
+                else:
+                    print(f"  无需更新日期值")
+
+        # --- 视频脚本提取 ---
+        if summary_table_id:
+            print(f"\n[补写] 开始提取视频脚本 (汇总表: {summary_table_id})")
+            try:
+                _run_video_script_extraction(
+                    feishu_app_id, feishu_app_secret,
+                    app_token, summary_table_id
+                )
+            except Exception as e:
+                print(f"[补写] 视频脚本提取失败: {e}")
+        else:
+            print("\n[补写] 未找到「视频汇总」表，跳过脚本提取")
+
+        print("\n[补写] 完成!")
+
+    finally:
+        client.close()
+
+
+def _run_video_script_extraction(
+    feishu_app_id: str, feishu_app_secret: str,
+    app_token: str, summary_table_id: str,
+):
+    """读取配置并调用 VideoScriptExtractor 提取视频脚本"""
+    config_path = os.path.join("config", "anti_crawl_config.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        cfg = {}
+
+    feishu_cfg = cfg.get("feishu", {})
+    if not feishu_cfg.get("video_script_enabled", False):
+        utils.logger.info("[飞书] 视频脚本提取未启用，跳过")
+        return
+
+    api_key = feishu_cfg.get("video_script_api_key", "")
+    if not api_key:
+        utils.logger.warning("[飞书] video_script_api_key 未配置，跳过视频脚本提取")
+        return
+
+    gateway_url = feishu_cfg.get("video_script_gateway_url", "https://ops-ai-gateway.yc345.tv/v1")
+    model = feishu_cfg.get("video_script_model", "gemini-3-pro-preview")
+    concurrency = int(feishu_cfg.get("video_script_concurrency", 5))
+
+    utils.logger.info(
+        f"[飞书] 开始自动提取视频脚本 (模型: {model}, 并发: {concurrency})..."
+    )
+
+    from tools.video_script_extractor import VideoScriptExtractor
+
+    def _on_progress(current, total, title):
+        utils.logger.info(f"[视频脚本] [{current}/{total}] {title}")
+
+    with VideoScriptExtractor(
+        feishu_app_id=feishu_app_id,
+        feishu_app_secret=feishu_app_secret,
+        gemini_base_url=gateway_url,
+        gemini_api_key=api_key,
+        gemini_model=model,
+        concurrency=concurrency,
+    ) as extractor:
+        result = extractor.extract_and_write(
+            app_token=app_token,
+            table_id=summary_table_id,
+            skip_existing=True,
+            on_progress=_on_progress,
+        )
+
+    if result.get("success"):
+        utils.logger.info(
+            f"[飞书] 视频脚本提取完成: "
+            f"处理 {result.get('processed', 0)}, "
+            f"跳过 {result.get('skipped', 0)}, "
+            f"失败 {result.get('failed', 0)}"
+        )
+    else:
+        utils.logger.warning(f"[飞书] 视频脚本提取失败: {result.get('message', '')}")
+
 
 def _validate_single_creator(expected_uid: str, notes: list) -> bool:
     """
@@ -3289,6 +3475,8 @@ def main():
                         help="每次补图最多处理 N 条笔记 (默认0=不限制，建议30~50)")
     parser.add_argument("--force-recrawl", action="store_true",
                         help="强制重新爬取：重置进度+禁用历史复用，爬取时直接下载图片")
+    parser.add_argument("--patch-feishu", default="",
+                        help="补写飞书表格: 传入 app_token，自动修复日期字段+提取视频脚本")
 
     args = parser.parse_args()
 
@@ -3348,6 +3536,11 @@ def main():
                 excel_path = config_excel
     except Exception:
         pass
+
+    # --patch-feishu 模式：补写已有飞书表格（修复日期 + 提取脚本）
+    if args.patch_feishu:
+        _patch_feishu_tables(args.patch_feishu, feishu_app_id, feishu_app_secret)
+        return
 
     # --export-only 模式：只导出已有数据，不爬取
     if args.export_only:

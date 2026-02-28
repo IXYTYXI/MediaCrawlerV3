@@ -111,12 +111,17 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         return self.headers
 
     async def _handle_rate_limit(self):
-        """处理访问频繁限流：渐进式等待确认"""
+        """处理访问频繁限流：渐进式等待 + 恢复后冷却期"""
+        from tools.anti_crawl_utils import get_wait_manager
         import random
+
         if not hasattr(self, '_rate_limit_count'):
             self._rate_limit_count = 0
         self._rate_limit_count += 1
         self._success_after_rate_limit = 0
+
+        # 通知动态等待管理器（使 get_multiplier 生效）
+        get_wait_manager().record_failure(is_block=True)
 
         wait_minutes_map = {1: 8, 2: 14, 3: 21}
         if self._rate_limit_count <= 3:
@@ -132,12 +137,40 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             f"等待 {wait_sec:.0f} 秒（约{wait_sec/60:.1f}分钟）后继续..."
         )
         await asyncio.sleep(wait_sec)
+
+        # 设置恢复冷却期：限流后的请求需要显著降速，避免立即再次触发
+        if self._rate_limit_count <= 1:
+            self._post_recovery_multiplier = 2.5
+            self._post_recovery_remaining = 10
+        elif self._rate_limit_count <= 3:
+            self._post_recovery_multiplier = 3.5
+            self._post_recovery_remaining = 15
+        else:
+            self._post_recovery_multiplier = 4.5
+            self._post_recovery_remaining = 20
+
         utils.logger.info(
-            f"[XiaoHongShuClient] 限流等待结束（第{self._rate_limit_count}次），继续爬取"
+            f"[XiaoHongShuClient] 限流等待结束（第{self._rate_limit_count}次），"
+            f"进入冷却期：接下来 {self._post_recovery_remaining} 次请求使用 "
+            f"{self._post_recovery_multiplier:.1f}x 间隔"
         )
 
     def _reset_rate_limit(self):
-        """请求成功后渐进式降级限流计数，避免过早归零导致反复触发"""
+        """请求成功后渐进式降级限流计数 + 冷却期递减"""
+        from tools.anti_crawl_utils import get_wait_manager
+        get_wait_manager().record_success()
+
+        # 冷却期递减：每次成功请求后逐步降低恢复乘数
+        if hasattr(self, '_post_recovery_remaining') and self._post_recovery_remaining > 0:
+            self._post_recovery_remaining -= 1
+            if self._post_recovery_remaining > 0:
+                total = self._post_recovery_remaining
+                start_mult = getattr(self, '_post_recovery_multiplier', 1.0)
+                self._post_recovery_multiplier = max(1.2, start_mult - 0.15)
+            else:
+                self._post_recovery_multiplier = 1.0
+                utils.logger.info("[XiaoHongShuClient] 冷却期结束，恢复正常爬取速度")
+
         if not hasattr(self, '_rate_limit_count') or self._rate_limit_count <= 0:
             return
         if not hasattr(self, '_success_after_rate_limit'):
@@ -158,6 +191,12 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 utils.logger.info(
                     f"[XiaoHongShuClient] 限流计数已清零（连续 {step_down_threshold} 次成功）"
                 )
+
+    def get_recovery_multiplier(self) -> float:
+        """获取限流恢复冷却期的等待时间乘数（1.0 = 正常速度）"""
+        if hasattr(self, '_post_recovery_remaining') and self._post_recovery_remaining > 0:
+            return getattr(self, '_post_recovery_multiplier', 1.0)
+        return 1.0
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     async def request(self, method, url, **kwargs) -> Union[str, Any]:
@@ -632,6 +671,8 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         callback: Optional[Callable] = None,
         xsec_token: str = "",
         xsec_source: str = "pc_feed",
+        resume_cursor: str = "",
+        resume_enumerated: int = 0,
     ) -> List[Dict]:
         """
         Get all posts published by specified user, this method will continuously find all post information under a user
@@ -641,6 +682,8 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             callback: Update callback function after one pagination crawl ends
             xsec_token: Verification token
             xsec_source: Channel source
+            resume_cursor: Saved pagination cursor to resume from (skip already-enumerated pages)
+            resume_enumerated: Number of notes already enumerated in previous runs
 
         Returns:
 
@@ -652,8 +695,17 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         max_consecutive_errors = 3
         batch_count = 0          # 批次计数（用于 pong 探活）
         pong_every_n_batches = 3  # 每 N 个批次做 1 次 pong 探活
+        total_enumerated = 0     # 已枚举总数（含恢复的）
+
+        if resume_cursor:
+            notes_cursor = resume_cursor
+            total_enumerated = resume_enumerated
+            utils.logger.info(
+                f"[XiaoHongShuClient.get_all_notes_by_creator] "
+                f"从游标恢复分页，跳过已枚举的 {resume_enumerated} 条"
+            )
         
-        while notes_has_more and len(result) < config.CRAWLER_MAX_NOTES_COUNT:
+        while notes_has_more and (total_enumerated + len(result)) < config.CRAWLER_MAX_NOTES_COUNT:
             # ========== 第 4 层：每 N 批次 pong() 探活 ==========
             batch_count += 1
             if batch_count > 1 and batch_count % pong_every_n_batches == 0:
@@ -716,6 +768,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
 
             notes_has_more = notes_res.get("has_more", False)
             notes_cursor = notes_res.get("cursor", "")
+            self._last_pagination_cursor = notes_cursor
             if "notes" not in notes_res:
                 utils.logger.info(
                     f"[XiaoHongShuClient.get_all_notes_by_creator] No 'notes' key found in response: {notes_res}"
@@ -727,7 +780,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 f"[XiaoHongShuClient.get_all_notes_by_creator] got user_id:{user_id} notes len : {len(notes)}"
             )
 
-            remaining = config.CRAWLER_MAX_NOTES_COUNT - len(result)
+            remaining = config.CRAWLER_MAX_NOTES_COUNT - total_enumerated - len(result)
             if remaining <= 0:
                 break
 

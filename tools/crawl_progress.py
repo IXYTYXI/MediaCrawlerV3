@@ -61,6 +61,10 @@ class CrawlProgressManager:
         self._start_time: Optional[str] = None
         self._db_conn: Optional[sqlite3.Connection] = None
         
+        # 分页游标：恢复时跳过已枚举的页面
+        self._saved_cursor: str = ""
+        self._saved_cursor_enumerated: int = 0
+        
         # 增量保存缓冲
         self._pending_crawled: Set[str] = set()
         self._pending_failed: Set[str] = set()
@@ -168,6 +172,8 @@ class CrawlProgressManager:
         self._crawled_ids = set()
         self._failed_ids = set()
         self._comment_crawled_ids = set()
+        self._saved_cursor = ""
+        self._saved_cursor_enumerated = 0
         self._pending_crawled = set()
         self._pending_failed = set()
         self._pending_comment_crawled = set()
@@ -206,6 +212,8 @@ class CrawlProgressManager:
             self._crawled_ids = set(data.get("crawled_ids", []))
             self._failed_ids = set(data.get("failed_ids", []))
             self._comment_crawled_ids = set(data.get("comment_crawled_ids", []))
+            self._saved_cursor = data.get("pagination_cursor", "")
+            self._saved_cursor_enumerated = data.get("pagination_enumerated", 0)
             
             last_update = data.get("last_update", "未知")
             total_crawled = len(self._crawled_ids)
@@ -215,6 +223,8 @@ class CrawlProgressManager:
             utils.logger.info(f"[断点续爬] 加载进度成功: {task_id}")
             utils.logger.info(f"[断点续爬] 上次更新: {last_update}")
             utils.logger.info(f"[断点续爬] 作品: {total_crawled} 条, 失败: {total_failed} 条, 评论: {total_comments} 条")
+            if self._saved_cursor:
+                utils.logger.info(f"[断点续爬] 分页游标: 已枚举 {self._saved_cursor_enumerated} 条，可直接跳过")
             
             return self._crawled_ids.copy()
             
@@ -295,6 +305,8 @@ class CrawlProgressManager:
                 "crawled_count": len(self._crawled_ids),
                 "failed_count": len(self._failed_ids),
                 "comment_crawled_count": len(self._comment_crawled_ids),
+                "pagination_cursor": self._saved_cursor,
+                "pagination_enumerated": self._saved_cursor_enumerated,
                 "crawled_ids": list(self._crawled_ids),
                 "failed_ids": list(self._failed_ids),
                 "comment_crawled_ids": list(self._comment_crawled_ids)
@@ -313,6 +325,20 @@ class CrawlProgressManager:
         except Exception as e:
             utils.logger.error(f"[断点续爬] 保存进度失败: {e}")
     
+    def update_cursor(self, cursor: str, enumerated: int):
+        """更新分页游标（分页过程中定期调用）"""
+        self._saved_cursor = cursor
+        self._saved_cursor_enumerated = enumerated
+
+    def get_saved_cursor(self) -> tuple:
+        """获取保存的分页游标 → (cursor_str, enumerated_count)"""
+        return self._saved_cursor, self._saved_cursor_enumerated
+
+    def clear_cursor(self):
+        """清除游标（作者爬取完成时调用，下次从头开始）"""
+        self._saved_cursor = ""
+        self._saved_cursor_enumerated = 0
+
     def get_failed_ids(self) -> Set[str]:
         """获取失败的 note_id 列表（用于重试）"""
         return self._failed_ids.copy()
