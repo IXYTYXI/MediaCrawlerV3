@@ -154,6 +154,7 @@
         }
         .status-badge.idle { background: var(--card); border: 1px solid var(--border); color: var(--text-muted); }
         .status-badge.running { background: var(--success-bg); border: 1px solid var(--success); color: #6ee7b7; }
+        .status-badge.warning { background: #422006; border: 1px solid #f59e0b; color: #fbbf24; }
         .status-badge.stopped { background: var(--danger-bg); border: 1px solid var(--danger); color: #fca5a5; }
 
         .status-dot {
@@ -336,13 +337,24 @@
                         <label class="form-label">每作者最大笔记数</label>
                         <input class="form-input" type="number" v-model.number="config.batch_crawl.max_notes_per_creator" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" v-if="config.batch_crawl.crawl_mode === 'date_range'">
                         <label class="form-label">开始日期</label>
                         <input class="form-input" type="date" v-model="config.batch_crawl.date_start" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" v-if="config.batch_crawl.crawl_mode === 'date_range'">
                         <label class="form-label">结束日期</label>
                         <input class="form-input" type="date" v-model="config.batch_crawl.date_end" />
+                    </div>
+                    <div class="form-group full" v-if="config.batch_crawl.crawl_mode !== 'full'" style="margin-top: 4px;">
+                        <div style="padding: 10px 14px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: var(--radius-sm); font-size: 12px; line-height: 1.7; color: var(--text-muted);">
+                            <template v-if="config.batch_crawl.crawl_mode === 'date_range'">
+                                <strong style="color: var(--text);">日期范围模式</strong>：只爬取发布时间在 {{ config.batch_crawl.date_start || '?' }} ~ {{ config.batch_crawl.date_end || '?' }} 之间的作品。连续 5 条超出范围后自动跳过该作者。
+                            </template>
+                            <template v-if="config.batch_crawl.crawl_mode === 'incremental'">
+                                <strong style="color: var(--text);">增量更新模式</strong>：已完成的作者仅爬取上次之后的新内容，已有作品只更新互动量（点赞/评论/收藏），不重复爬取全部内容。<br/>
+                                <span style="color: var(--warning);">首次使用请先用「全量爬取」完成一次完整爬取，之后切换为增量模式即可。</span>
+                            </template>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">作者间等待 (秒)</label>
@@ -393,6 +405,134 @@
                                  @click="config.batch_crawl.force_recrawl = !config.batch_crawl.force_recrawl"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 作者管理 -->
+            <div class="card">
+                <div class="card-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>作者列表 <span v-if="creators.length" style="font-size: 12px; color: var(--text-dim); font-weight: 400;">({{ creators.length }} 个)</span></span>
+                    <button class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px;" @click="loadCreators">刷新</button>
+                </div>
+
+                <!-- 新增表单 -->
+                <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                    <input class="form-input" v-model="newCreator.name" placeholder="名称" style="flex: 1; font-size: 12px;" />
+                    <input class="form-input" v-model="newCreator.id" placeholder="ID（可选）" style="flex: 1; font-size: 12px;" />
+                    <input class="form-input" v-model="newCreator.url" placeholder="小红书主页链接" style="flex: 2.5; font-size: 12px;"
+                           @keyup.enter="addCreator" />
+                    <button class="btn btn-primary" style="padding: 6px 16px; font-size: 12px; white-space: nowrap;" @click="addCreator" :disabled="!newCreator.url">添加</button>
+                </div>
+
+                <!-- 列表 -->
+                <div v-if="creators.length" style="max-height: 360px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+                    <table class="progress-table" style="margin: 0;">
+                        <thead>
+                            <tr><th style="width: 36px;">#</th><th>名称</th><th>ID</th><th style="min-width: 200px;">链接</th><th style="width: 80px;">操作</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(c, idx) in creators" :key="idx">
+                                <td style="color: var(--text-dim);">{{ idx + 1 }}</td>
+                                <td>
+                                    <span v-if="editIdx !== idx">{{ c.name }}</span>
+                                    <input v-else class="form-input" v-model="editCreator.name" style="padding: 3px 6px; font-size: 12px; width: 100%;" />
+                                </td>
+                                <td>
+                                    <span v-if="editIdx !== idx" class="uid-text">{{ c.id }}</span>
+                                    <input v-else class="form-input" v-model="editCreator.id" style="padding: 3px 6px; font-size: 12px; width: 100%;" />
+                                </td>
+                                <td>
+                                    <span v-if="editIdx !== idx" style="font-size: 11px; color: var(--text-dim); word-break: break-all;">{{ c.url.substring(0, 70) }}{{ c.url.length > 70 ? '...' : '' }}</span>
+                                    <input v-else class="form-input" v-model="editCreator.url" style="padding: 3px 6px; font-size: 12px; width: 100%;" />
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 4px;">
+                                        <template v-if="editIdx !== idx">
+                                            <button class="btn-sm btn-secondary" style="background: var(--border); color: var(--text);" @click="startEdit(idx)">改</button>
+                                            <button class="btn-sm" style="background: var(--danger-bg); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3);" @click="deleteCreator(idx)">删</button>
+                                        </template>
+                                        <template v-else>
+                                            <button class="btn-sm btn-primary" style="background: var(--success); color: #fff;" @click="saveEdit(idx)">存</button>
+                                            <button class="btn-sm btn-secondary" style="background: var(--border); color: var(--text);" @click="editIdx = -1">取消</button>
+                                        </template>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div v-else style="text-align: center; padding: 30px; color: var(--text-dim); font-size: 13px;">
+                    暂无作者，请添加小红书作者主页链接
+                </div>
+            </div>
+
+            <!-- Session 池 -->
+            <div class="card">
+                <div class="card-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>Session 池
+                        <span v-if="sessionPool.stats.total" style="font-size: 12px; color: var(--text-dim); font-weight: 400;">
+                            ({{ sessionPool.stats.active }} 可用 / {{ sessionPool.stats.total }} 总计)
+                        </span>
+                    </span>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-sm btn-secondary" style="background: var(--border); color: var(--text);" @click="loadSessions">刷新</button>
+                        <button class="btn-sm btn-primary" @click="verifyAllSessions" :disabled="sessionPool.verifying">
+                            {{ sessionPool.verifying ? '验证中...' : '全部验证' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 添加 -->
+                <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                    <input class="form-input" v-model="sessionPool.newWs" placeholder="粘贴 web_session 值" style="flex: 2.5; font-size: 12px;" />
+                    <input class="form-input" v-model="sessionPool.newLabel" placeholder="备注（可选）" style="flex: 1; font-size: 12px;" />
+                    <button class="btn btn-primary" style="padding: 6px 16px; font-size: 12px; white-space: nowrap;"
+                            @click="addSession" :disabled="!sessionPool.newWs">添加</button>
+                </div>
+
+                <!-- 列表 -->
+                <div v-if="sessionPool.list.length" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+                    <table class="progress-table" style="margin: 0;">
+                        <thead>
+                            <tr>
+                                <th style="width: 36px;">#</th>
+                                <th>备注</th>
+                                <th>web_session</th>
+                                <th style="width: 60px;">状态</th>
+                                <th style="width: 50px;">成功</th>
+                                <th style="width: 50px;">失败</th>
+                                <th style="width: 100px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(s, i) in sessionPool.list" :key="s.id">
+                                <td style="color: var(--text-dim);">{{ i + 1 }}</td>
+                                <td>{{ s.label || '-' }}</td>
+                                <td class="uid-text">{{ s.web_session.substring(0, 12) }}...</td>
+                                <td>
+                                    <span class="status-badge"
+                                          :class="s.status === 'active' ? 'running' : s.status === 'cooldown' ? 'warning' : 'stopped'">
+                                        {{ s.status === 'active' ? '可用' : s.status === 'cooldown' ? '冷却' : '过期' }}
+                                    </span>
+                                </td>
+                                <td style="color: var(--success);">{{ s.success_count }}</td>
+                                <td style="color: var(--danger);">{{ s.fail_count }}</td>
+                                <td>
+                                    <div style="display: flex; gap: 4px;">
+                                        <button class="btn-sm btn-secondary" style="background: var(--border); color: var(--text);"
+                                                @click="verifySession(s.id)" :disabled="s._verifying">
+                                            {{ s._verifying ? '...' : '验证' }}
+                                        </button>
+                                        <button class="btn-sm" style="background: var(--danger-bg); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3);"
+                                                @click="deleteSession(s.id, s.label)">删</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div v-else style="text-align: center; padding: 24px; color: var(--text-dim); font-size: 13px;">
+                    暂无 session，请添加 web_session
                 </div>
             </div>
 
@@ -543,6 +683,53 @@
                 </div>
             </div>
 
+            <!-- 任务通知 -->
+            <div class="card">
+                <div class="card-title">任务完成通知</div>
+                <div class="form-grid" v-if="config.notification">
+                    <div class="form-group">
+                        <div class="switch-row">
+                            <label class="form-label">启用通知</label>
+                            <div class="switch" :class="{ on: config.notification.enabled }"
+                                 @click="config.notification.enabled = !config.notification.enabled"></div>
+                        </div>
+                        <span class="form-desc">任务完成后向飞书群发送结果卡片</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">通知方式</label>
+                        <select class="form-select" v-model="notifyMethod">
+                            <option value="webhook">Webhook 自定义机器人（推荐）</option>
+                            <option value="app_bot">应用机器人</option>
+                        </select>
+                    </div>
+                    <div class="form-group full" v-if="notifyMethod === 'webhook'">
+                        <label class="form-label">Webhook URL</label>
+                        <input class="form-input" v-model="config.notification.webhook_url"
+                               placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx" />
+                        <span class="form-desc">群设置 → 群机器人 → 添加自定义机器人 → 复制 Webhook 地址</span>
+                    </div>
+                    <div class="form-group" v-if="notifyMethod === 'webhook'">
+                        <label class="form-label">签名密钥（可选）</label>
+                        <input class="form-input" type="password" v-model="config.notification.webhook_secret"
+                               placeholder="留空则不签名" />
+                    </div>
+                    <div class="form-group full" v-if="notifyMethod === 'app_bot'">
+                        <label class="form-label">群聊 Chat ID</label>
+                        <input class="form-input" v-model="config.notification.chat_id"
+                               placeholder="oc_xxxxx" />
+                        <span class="form-desc">将应用机器人加入群后，通过 API 获取群聊 ID</span>
+                    </div>
+                    <div class="form-group" v-if="notifyMethod === 'app_bot'">
+                        <label class="form-label">App ID（留空复用飞书推送的）</label>
+                        <input class="form-input" v-model="config.notification.app_id" />
+                    </div>
+                    <div class="form-group" v-if="notifyMethod === 'app_bot'">
+                        <label class="form-label">App Secret（留空复用飞书推送的）</label>
+                        <input class="form-input" type="password" v-model="config.notification.app_secret" />
+                    </div>
+                </div>
+            </div>
+
             <!-- 浏览器 & 容错 -->
             <div class="card">
                 <div class="card-title">浏览器 / 容错</div>
@@ -635,6 +822,22 @@
                         <span style="font-size: 11px; color: var(--text-dim); text-align: center; max-width: 360px; line-height: 1.6;">
                             {{ crawlModeDesc }}
                         </span>
+
+                        <!-- 日期范围快捷设置 -->
+                        <div v-if="config.batch_crawl.crawl_mode === 'date_range'"
+                             style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">开始</label>
+                                <input type="date" class="form-input" v-model="config.batch_crawl.date_start"
+                                       style="font-size: 12px; padding: 5px 8px; width: 145px;" />
+                            </div>
+                            <span style="color: var(--text-dim);">~</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">结束</label>
+                                <input type="date" class="form-input" v-model="config.batch_crawl.date_end"
+                                       style="font-size: 12px; padding: 5px 8px; width: 145px;" />
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 按钮 -->
@@ -790,6 +993,8 @@
                             loginPassword.value = '';
                             loadConfig();
                             fetchStatus();
+                            loadCreators();
+                            loadSessions();
                             statusTimer = setInterval(fetchStatus, 5000);
                         } else {
                             loginError.value = data.message || '登录失败';
@@ -928,15 +1133,28 @@
                 async function startCrawler() {
                     starting.value = true;
                     try {
+                        // 启动前自动保存配置
+                        const raw = JSON.parse(JSON.stringify(config));
+                        const saveRes = await authFetch(API + '/config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(raw),
+                        });
+                        const saveData = await saveRes.json();
+                        if (!saveData.success) {
+                            showToast('配置保存失败，启动取消', 'error');
+                            starting.value = false;
+                            return;
+                        }
+
                         const res = await authFetch(API + '/start', { method: 'POST' });
                         const data = await res.json();
                         if (data.success) {
-                            showToast('爬虫已启动, PID: ' + data.pid);
+                            showToast('配置已保存，爬虫已启动, PID: ' + data.pid);
                             crawlerStatus.value = 'running';
                             crawlerPid.value = data.pid;
                             runningSeconds.value = 0;
                             exitCode.value = null;
-                            // 自动跳到日志
                             tab.value = 'log';
                             connectLogWs();
                         } else {
@@ -967,6 +1185,165 @@
                     }
                 }
 
+                // ── Session 池 ──
+                const sessionPool = reactive({
+                    list: [],
+                    stats: { total: 0, active: 0, cooldown: 0, expired: 0 },
+                    newWs: '',
+                    newLabel: '',
+                    verifying: false,
+                });
+
+                async function loadSessions() {
+                    try {
+                        const res = await authFetch(API + '/sessions');
+                        const data = await res.json();
+                        if (data.success) {
+                            sessionPool.list = (data.sessions || []).map(s => ({ ...s, _verifying: false }));
+                            sessionPool.stats = data.stats || {};
+                        }
+                    } catch (e) { showToast('加载 session 列表失败', 'error'); }
+                }
+
+                async function addSession() {
+                    if (!sessionPool.newWs) return;
+                    try {
+                        const res = await authFetch(API + '/sessions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ web_session: sessionPool.newWs, label: sessionPool.newLabel }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(data.message || '已添加');
+                            sessionPool.newWs = ''; sessionPool.newLabel = '';
+                            loadSessions();
+                        } else { showToast(data.error || data.detail || '添加失败', 'error'); }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                }
+
+                async function deleteSession(id, label) {
+                    if (!confirm(`确认删除 session "${label || id}" ？`)) return;
+                    try {
+                        const res = await authFetch(API + '/sessions/' + id, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) { showToast('已删除'); loadSessions(); }
+                        else { showToast(data.error || '删除失败', 'error'); }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                }
+
+                async function verifySession(id) {
+                    const s = sessionPool.list.find(x => x.id === id);
+                    if (s) s._verifying = true;
+                    try {
+                        const res = await authFetch(API + '/sessions/' + id + '/verify', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(data.message + ': ' + data.status);
+                            loadSessions();
+                        } else { showToast(data.error || '验证失败', 'error'); }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                    finally { if (s) s._verifying = false; }
+                }
+
+                async function verifyAllSessions() {
+                    sessionPool.verifying = true;
+                    try {
+                        const res = await authFetch(API + '/sessions/verify-all', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(`验证完成: ${data.results.active} 可用, ${data.results.expired} 过期`);
+                            loadSessions();
+                        } else { showToast('验证失败', 'error'); }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                    finally { sessionPool.verifying = false; }
+                }
+
+                // ── 作者管理 ──
+                const creators = ref([]);
+                const newCreator = reactive({ name: '', id: '', url: '' });
+                const editIdx = ref(-1);
+                const editCreator = reactive({ name: '', id: '', url: '' });
+
+                async function loadCreators() {
+                    try {
+                        const res = await authFetch(API + '/creators');
+                        const data = await res.json();
+                        if (data.success) creators.value = data.creators || [];
+                    } catch (e) {
+                        showToast('加载作者列表失败', 'error');
+                    }
+                }
+
+                async function addCreator() {
+                    if (!newCreator.url) return;
+                    try {
+                        const res = await authFetch(API + '/creators', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: newCreator.name, id: newCreator.id, url: newCreator.url }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(data.message);
+                            newCreator.name = ''; newCreator.id = ''; newCreator.url = '';
+                            loadCreators();
+                        } else {
+                            showToast(data.error || '添加失败', 'error');
+                        }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                }
+
+                function startEdit(idx) {
+                    editIdx.value = idx;
+                    const c = creators.value[idx];
+                    editCreator.name = c.name;
+                    editCreator.id = c.id;
+                    editCreator.url = c.url;
+                }
+
+                async function saveEdit(idx) {
+                    try {
+                        const res = await authFetch(API + '/creators/' + idx, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: editCreator.name, id: editCreator.id, url: editCreator.url }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast('已更新');
+                            editIdx.value = -1;
+                            loadCreators();
+                        } else { showToast(data.error || '更新失败', 'error'); }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                }
+
+                async function deleteCreator(idx) {
+                    const c = creators.value[idx];
+                    if (!confirm(`确认删除 "${c.name || c.url}" ？`)) return;
+                    try {
+                        const res = await authFetch(API + '/creators/' + idx, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(data.message);
+                            if (editIdx.value === idx) editIdx.value = -1;
+                            loadCreators();
+                        } else { showToast(data.error || '删除失败', 'error'); }
+                    } catch (e) { showToast('请求失败', 'error'); }
+                }
+
+                // ── 通知方式 ──
+                const notifyMethod = computed({
+                    get() {
+                        return config.notification?.chat_id ? 'app_bot' : 'webhook';
+                    },
+                    set(v) {
+                        if (!config.notification) return;
+                        if (v === 'webhook') { config.notification.chat_id = ''; }
+                        else { config.notification.webhook_url = ''; config.notification.webhook_secret = ''; }
+                    }
+                });
+
                 // ── 爬取模式 ──
                 const crawlModes = [
                     { value: 'full', label: '全量爬取' },
@@ -975,10 +1352,12 @@
                 ];
                 const crawlModeDesc = computed(() => {
                     const mode = config.batch_crawl?.crawl_mode || 'full';
+                    const ds = config.batch_crawl?.date_start || '';
+                    const de = config.batch_crawl?.date_end || '';
                     const descs = {
                         full: '爬取所有内容，适合首次使用',
-                        incremental: '只爬取上次之后的新内容，已有作品仅更新互动量',
-                        date_range: '仅爬取指定日期范围内的内容',
+                        incremental: '已完成的作者仅爬新内容+更新互动量，首次请先用全量模式',
+                        date_range: ds || de ? `爬取 ${ds || '不限'} ~ ${de || '不限'} 范围内的内容` : '仅爬取指定日期范围内的内容（请在配置管理中设置日期）',
                     };
                     return descs[mode] || '';
                 });
@@ -1149,6 +1528,8 @@
                         authenticated.value = true;
                         loadConfig();
                         fetchStatus();
+                        loadCreators();
+                        loadSessions();
                         statusTimer = setInterval(fetchStatus, 5000);
                     } else {
                         nextTick(() => { if (pwdInput.value) pwdInput.value.focus(); });
@@ -1170,7 +1551,10 @@
                     showToast, loadConfig, saveConfig,
                     startCrawler, stopCrawler, formatDuration,
                     clearLogs, switchToLog,
-                    crawlModes, crawlModeDesc, setCrawlMode,
+                    sessionPool, loadSessions, addSession, deleteSession, verifySession, verifyAllSessions,
+                    creators, newCreator, editIdx, editCreator,
+                    loadCreators, addCreator, startEdit, saveEdit, deleteCreator,
+                    notifyMethod, crawlModes, crawlModeDesc, setCrawlMode,
                     files, fileView, loadFiles, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, switchToFiles,
                 };
             }

@@ -111,6 +111,220 @@ async def get_creators():
         raise HTTPException(status_code=500, detail=f"读取作者列表失败: {e}")
 
 
+def _resolve_excel_path_dash() -> str:
+    try:
+        if CONFIG_PATH.exists():
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            rel = cfg.get("batch_crawl", {}).get("excel_path", "redbookaccontidandresult.xlsx")
+        else:
+            rel = "redbookaccontidandresult.xlsx"
+    except Exception:
+        rel = "redbookaccontidandresult.xlsx"
+    if os.path.isabs(rel):
+        return rel
+    return str(PROJECT_ROOT / rel)
+
+
+def _write_creators_dash(creators: list):
+    import openpyxl
+    path = _resolve_excel_path_dash()
+    if os.path.exists(path):
+        wb = openpyxl.load_workbook(path)
+    else:
+        wb = openpyxl.Workbook()
+    sheet_name = "小红书账号"
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+    ws = wb.create_sheet(sheet_name, 0)
+    ws.append(["名称", "ID", "主页链接"])
+    for c in creators:
+        ws.append([c.get("name", ""), c.get("id", ""), c.get("url", "")])
+    wb.save(path)
+    wb.close()
+
+
+@router.post("/creators")
+async def add_creator_dash(body: dict):
+    try:
+        url = body.get("url", "").strip()
+        if not url or "xiaohongshu.com" not in url:
+            raise HTTPException(status_code=400, detail="链接必须包含 xiaohongshu.com")
+        path = _resolve_excel_path_dash()
+        creators = []
+        if os.path.exists(path):
+            from tools.excel_reader import ExcelCreatorReader
+            with ExcelCreatorReader(path) as reader:
+                creators = reader.get_creators()
+        existing_urls = {c["url"].split("?")[0] for c in creators}
+        if url.split("?")[0] in existing_urls:
+            raise HTTPException(status_code=409, detail="该作者已存在")
+        creators.append({"name": body.get("name", "").strip(), "id": body.get("id", "").strip(), "url": url})
+        _write_creators_dash(creators)
+        return {"success": True, "message": f"已添加", "total": len(creators)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/creators/{index}")
+async def update_creator_dash(index: int, body: dict):
+    try:
+        path = _resolve_excel_path_dash()
+        from tools.excel_reader import ExcelCreatorReader
+        with ExcelCreatorReader(path) as reader:
+            creators = reader.get_creators()
+        if index < 0 or index >= len(creators):
+            raise HTTPException(status_code=404, detail="索引无效")
+        if "name" in body:
+            creators[index]["name"] = body["name"].strip()
+        if "id" in body:
+            creators[index]["id"] = body["id"].strip()
+        if "url" in body:
+            url = body["url"].strip()
+            if url and "xiaohongshu.com" not in url:
+                raise HTTPException(status_code=400, detail="链接必须包含 xiaohongshu.com")
+            if url:
+                creators[index]["url"] = url
+        _write_creators_dash(creators)
+        return {"success": True, "message": "已更新"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/creators/{index}")
+async def delete_creator_dash(index: int):
+    try:
+        path = _resolve_excel_path_dash()
+        from tools.excel_reader import ExcelCreatorReader
+        with ExcelCreatorReader(path) as reader:
+            creators = reader.get_creators()
+        if index < 0 or index >= len(creators):
+            raise HTTPException(status_code=404, detail="索引无效")
+        removed = creators.pop(index)
+        _write_creators_dash(creators)
+        return {"success": True, "message": f"已删除: {removed.get('name', '')}", "total": len(creators)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Session 池管理 ====================
+
+def _get_session_pool_dash():
+    from tools.session_pool import SessionPool
+    return SessionPool()
+
+
+@router.get("/sessions")
+async def list_sessions_dash():
+    try:
+        pool = _get_session_pool_dash()
+        return {"success": True, "sessions": pool.get_all(), "stats": pool.stats()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions")
+async def add_session_dash(body: dict):
+    try:
+        ws = body.get("web_session", "").strip()
+        label = body.get("label", "").strip()
+        if not ws or len(ws) < 10:
+            raise HTTPException(status_code=400, detail="web_session 无效")
+        pool = _get_session_pool_dash()
+        entry = pool.add(ws, label)
+        return {"success": True, "message": f"已添加: {entry.id}", "session": entry.to_dict()}
+    except ValueError as ve:
+        raise HTTPException(status_code=409, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session_dash(session_id: str):
+    try:
+        pool = _get_session_pool_dash()
+        ok = pool.remove(session_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="未找到")
+        return {"success": True, "message": "已删除"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/verify")
+async def verify_single_session_dash(session_id: str):
+    import httpx
+    try:
+        pool = _get_session_pool_dash()
+        entry = pool.get_by_id(session_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="未找到")
+        valid = await _verify_ws_dash(entry.web_session)
+        if valid:
+            pool.mark_active(session_id)
+            return {"success": True, "status": "active", "message": "验证通过"}
+        else:
+            pool.mark_expired(session_id)
+            return {"success": True, "status": "expired", "message": "已过期"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/verify-all")
+async def verify_all_sessions_dash():
+    try:
+        pool = _get_session_pool_dash()
+        results = {"verified": 0, "active": 0, "expired": 0}
+        for s in pool.get_all():
+            if s["status"] == "expired":
+                continue
+            valid = await _verify_ws_dash(s["web_session"])
+            if valid:
+                pool.mark_active(s["id"])
+                results["active"] += 1
+            else:
+                pool.mark_expired(s["id"])
+                results["expired"] += 1
+            results["verified"] += 1
+        return {"success": True, "results": results, "stats": pool.stats()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _verify_ws_dash(web_session: str) -> bool:
+    import httpx
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Cookie": f"web_session={web_session}",
+            "Origin": "https://www.xiaohongshu.com",
+            "Referer": "https://www.xiaohongshu.com/",
+        }
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(
+                "https://edith.xiaohongshu.com/api/sns/web/v1/user/selfinfo",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("success", False) or data.get("code", -1) == 0
+    except Exception:
+        pass
+    return False
+
+
 # ==================== 批量爬取控制 ====================
 
 class BatchStartRequest(BaseModel):

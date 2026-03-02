@@ -578,3 +578,242 @@ async def ws_log(ws: WebSocket):
     finally:
         if ws in _log_subscribers:
             _log_subscribers.remove(ws)
+
+
+# ================================================================
+#  作者管理（Excel 读写）
+# ================================================================
+
+def _resolve_excel_path() -> str:
+    try:
+        cfg = _read_config()
+        rel = cfg.get("batch_crawl", {}).get("excel_path", "redbookaccontidandresult.xlsx")
+    except Exception:
+        rel = "redbookaccontidandresult.xlsx"
+    if os.path.isabs(rel):
+        return rel
+    return os.path.join(PROJECT_ROOT, rel)
+
+
+def _read_creators() -> list:
+    path = _resolve_excel_path()
+    if not os.path.exists(path):
+        return []
+    from tools.excel_reader import ExcelCreatorReader
+    with ExcelCreatorReader(path) as reader:
+        return reader.get_creators()
+
+
+def _write_creators(creators: list):
+    """将作者列表写回 Excel（覆盖 '小红书账号' sheet，保留其他 sheet）"""
+    import openpyxl
+    path = _resolve_excel_path()
+    if os.path.exists(path):
+        wb = openpyxl.load_workbook(path)
+    else:
+        wb = openpyxl.Workbook()
+
+    sheet_name = "小红书账号"
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+    ws = wb.create_sheet(sheet_name, 0)
+
+    ws.append(["名称", "ID", "主页链接"])
+    for c in creators:
+        ws.append([c.get("name", ""), c.get("id", ""), c.get("url", "")])
+
+    wb.save(path)
+    wb.close()
+
+
+@router.get("/creators")
+async def list_creators():
+    try:
+        creators = _read_creators()
+        return {"success": True, "creators": creators, "total": len(creators)}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.post("/creators")
+async def add_creator(body: dict):
+    try:
+        name = body.get("name", "").strip()
+        cid = body.get("id", "").strip()
+        url = body.get("url", "").strip()
+        if not url or "xiaohongshu.com" not in url:
+            return JSONResponse(status_code=400, content={"success": False, "error": "链接必须包含 xiaohongshu.com"})
+
+        creators = _read_creators()
+        existing_urls = {c["url"].split("?")[0] for c in creators}
+        clean_url = url.split("?")[0]
+        if clean_url in existing_urls:
+            return JSONResponse(status_code=409, content={"success": False, "error": "该作者已存在"})
+
+        creators.append({"name": name, "id": cid, "url": url})
+        _write_creators(creators)
+        return {"success": True, "message": f"已添加: {name or url}", "total": len(creators)}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.put("/creators/{index}")
+async def update_creator(index: int, body: dict):
+    try:
+        creators = _read_creators()
+        if index < 0 or index >= len(creators):
+            return JSONResponse(status_code=404, content={"success": False, "error": "索引无效"})
+
+        url = body.get("url", "").strip()
+        if url and "xiaohongshu.com" not in url:
+            return JSONResponse(status_code=400, content={"success": False, "error": "链接必须包含 xiaohongshu.com"})
+
+        if "name" in body:
+            creators[index]["name"] = body["name"].strip()
+        if "id" in body:
+            creators[index]["id"] = body["id"].strip()
+        if "url" in body and url:
+            creators[index]["url"] = url
+
+        _write_creators(creators)
+        return {"success": True, "message": "已更新", "creator": creators[index]}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.delete("/creators/{index}")
+async def delete_creator(index: int):
+    try:
+        creators = _read_creators()
+        if index < 0 or index >= len(creators):
+            return JSONResponse(status_code=404, content={"success": False, "error": "索引无效"})
+
+        removed = creators.pop(index)
+        _write_creators(creators)
+        return {"success": True, "message": f"已删除: {removed.get('name', '')}", "total": len(creators)}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.put("/creators")
+async def replace_all_creators(body: dict):
+    """批量替换所有作者"""
+    try:
+        creators = body.get("creators", [])
+        valid = []
+        for c in creators:
+            url = c.get("url", "").strip()
+            if url and "xiaohongshu.com" in url:
+                valid.append({"name": c.get("name", "").strip(), "id": c.get("id", "").strip(), "url": url})
+        _write_creators(valid)
+        return {"success": True, "message": f"已保存 {len(valid)} 个作者", "total": len(valid)}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+# ================================================================
+#  Session 池管理
+# ================================================================
+
+def _get_session_pool():
+    from tools.session_pool import SessionPool
+    return SessionPool()
+
+
+@router.get("/sessions")
+async def list_sessions():
+    try:
+        pool = _get_session_pool()
+        return {"success": True, "sessions": pool.get_all(), "stats": pool.stats()}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.post("/sessions")
+async def add_session(body: dict):
+    try:
+        ws = body.get("web_session", "").strip()
+        label = body.get("label", "").strip()
+        if not ws or len(ws) < 10:
+            return JSONResponse(status_code=400, content={"success": False, "error": "web_session 无效"})
+        pool = _get_session_pool()
+        entry = pool.add(ws, label)
+        return {"success": True, "message": f"已添加: {entry.id}", "session": entry.to_dict()}
+    except ValueError as ve:
+        return JSONResponse(status_code=409, content={"success": False, "error": str(ve)})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    try:
+        pool = _get_session_pool()
+        ok = pool.remove(session_id)
+        if not ok:
+            return JSONResponse(status_code=404, content={"success": False, "error": "未找到"})
+        return {"success": True, "message": "已删除"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.post("/sessions/{session_id}/verify")
+async def verify_single_session(session_id: str):
+    try:
+        pool = _get_session_pool()
+        entry = pool.get_by_id(session_id)
+        if not entry:
+            return JSONResponse(status_code=404, content={"success": False, "error": "未找到"})
+        valid = await _verify_web_session(entry.web_session)
+        if valid:
+            pool.mark_active(session_id)
+            return {"success": True, "status": "active", "message": "验证通过"}
+        else:
+            pool.mark_expired(session_id)
+            return {"success": True, "status": "expired", "message": "已过期"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@router.post("/sessions/verify-all")
+async def verify_all_sessions():
+    try:
+        pool = _get_session_pool()
+        results = {"verified": 0, "active": 0, "expired": 0}
+        for s in pool.get_all():
+            if s["status"] == "expired":
+                continue
+            valid = await _verify_web_session(s["web_session"])
+            if valid:
+                pool.mark_active(s["id"])
+                results["active"] += 1
+            else:
+                pool.mark_expired(s["id"])
+                results["expired"] += 1
+            results["verified"] += 1
+        return {"success": True, "results": results, "stats": pool.stats()}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+async def _verify_web_session(web_session: str) -> bool:
+    """轻量验证：用 httpx 发请求检查 session 是否有效"""
+    import httpx
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Cookie": f"web_session={web_session}",
+            "Origin": "https://www.xiaohongshu.com",
+            "Referer": "https://www.xiaohongshu.com/",
+        }
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(
+                "https://edith.xiaohongshu.com/api/sns/web/v1/user/selfinfo",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("success", False) or data.get("code", -1) == 0
+    except Exception:
+        pass
+    return False

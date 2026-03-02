@@ -275,6 +275,77 @@
           </div>
         </div>
 
+        <!-- Session 池 -->
+        <div class="card rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <span>🔑</span>
+              <h3 class="text-sm font-semibold text-white">Session 池</h3>
+              <span v-if="spStats.total" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium">
+                {{ spStats.active }} 可用 / {{ spStats.total }} 总计
+              </span>
+            </div>
+            <div class="flex gap-2">
+              <button @click="loadSessions" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-[11px] text-gray-400 transition">刷新</button>
+              <button @click="verifyAllSessions" :disabled="spVerifying"
+                class="px-3 py-1.5 rounded-lg text-[11px] transition"
+                :class="spVerifying ? 'bg-gray-800 text-gray-500' : 'btn-primary text-white'">
+                {{ spVerifying ? '验证中...' : '全部验证' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mb-4">
+            <input type="text" v-model="spNewWs" placeholder="粘贴 web_session 值"
+              class="input-field flex-1 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 font-mono">
+            <input type="text" v-model="spNewLabel" placeholder="备注（可选）"
+              class="input-field rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600" style="width:140px">
+            <button @click="addSessionEntry" :disabled="!spNewWs"
+              class="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition"
+              :class="spNewWs ? 'btn-primary text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'">添加</button>
+          </div>
+
+          <div v-if="spList.length" class="overflow-x-auto rounded-lg border border-gray-800/50" style="max-height:280px;overflow-y:auto">
+            <table class="w-full text-xs">
+              <thead><tr class="text-gray-500 bg-gray-800/30 uppercase text-[10px] tracking-wider">
+                <th class="text-left py-2 px-3 font-medium">#</th>
+                <th class="text-left py-2 px-3 font-medium">备注</th>
+                <th class="text-left py-2 px-3 font-medium">web_session</th>
+                <th class="text-center py-2 px-3 font-medium">状态</th>
+                <th class="text-center py-2 px-3 font-medium">成功</th>
+                <th class="text-center py-2 px-3 font-medium">失败</th>
+                <th class="text-center py-2 px-3 font-medium" style="width:100px">操作</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="(s, i) in spList" :key="s.id" class="table-row border-t border-gray-800/30">
+                  <td class="py-2 px-3 text-gray-600">{{ i + 1 }}</td>
+                  <td class="py-2 px-3 text-gray-300">{{ s.label || '-' }}</td>
+                  <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">{{ s.web_session.substring(0, 12) }}...</td>
+                  <td class="py-2 px-3 text-center">
+                    <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
+                      :class="s.status==='active' ? 'bg-emerald-500/15 text-emerald-400' : s.status==='cooldown' ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400'">
+                      {{ s.status === 'active' ? '可用' : s.status === 'cooldown' ? '冷却' : '过期' }}
+                    </span>
+                  </td>
+                  <td class="py-2 px-3 text-center text-emerald-400">{{ s.success_count }}</td>
+                  <td class="py-2 px-3 text-center text-red-400">{{ s.fail_count }}</td>
+                  <td class="py-2 px-3 text-center">
+                    <div class="flex gap-1 justify-center">
+                      <button @click="verifySingleSession(s.id)" :disabled="s._v"
+                        class="px-2 py-1 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition disabled:opacity-40">
+                        {{ s._v ? '...' : '验证' }}
+                      </button>
+                      <button @click="deleteSessionEntry(s.id, s.label)"
+                        class="px-2 py-1 rounded text-[10px] bg-red-500/15 hover:bg-red-500/30 text-red-400 transition">删</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="text-center py-6 text-gray-600 text-sm">暂无 session，请添加</div>
+        </div>
+
         <!-- 自动化说明 -->
         <div class="card rounded-xl p-5 border-gray-700/30">
           <div class="flex items-center gap-2 mb-3"><span>💡</span><h3 class="text-sm font-semibold text-white">自动化机制说明</h3></div>
@@ -293,6 +364,32 @@
           <div><h2 class="text-lg font-semibold text-white">爬取设置</h2><p class="text-xs text-gray-500">配置爬取平台、模式和目标</p></div>
         </div>
         
+        <!-- 爬取模式 & 日期 -->
+        <div class="card rounded-xl p-5 mb-4">
+          <div class="flex items-center gap-2 mb-4"><span>📋</span><h3 class="text-sm font-semibold text-white">爬取模式</h3></div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">模式</label>
+              <select v-model="config.batch_crawl.crawl_mode" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+                <option value="full">全量爬取</option>
+                <option value="date_range">日期范围</option>
+                <option value="incremental">增量更新</option>
+              </select>
+            </div>
+            <div v-if="config.batch_crawl.crawl_mode === 'date_range'">
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">开始日期</label>
+              <input type="date" v-model="config.batch_crawl.date_start" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+            </div>
+            <div v-if="config.batch_crawl.crawl_mode === 'date_range'">
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">结束日期</label>
+              <input type="date" v-model="config.batch_crawl.date_end" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+            </div>
+          </div>
+          <p class="text-[10px] text-gray-600 mt-3" v-if="config.batch_crawl.crawl_mode === 'full'">全量模式：爬取所有作品，不限日期</p>
+          <p class="text-[10px] text-gray-600 mt-3" v-else-if="config.batch_crawl.crawl_mode === 'date_range'">日期范围模式：只爬取 {{ config.batch_crawl.date_start || '?' }} ~ {{ config.batch_crawl.date_end || '?' }} 范围内的作品</p>
+          <p class="text-[10px] text-gray-600 mt-3" v-else>增量模式：已完成的作者仅爬取上次之后的新内容，已有作品只更新互动量</p>
+        </div>
+
         <div class="grid grid-cols-2 gap-4">
           <div class="card rounded-xl p-4">
             <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">平台</label>
@@ -301,7 +398,7 @@
             </select>
           </div>
           <div class="card rounded-xl p-4">
-            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">爬取模式</label>
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">爬取类型</label>
             <select v-model="config.crawl_settings.crawler_type" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
               <option value="search">🔎 关键词搜索</option><option value="creator">👤 作者主页</option><option value="detail">📄 指定帖子</option>
             </select>
@@ -490,16 +587,46 @@
               <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium">{{ creators.length }} 个</span></div>
             <button @click="loadCreators" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-[11px] text-gray-400 transition">刷新</button>
           </div>
-          <div v-if="creators.length" class="overflow-x-auto rounded-lg border border-gray-800/50">
+
+          <!-- 添加作者 -->
+          <div class="flex gap-2 mb-4">
+            <input type="text" v-model="newCreator.name" placeholder="名称" class="input-field rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600" style="flex:1">
+            <input type="text" v-model="newCreator.id" placeholder="ID（可选）" class="input-field rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600" style="flex:1">
+            <input type="text" v-model="newCreator.url" placeholder="小红书主页链接" @keyup.enter="addCreator" class="input-field rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600" style="flex:2.5">
+            <button @click="addCreator" :disabled="!newCreator.url" class="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all" :class="newCreator.url ? 'btn-primary text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'">添加</button>
+          </div>
+
+          <div v-if="creators.length" class="overflow-x-auto rounded-lg border border-gray-800/50" style="max-height:400px;overflow-y:auto">
             <table class="w-full text-xs">
               <thead><tr class="text-gray-500 bg-gray-800/30 uppercase text-[10px] tracking-wider">
-                <th class="text-left py-2.5 px-3 font-medium">#</th><th class="text-left py-2.5 px-3 font-medium">名称</th><th class="text-left py-2.5 px-3 font-medium">ID</th><th class="text-left py-2.5 px-3 font-medium">链接</th>
+                <th class="text-left py-2.5 px-3 font-medium">#</th><th class="text-left py-2.5 px-3 font-medium">名称</th><th class="text-left py-2.5 px-3 font-medium">ID</th><th class="text-left py-2.5 px-3 font-medium">链接</th><th class="text-center py-2.5 px-3 font-medium" style="width:90px">操作</th>
               </tr></thead>
               <tbody><tr v-for="(c, i) in creators" :key="i" class="table-row border-t border-gray-800/30">
                 <td class="py-2.5 px-3 text-gray-600">{{ i + 1 }}</td>
-                <td class="py-2.5 px-3 text-gray-200 font-medium">{{ c.name }}</td>
-                <td class="py-2.5 px-3 text-gray-500 font-mono text-[10px]">{{ c.id }}</td>
-                <td class="py-2.5 px-3"><a :href="c.url" target="_blank" class="text-blue-400/70 hover:text-blue-400 hover:underline">{{ c.url.substring(0, 55) }}...</a></td>
+                <td class="py-2.5 px-3">
+                  <span v-if="editingIdx !== i" class="text-gray-200 font-medium">{{ c.name }}</span>
+                  <input v-else type="text" v-model="editForm.name" class="input-field w-full rounded px-2 py-1 text-xs text-white">
+                </td>
+                <td class="py-2.5 px-3">
+                  <span v-if="editingIdx !== i" class="text-gray-500 font-mono text-[10px]">{{ c.id }}</span>
+                  <input v-else type="text" v-model="editForm.id" class="input-field w-full rounded px-2 py-1 text-xs text-white">
+                </td>
+                <td class="py-2.5 px-3">
+                  <a v-if="editingIdx !== i" :href="c.url" target="_blank" class="text-blue-400/70 hover:text-blue-400 hover:underline">{{ c.url.substring(0, 55) }}...</a>
+                  <input v-else type="text" v-model="editForm.url" class="input-field w-full rounded px-2 py-1 text-xs text-white">
+                </td>
+                <td class="py-2 px-3">
+                  <div class="flex gap-1 justify-center">
+                    <template v-if="editingIdx !== i">
+                      <button @click="startEditCreator(i)" class="px-2 py-1 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition">改</button>
+                      <button @click="deleteCreator(i)" class="px-2 py-1 rounded text-[10px] bg-red-500/15 hover:bg-red-500/30 text-red-400 transition">删</button>
+                    </template>
+                    <template v-else>
+                      <button @click="saveEditCreator(i)" class="px-2 py-1 rounded text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white transition">存</button>
+                      <button @click="editingIdx = -1" class="px-2 py-1 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition">取消</button>
+                    </template>
+                  </div>
+                </td>
               </tr></tbody>
             </table>
           </div>
@@ -848,6 +975,9 @@ createApp({
       { id: 'logs', name: '日志/文件', icon: '📋' },
     ]
     const creators = ref([])
+    const newCreator = reactive({ name: '', id: '', url: '' })
+    const editingIdx = ref(-1)
+    const editForm = reactive({ name: '', id: '', url: '' })
     const batchStatus = reactive({ status: 'idle', started_at: null, message: '' })
     const batchLogs = ref([])
     const batchForm = reactive({ limit: 0, min_interaction: 0, enable_comments: false, force_recrawl: false })
@@ -857,6 +987,56 @@ createApp({
     const fileView = reactive({ visible: false, name: '', path: '', data: null, loading: false, error: '', offset: 0, limit: 50 })
 
     // Session 管理
+    // Session 池
+    const spList = ref([])
+    const spStats = reactive({ total: 0, active: 0, cooldown: 0, expired: 0 })
+    const spNewWs = ref('')
+    const spNewLabel = ref('')
+    const spVerifying = ref(false)
+
+    async function loadSessions() {
+      const res = await api('/sessions')
+      if (res?.success) {
+        spList.value = (res.sessions || []).map(s => ({ ...s, _v: false }))
+        Object.assign(spStats, res.stats || {})
+      }
+    }
+
+    async function addSessionEntry() {
+      if (!spNewWs.value.trim()) return
+      const res = await api('/sessions', { method: 'POST', body: JSON.stringify({ web_session: spNewWs.value, label: spNewLabel.value }) })
+      if (res?.success) { showToast(res.message || '已添加', 'success'); spNewWs.value = ''; spNewLabel.value = ''; loadSessions() }
+      else showToast(res?.detail || res?.error || '添加失败', 'error')
+    }
+
+    async function deleteSessionEntry(id, label) {
+      if (!confirm(`确认删除 session "${label || id}" ？`)) return
+      const res = await api('/sessions/' + id, { method: 'DELETE' })
+      if (res?.success) { showToast('已删除', 'success'); loadSessions() }
+      else showToast(res?.detail || '删除失败', 'error')
+    }
+
+    async function verifySingleSession(id) {
+      const s = spList.value.find(x => x.id === id)
+      if (s) s._v = true
+      try {
+        const res = await api('/sessions/' + id + '/verify', { method: 'POST' })
+        if (res?.success) { showToast(res.message + ': ' + res.status, res.status === 'active' ? 'success' : 'error'); loadSessions() }
+        else showToast(res?.detail || '验证失败', 'error')
+      } catch (e) { showToast('请求失败', 'error') }
+      finally { if (s) s._v = false }
+    }
+
+    async function verifyAllSessions() {
+      spVerifying.value = true
+      try {
+        const res = await api('/sessions/verify-all', { method: 'POST' })
+        if (res?.success) { showToast(`验证完成: ${res.results.active} 可用, ${res.results.expired} 过期`, 'success'); loadSessions() }
+        else showToast('验证失败', 'error')
+      } catch (e) { showToast('请求失败', 'error') }
+      finally { spVerifying.value = false }
+    }
+
     const sessionStatus = reactive({
       browser_data_exists: false,
       browser_data_size_mb: 0,
@@ -953,6 +1133,37 @@ createApp({
     async function loadCreators() {
       const res = await api('/creators')
       if (res?.success) creators.value = res.data.creators || []
+      editingIdx.value = -1
+    }
+
+    async function addCreator() {
+      if (!newCreator.url.trim()) return
+      const res = await api('/creators', { method: 'POST', body: JSON.stringify({ name: newCreator.name, id: newCreator.id, url: newCreator.url }) })
+      if (res?.success) {
+        showToast(res.message || '已添加', 'success')
+        newCreator.name = ''; newCreator.id = ''; newCreator.url = ''
+        loadCreators()
+      } else showToast(res?.detail || res?.message || '添加失败', 'error')
+    }
+
+    function startEditCreator(idx) {
+      editingIdx.value = idx
+      const c = creators.value[idx]
+      editForm.name = c.name; editForm.id = c.id; editForm.url = c.url
+    }
+
+    async function saveEditCreator(idx) {
+      const res = await api('/creators/' + idx, { method: 'PUT', body: JSON.stringify({ name: editForm.name, id: editForm.id, url: editForm.url }) })
+      if (res?.success) { showToast('已更新', 'success'); editingIdx.value = -1; loadCreators() }
+      else showToast(res?.detail || '更新失败', 'error')
+    }
+
+    async function deleteCreator(idx) {
+      const c = creators.value[idx]
+      if (!confirm(`确认删除 "${c.name || c.url}" ？`)) return
+      const res = await api('/creators/' + idx, { method: 'DELETE' })
+      if (res?.success) { showToast(res.message || '已删除', 'success'); loadCreators() }
+      else showToast(res?.detail || '删除失败', 'error')
     }
 
     async function startBatch() {
@@ -1202,7 +1413,7 @@ createApp({
     }
 
     function initDashboard() {
-      loadConfig(); loadCreators(); loadFiles(); loadSessionStatus()
+      loadConfig(); loadCreators(); loadFiles(); loadSessionStatus(); loadSessions()
     }
 
     watch(activeTab, (tab) => {
@@ -1229,7 +1440,7 @@ createApp({
       setInterval(() => { if (authenticated.value) loadSessionStatus() }, 30000)
     })
 
-    return { config, configDirty, saving, activeTab, tabs, creators, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout }
+    return { config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions }
   }
 }).mount('#app')
 </script>

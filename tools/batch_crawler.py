@@ -2646,6 +2646,34 @@ async def run_batch_crawl(
     from config.anti_crawl_loader import apply_anti_crawl_config
     from tools.async_file_writer import AsyncFileWriter
 
+    _batch_start_time = time.time()
+
+    # ===== Session 池初始化 =====
+    _session_pool = None
+    _current_session_id = None
+    try:
+        _pool_cfg_path = os.path.join("config", "anti_crawl_config.json")
+        with open(_pool_cfg_path, "r", encoding="utf-8") as _pcf:
+            _pool_cfg = json.load(_pcf).get("session_pool", {})
+        if _pool_cfg.get("enabled") and _pool_cfg:
+            from tools.session_pool import SessionPool
+            _session_pool = SessionPool()
+            _pool_stats = _session_pool.stats()
+            if _pool_stats["total"] > 0:
+                utils.logger.info(
+                    f"[SessionPool] 已启用 | "
+                    f"总计 {_pool_stats['total']} 个 session | "
+                    f"可用 {_pool_stats['active']} | "
+                    f"冷却 {_pool_stats['cooldown']} | "
+                    f"过期 {_pool_stats['expired']}"
+                )
+            else:
+                utils.logger.info("[SessionPool] 已启用但池为空，使用默认 session")
+                _session_pool = None
+    except Exception as _sp_err:
+        utils.logger.debug(f"[SessionPool] 初始化跳过: {_sp_err}")
+        _session_pool = None
+
     utils.logger.info("=" * 60)
     utils.logger.info("[BatchCrawler] 批量爬取开始")
     utils.logger.info(f"  互动量过滤: {'关闭' if min_interaction <= 0 else f'>= {min_interaction}'}")
@@ -2936,12 +2964,41 @@ async def run_batch_crawl(
                 )
                 # 不 continue，继续下面的爬取流程
 
+        # ========== Session 池轮换 ==========
+        if _session_pool and _session_pool.active_count > 0:
+            _next_s = _session_pool.get_next()
+            if _next_s:
+                _current_session_id = _next_s.id
+                config.COOKIES = f"web_session={_next_s.web_session}"
+                utils.logger.info(
+                    f"[SessionPool] [{idx}/{total}] 切换 session: "
+                    f"{_next_s.label or _next_s.id} "
+                    f"({_next_s.web_session[:8]}...)"
+                )
+            else:
+                utils.logger.warning("[SessionPool] 无可用 session，使用当前默认 session")
+                _current_session_id = None
+
         # ========== Session 健康检查 ==========
         session_ok = await _check_session_health()
         if not session_ok:
             utils.logger.warning(
                 f"[BatchCrawler] [{idx}/{total}] Session 失效，暂停爬取并等待恢复..."
             )
+            try:
+                _ncfg_path = os.path.join("config", "anti_crawl_config.json")
+                with open(_ncfg_path, "r", encoding="utf-8") as _nf:
+                    _ncfg = json.load(_nf).get("notification", {})
+                if _ncfg.get("enabled"):
+                    from tools.feishu_notify import send_session_expired_alert
+                    send_session_expired_alert(
+                        creator_name=creator_name,
+                        creator_index=idx,
+                        total_creators=total,
+                        notify_config=_ncfg,
+                    )
+            except Exception:
+                pass
             recovered = await _wait_for_session_recovery(
                 max_wait_minutes=60,
                 check_interval_seconds=120,
@@ -3063,6 +3120,8 @@ async def run_batch_crawl(
                 progress.mark_completed(creator_url)
                 _GracefulShutdown.reset_current()
                 success += 1
+                if _session_pool and _current_session_id:
+                    _session_pool.mark_success(_current_session_id)
                 utils.logger.info(
                     f"[BatchCrawler] [{idx}/{total}] 完成: {creator_name}"
                 )
@@ -3089,11 +3148,38 @@ async def run_batch_crawl(
                 )
 
         except SessionExpiredError as se:
-            # ========== Session 失效熔断：暂停等待恢复 ==========
+            # ========== Session 失效熔断 ==========
+            # 如果有 session 池，标记失败并尝试切换
+            if _session_pool and _current_session_id:
+                _session_pool.mark_failed(_current_session_id)
+                _fallback = _session_pool.get_next()
+                if _fallback:
+                    _current_session_id = _fallback.id
+                    config.COOKIES = f"web_session={_fallback.web_session}"
+                    utils.logger.info(
+                        f"[SessionPool] Session 失效，自动切换到: "
+                        f"{_fallback.label or _fallback.id} "
+                        f"({_fallback.web_session[:8]}...)"
+                    )
+
             utils.logger.error(
-                f"[BatchCrawler] [{idx}/{total}] ⚡ Session 失效熔断: {creator_name} - {se}"
+                f"[BatchCrawler] [{idx}/{total}] Session 失效熔断: {creator_name} - {se}"
             )
-            
+            try:
+                _ncfg_path = os.path.join("config", "anti_crawl_config.json")
+                with open(_ncfg_path, "r", encoding="utf-8") as _nf:
+                    _ncfg = json.load(_nf).get("notification", {})
+                if _ncfg.get("enabled"):
+                    from tools.feishu_notify import send_session_expired_alert
+                    send_session_expired_alert(
+                        creator_name=creator_name,
+                        creator_index=idx,
+                        total_creators=total,
+                        notify_config=_ncfg,
+                    )
+            except Exception:
+                pass
+
             # 保存已爬到的部分数据（如果有的话）
             try:
                 data_dir = os.path.join("data", "xhs", "json")
@@ -3381,12 +3467,14 @@ async def run_batch_crawl(
         utils.logger.info("[BatchCrawler] 没有符合条件的数据可导出")
 
     # 8. 推送到飞书
+    _final_bitable_url = ""
     if pipeline_writer:
         try:
             utils.logger.info("[Pipeline] 收尾: 等待脚本提取完成 + 最终校验...")
             pipeline_writer.finalize()
             if pipeline_writer.bitable_url:
-                utils.logger.info(f"[Pipeline] 飞书表格链接: {pipeline_writer.bitable_url}")
+                _final_bitable_url = pipeline_writer.bitable_url
+                utils.logger.info(f"[Pipeline] 飞书表格链接: {_final_bitable_url}")
         except Exception as e:
             utils.logger.error(f"[Pipeline] 收尾失败: {e}")
         finally:
@@ -3402,13 +3490,38 @@ async def run_batch_crawl(
                 folder_token=feishu_folder_token,
             )
             if bitable_url:
-                utils.logger.info(f"[BatchCrawler] 飞书表格链接: {bitable_url}")
+                _final_bitable_url = bitable_url
+                utils.logger.info(f"[BatchCrawler] 飞书表格链接: {_final_bitable_url}")
         except Exception as e:
             utils.logger.error(f"[BatchCrawler] 飞书推送失败: {e}")
     elif skip_feishu:
         utils.logger.info("[BatchCrawler] 跳过飞书写入 (--skip-feishu)")
     elif not all_export_notes:
         utils.logger.info("[BatchCrawler] 没有新数据，跳过飞书写入")
+
+    # 9. 任务完成通知
+    _batch_elapsed = int(time.time() - _batch_start_time)
+
+    try:
+        _notify_cfg_path = os.path.join("config", "anti_crawl_config.json")
+        with open(_notify_cfg_path, "r", encoding="utf-8") as _nf:
+            _notify_cfg = json.load(_nf).get("notification", {})
+        if _notify_cfg.get("enabled", False):
+            from tools.feishu_notify import send_notification
+            send_notification(
+                task_id=task_id,
+                crawl_mode=crawl_mode,
+                total=total,
+                success=success,
+                failed=failed,
+                skipped=skipped,
+                reused=reused,
+                elapsed_seconds=_batch_elapsed,
+                bitable_url=_final_bitable_url,
+                notify_config=_notify_cfg,
+            )
+    except Exception as _ne:
+        utils.logger.warning(f"[Notify] 发送通知失败: {_ne}")
 
 
 # ==================== 仅导出模式 ====================

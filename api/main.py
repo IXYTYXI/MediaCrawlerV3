@@ -177,22 +177,38 @@ app.include_router(terminal_router, prefix="/api")
 app.include_router(shell_router, prefix="/api")
 
 
+_NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+
 @app.get("/")
-async def serve_frontend():
-    """Return frontend page"""
+async def serve_control_page_root():
+    """控制面板作为首页"""
+    control_path = os.path.join(os.path.dirname(__file__), "control.html")
+    if os.path.exists(control_path):
+        return FileResponse(control_path, media_type="text/html", headers=_NO_CACHE_HEADERS)
+    return {"message": "Control panel not found"}
+
+
+@app.get("/control")
+async def serve_control_page():
+    """控制面板（保留旧路径兼容）"""
+    control_path = os.path.join(os.path.dirname(__file__), "control.html")
+    if os.path.exists(control_path):
+        return FileResponse(control_path, media_type="text/html", headers=_NO_CACHE_HEADERS)
+    return {"message": "Control panel not found"}
+
+
+# React Dashboard 移至 /notuse
+DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard")
+
+
+@app.get("/notuse")
+async def serve_frontend_hidden():
+    """React Dashboard (hidden)"""
     index_path = os.path.join(WEBUI_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return {
-        "message": "MediaCrawler WebUI API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "note": "WebUI not found, please build it first: cd webui && npm run build"
-    }
-
-
-# Dashboard 前端页面
-DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard")
+    return {"message": "WebUI not found"}
 
 
 @app.get("/dashboard")
@@ -200,7 +216,7 @@ async def serve_dashboard():
     """Return Dashboard page"""
     index_path = os.path.join(DASHBOARD_DIR, "index.html")
     if os.path.exists(index_path):
-        return FileResponse(index_path)
+        return FileResponse(index_path, media_type="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     return {"message": "Dashboard not found"}
 
 
@@ -211,15 +227,6 @@ async def serve_login_page():
     if os.path.exists(login_path):
         return FileResponse(login_path, media_type="text/html")
     return {"message": "Login page not found"}
-
-
-@app.get("/control")
-async def serve_control_page():
-    """Return crawler control panel page"""
-    control_path = os.path.join(os.path.dirname(__file__), "control.html")
-    if os.path.exists(control_path):
-        return FileResponse(control_path, media_type="text/html")
-    return {"message": "Control panel not found"}
 
 
 @app.get("/terminal")
