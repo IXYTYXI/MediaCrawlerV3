@@ -18,6 +18,7 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 # 基础配置
+import os
 import platform as _platform
 _IS_LINUX = _platform.system() == "Linux"
 
@@ -87,6 +88,11 @@ SAVE_DATA_OPTION = "json"  # csv or db or json or sqlite or excel or postgres
 
 # 用户浏览器缓存的浏览器文件配置
 USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
+
+# 多实例隔离：通过环境变量 MC_INSTANCE_ID 自动修改路径
+_INSTANCE_ID = os.environ.get("MC_INSTANCE_ID", "")
+if _INSTANCE_ID:
+    USER_DATA_DIR = f"instance_{_INSTANCE_ID}/%s_user_data_dir"
 
 # 爬取开始页数 默认从第一页开始
 START_PAGE = 1
