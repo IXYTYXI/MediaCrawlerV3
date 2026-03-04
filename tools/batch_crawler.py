@@ -27,6 +27,11 @@ from tools.progress_validator import preflight_validate_progress
 
 import signal
 
+try:
+    from media_platform.xhs.exception import SessionExpiredError
+except ImportError:
+    SessionExpiredError = type("SessionExpiredError", (Exception,), {})
+
 
 # ==================== 优雅退出 ====================
 
@@ -135,6 +140,8 @@ class BatchProgress:
         self._failed: Dict[str, str] = {}  # 失败记录 {url: error_msg}
         self._partial: Dict[str, str] = {}  # 部分完成 {url: "265 notes saved"}
         self._skipped: Dict[str, str] = {}  # 永久跳过 {url: reason}（如作者隐藏所有作品）
+        self._last_crawl_dates: Dict[str, str] = {}  # 增量日期 {url: "2026-03-04"}
+        self._retry_queue: List[Dict] = []  # session 中断待重试 [{url, name, user_id, last_date}]
         self._session_id: str = ""
         self._load()
 
@@ -157,11 +164,17 @@ class BatchProgress:
                 self._partial = raw_partial if isinstance(raw_partial, dict) else {}
                 raw_skipped = data.get("skipped", {})
                 self._skipped = raw_skipped if isinstance(raw_skipped, dict) else {}
+                raw_dates = data.get("last_crawl_dates", {})
+                self._last_crawl_dates = raw_dates if isinstance(raw_dates, dict) else {}
+                raw_retry = data.get("retry_queue", [])
+                self._retry_queue = raw_retry if isinstance(raw_retry, list) else []
                 utils.logger.info(
                     f"[BatchProgress] 加载进度: {len(self._completed)} 完成, "
                     f"{len(self._partial)} 部分完成, "
                     f"{len(self._failed)} 失败, "
-                    f"{len(self._skipped)} 跳过"
+                    f"{len(self._skipped)} 跳过, "
+                    f"{len(self._last_crawl_dates)} 有增量日期, "
+                    f"{len(self._retry_queue)} 待重试"
                 )
             except Exception as e:
                 utils.logger.warning(f"[BatchProgress] 加载进度失败: {e}")
@@ -175,6 +188,8 @@ class BatchProgress:
             "failed": self._failed,
             "partial": self._partial,
             "skipped": self._skipped,
+            "last_crawl_dates": self._last_crawl_dates,
+            "retry_queue": self._retry_queue,
             "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         with open(self.progress_file, "w", encoding="utf-8") as f:
@@ -199,6 +214,7 @@ class BatchProgress:
     def mark_failed(self, url: str, error: str):
         self._ensure_failed_is_dict()
         self._failed[url] = error
+        self._completed.discard(url)
         self.save()
 
     def mark_skipped(self, url: str, reason: str):
@@ -227,6 +243,7 @@ class BatchProgress:
     def clear_partial(self, url: str):
         """爬取完成后清除 partial 标记"""
         self._partial.pop(url, None)
+        self.save()
 
     def remove_completed(self, url: str):
         """从已完成列表中移除（校验失败时使用）"""
@@ -237,15 +254,56 @@ class BatchProgress:
         self._session_id = session_id
 
     def reset(self):
-        """重置进度（重新开始），skipped 保留（永久跳过不受 reset 影响）"""
+        """重置进度（重新开始），skipped 和 last_crawl_dates 保留"""
         self._completed.clear()
         self._failed.clear()
         self._partial.clear()
+        self._retry_queue.clear()
         self.save()
 
     @property
     def completed_count(self) -> int:
         return len(self._completed)
+
+    # ---- 增量日期管理 ----
+
+    def get_last_crawl_date(self, url: str) -> str:
+        """获取作者上次成功完成增量爬取的日期"""
+        return self._last_crawl_dates.get(url, "")
+
+    def set_last_crawl_date(self, url: str, date_str: str):
+        """增量爬取成功完成后更新日期"""
+        self._last_crawl_dates[url] = date_str
+        self.save()
+
+    # ---- Session 中断重试队列 ----
+
+    def add_retry(self, url: str, name: str, user_id: str, last_date: str):
+        """Session 中断时将作者加入重试队列"""
+        for item in self._retry_queue:
+            if item.get("url") == url:
+                return
+        self._retry_queue.append({
+            "url": url, "name": name,
+            "user_id": user_id, "last_date": last_date,
+        })
+        self.save()
+
+    def pop_retry(self) -> Optional[Dict]:
+        """取出一个待重试的作者（FIFO）"""
+        if not self._retry_queue:
+            return None
+        item = self._retry_queue.pop(0)
+        self.save()
+        return item
+
+    def has_retry(self) -> bool:
+        return len(self._retry_queue) > 0
+
+    def clear_retry(self, url: str):
+        """重试成功后从队列中清除"""
+        self._retry_queue = [r for r in self._retry_queue if r.get("url") != url]
+        self.save()
 
 
 # ==================== 数据收集与过滤 ====================
@@ -2904,9 +2962,13 @@ async def run_batch_crawl(
 
         # 断点续爬：跳过当前任务已完成的（增量模式除外）
         incremental_this_creator = False
+        _incremental_start_date = ""
         if resume and progress.is_completed(creator_url):
             if crawl_mode == "incremental":
-                last_date = get_last_crawl_date_for_creator(task_dir, user_id)
+                # 优先用 progress 中保存的成功日期，其次从文件推断
+                last_date = progress.get_last_crawl_date(creator_url)
+                if not last_date:
+                    last_date = get_last_crawl_date_for_creator(task_dir, user_id)
                 if not last_date:
                     utils.logger.info(
                         f"[BatchCrawler] [{idx}/{total}] [增量] 无历史数据，跳过: {creator_name}"
@@ -2914,6 +2976,7 @@ async def run_batch_crawl(
                     skipped += 1
                     continue
                 incremental_this_creator = True
+                _incremental_start_date = last_date
                 config.DATE_EARLY_STOP_ENABLED = True
                 config.DATE_EARLY_STOP_THRESHOLD = 5
                 config.CRAWL_DATE_START = last_date
@@ -3131,6 +3194,12 @@ async def run_batch_crawl(
 
             if _has_data:
                 progress.mark_completed(creator_url)
+                # 任何模式成功完成都记录日期（全量爬也记录，作为增量基线）
+                progress.set_last_crawl_date(
+                    creator_url,
+                    datetime.now().strftime("%Y-%m-%d"),
+                )
+                progress.clear_retry(creator_url)
                 _GracefulShutdown.reset_current()
                 success += 1
                 if _session_pool and _current_session_id:
@@ -3193,7 +3262,7 @@ async def run_batch_crawl(
             except Exception:
                 pass
 
-            # 保存已爬到的部分数据（如果有的话）
+            # 保存已爬到的部分数据（合并已有历史，避免覆盖）
             try:
                 data_dir = os.path.join("data", "xhs", "json")
                 partial_notes = collect_crawled_data(
@@ -3202,19 +3271,42 @@ async def run_batch_crawl(
                 )
                 if partial_notes:
                     contents_file = os.path.join(task_dir, f"creator_{user_id}_contents.json")
+                    if os.path.exists(contents_file):
+                        try:
+                            with open(contents_file, "r", encoding="utf-8") as f:
+                                old_data = json.load(f)
+                            new_ids = {n.get("note_id") for n in partial_notes if n.get("note_id")}
+                            extra = [n for n in old_data if n.get("note_id") and n["note_id"] not in new_ids]
+                            if extra:
+                                partial_notes = partial_notes + extra
+                                utils.logger.info(
+                                    f"[BatchCrawler] [{idx}/{total}] 合并旧数据 {len(extra)} 条"
+                                )
+                        except Exception:
+                            pass
                     with open(contents_file, "w", encoding="utf-8") as f:
                         json.dump(partial_notes, f, ensure_ascii=False, indent=2)
                     utils.logger.info(
                         f"[BatchCrawler] [{idx}/{total}] 已保存 {len(partial_notes)} 条有效数据"
-                        f"（session 断前爬到的部分）"
+                        f"（session 断前爬到的部分，含合并历史）"
                     )
             except Exception as save_err:
                 utils.logger.warning(f"[BatchCrawler] 保存部分数据失败: {save_err}")
-            
-            # 标记为失败（需重爬）
+
+            # 标记为失败
             progress.mark_failed(creator_url, f"Session 失效熔断: {se}")
             failed += 1
-            
+
+            # 增量模式：加入重试队列（不更新 last_crawl_date，以便重试时从原日期补爬）
+            if crawl_mode == "incremental":
+                _retry_date = _incremental_start_date or progress.get_last_crawl_date(creator_url)
+                if _retry_date:
+                    progress.add_retry(creator_url, creator_name, user_id, _retry_date)
+                    utils.logger.info(
+                        f"[BatchCrawler] [{idx}/{total}] [增量] 已加入重试队列: "
+                        f"{creator_name}（将从 {_retry_date} 补爬）"
+                    )
+
             # 关闭当前浏览器
             if crawler:
                 try:
@@ -3234,7 +3326,7 @@ async def run_batch_crawl(
                 except Exception:
                     pass
                 crawler = None
-            
+
             # 等待 session 恢复
             utils.logger.info(
                 f"[BatchCrawler] [{idx}/{total}] 等待 session 恢复..."
@@ -3248,12 +3340,11 @@ async def run_batch_crawl(
                     f"[BatchCrawler] [{idx}/{total}] Session 等待超时（60分钟），"
                     f"停止后续爬取"
                 )
-                break  # 超时直接停止整个批次
-            
+                break
+
             utils.logger.info(
                 f"[BatchCrawler] [{idx}/{total}] Session 已恢复，继续下一个作者"
             )
-            # 继续 for 循环处理下一个作者（当前作者标记为 failed，下次可重爬）
             continue
 
         except Exception as e:
@@ -3294,10 +3385,323 @@ async def run_batch_crawl(
             utils.logger.info(f"[BatchCrawler] 等待 {wait} 秒后继续下一个作者...")
             await asyncio.sleep(wait)
 
+        # ========== 重试队列：session 恢复后补爬中断的作者 ==========
+        # 触发条件：刚完成一个正常作者（session 稳定） + 队列非空
+        if (
+            crawl_mode == "incremental"
+            and progress.has_retry()
+            and creator_url in progress._completed  # 上一个作者确实成功了
+        ):
+            _retry_item = progress.pop_retry()
+            if _retry_item:
+                _r_url = _retry_item["url"]
+                _r_name = _retry_item["name"]
+                _r_uid = _retry_item["user_id"]
+                _r_date = _retry_item["last_date"]
+                utils.logger.info(
+                    f"[BatchCrawler] [重试] 补爬被中断的作者: {_r_name}，"
+                    f"从 {_r_date} 开始"
+                )
+
+                config.INCREMENTAL_MODE = True
+                config.DATE_EARLY_STOP_ENABLED = True
+                config.DATE_EARLY_STOP_THRESHOLD = 5
+                config.CRAWL_DATE_START = _r_date
+
+                _retry_crawler = None
+                _retry_ok = False
+                try:
+                    AsyncFileWriter.reset_session_timestamp()
+                    _retry_session_ts = AsyncFileWriter._session_timestamp
+                    config.XHS_CREATOR_ID_LIST = [_r_url]
+
+                    from tools.crawl_statistics import reset_statistics
+                    reset_statistics(platform="xhs")
+
+                    from media_platform.xhs import XiaoHongShuCrawler
+                    from var import crawler_type_var
+                    crawler_type_var.set("creator")
+
+                    _retry_crawler = XiaoHongShuCrawler()
+                    await _retry_crawler.start()
+
+                    data_dir = os.path.join("data", "xhs", "json")
+                    _retry_new = collect_crawled_data(
+                        data_dir, _retry_session_ts, _r_name,
+                        min_interaction=0, user_id=_r_uid,
+                    )
+
+                    # 合并新旧数据
+                    _r_contents = os.path.join(task_dir, f"creator_{_r_uid}_contents.json")
+                    _r_existing: Dict[str, Dict] = {}
+                    for _suf in ["_contents.json", "_reuse.json"]:
+                        _rfp = os.path.join(task_dir, f"creator_{_r_uid}{_suf}")
+                        if os.path.exists(_rfp):
+                            try:
+                                with open(_rfp, "r", encoding="utf-8") as _rf:
+                                    _rarr = json.load(_rf)
+                                if isinstance(_rarr, list):
+                                    for _rit in _rarr:
+                                        _rnid = _rit.get("note_id")
+                                        if _rnid:
+                                            _r_existing[_rnid] = _rit
+                            except Exception:
+                                pass
+                    for _rn in (_retry_new or []):
+                        _rnid = _rn.get("note_id")
+                        if _rnid:
+                            if _rnid in _r_existing:
+                                _r_existing[_rnid] = _merge_note_metadata(
+                                    _r_existing[_rnid], _rn
+                                )
+                            else:
+                                _r_existing[_rnid] = _rn
+                    _r_merged = sorted(
+                        _r_existing.values(),
+                        key=lambda x: _safe_int(x.get("time", 0)),
+                        reverse=True,
+                    )
+                    if _r_merged:
+                        with open(_r_contents, "w", encoding="utf-8") as _rf:
+                            json.dump(_r_merged, _rf, ensure_ascii=False, indent=2)
+
+                    if _r_merged:
+                        progress.mark_completed(_r_url)
+                        progress.set_last_crawl_date(
+                            _r_url, datetime.now().strftime("%Y-%m-%d")
+                        )
+                        progress.clear_retry(_r_url)
+                        _retry_ok = True
+                        success += 1
+                        if _session_pool and _current_session_id:
+                            _session_pool.mark_success(_current_session_id)
+                        utils.logger.info(
+                            f"[BatchCrawler] [重试] 补爬成功: {_r_name}，"
+                            f"合计 {len(_r_merged)} 条"
+                        )
+                        if pipeline_writer:
+                            try:
+                                _rpl = _load_creator_notes_for_pipeline(
+                                    task_dir, _r_uid, crawl_mode,
+                                    date_start, date_end, min_interaction,
+                                )
+                                if _rpl:
+                                    pipeline_writer.write_creator_async(_r_name, _rpl)
+                            except Exception as _rpw_e:
+                                utils.logger.warning(
+                                    f"[Pipeline] 重试写入失败: {_r_name} - {_rpw_e}"
+                                )
+                    else:
+                        utils.logger.warning(
+                            f"[BatchCrawler] [重试] 补爬无数据: {_r_name}"
+                        )
+
+                except SessionExpiredError as _rse:
+                    utils.logger.error(
+                        f"[BatchCrawler] [重试] 再次 session 过期: {_r_name} - {_rse}"
+                    )
+                    # 保存部分数据
+                    try:
+                        data_dir = os.path.join("data", "xhs", "json")
+                        _rpartial = collect_crawled_data(
+                            data_dir, _retry_session_ts, _r_name,
+                            min_interaction=0, user_id=_r_uid,
+                        )
+                        if _rpartial:
+                            _r_cf = os.path.join(task_dir, f"creator_{_r_uid}_contents.json")
+                            if os.path.exists(_r_cf):
+                                try:
+                                    with open(_r_cf, "r", encoding="utf-8") as _rf:
+                                        _rold = json.load(_rf)
+                                    _rnids = {n.get("note_id") for n in _rpartial if n.get("note_id")}
+                                    _rextra = [n for n in _rold if n.get("note_id") and n["note_id"] not in _rnids]
+                                    if _rextra:
+                                        _rpartial = _rpartial + _rextra
+                                except Exception:
+                                    pass
+                            with open(_r_cf, "w", encoding="utf-8") as _rf:
+                                json.dump(_rpartial, _rf, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                    # 放回重试队列，最多重试 2 次（原始 + 1 次重试）
+                    _retry_count = _retry_item.get("retry_count", 0) + 1
+                    if _retry_count < 2:
+                        _retry_item["retry_count"] = _retry_count
+                        progress._retry_queue.append(_retry_item)
+                        progress.save()
+                        utils.logger.info(
+                            f"[BatchCrawler] [重试] {_r_name} 放回队列 "
+                            f"(第 {_retry_count} 次失败，最多重试 2 次)"
+                        )
+                    else:
+                        utils.logger.warning(
+                            f"[BatchCrawler] [重试] {_r_name} 已达最大重试次数，放弃"
+                        )
+                        progress.mark_failed(_r_url, f"重试 {_retry_count} 次仍失败")
+
+                except Exception as _re:
+                    utils.logger.error(
+                        f"[BatchCrawler] [重试] 补爬异常: {_r_name} - {_re}"
+                    )
+                    progress.mark_failed(_r_url, f"重试异常: {_re}")
+
+                finally:
+                    if _retry_crawler:
+                        try:
+                            if getattr(_retry_crawler, "cdp_manager", None):
+                                await _retry_crawler.cdp_manager.cleanup(force=True)
+                            elif getattr(_retry_crawler, "browser_context", None):
+                                await _retry_crawler.browser_context.close()
+                        except Exception:
+                            pass
+                        try:
+                            import subprocess
+                            import platform as _platform
+                            if _platform.system() == "Linux":
+                                subprocess.run(
+                                    ["pkill", "-f", "chromium"],
+                                    capture_output=True, timeout=5,
+                                )
+                            await asyncio.sleep(2)
+                        except Exception:
+                            pass
+
+    # 6.5 主循环结束后，清理残留的重试队列
+    if crawl_mode == "incremental" and progress.has_retry():
+        _remain = len(progress._retry_queue)
+        utils.logger.info(
+            f"[BatchCrawler] 主循环结束，重试队列仍有 {_remain} 个作者待补爬"
+        )
+        _final_retry_round = 0
+        while progress.has_retry() and _final_retry_round < _remain * 2:
+            _final_retry_round += 1
+            _fri = progress.pop_retry()
+            if not _fri:
+                break
+            _fr_url = _fri["url"]
+            _fr_name = _fri["name"]
+            _fr_uid = _fri["user_id"]
+            _fr_date = _fri["last_date"]
+            utils.logger.info(
+                f"[BatchCrawler] [最终重试 {_final_retry_round}] {_fr_name}，"
+                f"从 {_fr_date} 补爬"
+            )
+
+            config.INCREMENTAL_MODE = True
+            config.DATE_EARLY_STOP_ENABLED = True
+            config.DATE_EARLY_STOP_THRESHOLD = 5
+            config.CRAWL_DATE_START = _fr_date
+
+            _fr_crawler = None
+            try:
+                AsyncFileWriter.reset_session_timestamp()
+                _fr_ts = AsyncFileWriter._session_timestamp
+                config.XHS_CREATOR_ID_LIST = [_fr_url]
+                from tools.crawl_statistics import reset_statistics
+                reset_statistics(platform="xhs")
+                from media_platform.xhs import XiaoHongShuCrawler
+                from var import crawler_type_var
+                crawler_type_var.set("creator")
+
+                _fr_crawler = XiaoHongShuCrawler()
+                await _fr_crawler.start()
+
+                data_dir = os.path.join("data", "xhs", "json")
+                _fr_new = collect_crawled_data(
+                    data_dir, _fr_ts, _fr_name,
+                    min_interaction=0, user_id=_fr_uid,
+                )
+                _fr_existing: Dict[str, Dict] = {}
+                for _suf in ["_contents.json", "_reuse.json"]:
+                    _fp = os.path.join(task_dir, f"creator_{_fr_uid}{_suf}")
+                    if os.path.exists(_fp):
+                        try:
+                            with open(_fp, "r", encoding="utf-8") as _frf:
+                                _fa = json.load(_frf)
+                            if isinstance(_fa, list):
+                                for _fi in _fa:
+                                    _fnid = _fi.get("note_id")
+                                    if _fnid:
+                                        _fr_existing[_fnid] = _fi
+                        except Exception:
+                            pass
+                for _fn in (_fr_new or []):
+                    _fnid = _fn.get("note_id")
+                    if _fnid:
+                        if _fnid in _fr_existing:
+                            _fr_existing[_fnid] = _merge_note_metadata(
+                                _fr_existing[_fnid], _fn
+                            )
+                        else:
+                            _fr_existing[_fnid] = _fn
+                _fr_merged = sorted(
+                    _fr_existing.values(),
+                    key=lambda x: _safe_int(x.get("time", 0)),
+                    reverse=True,
+                )
+                if _fr_merged:
+                    _fr_cf = os.path.join(task_dir, f"creator_{_fr_uid}_contents.json")
+                    with open(_fr_cf, "w", encoding="utf-8") as _frf:
+                        json.dump(_fr_merged, _frf, ensure_ascii=False, indent=2)
+                    progress.mark_completed(_fr_url)
+                    progress.set_last_crawl_date(
+                        _fr_url, datetime.now().strftime("%Y-%m-%d")
+                    )
+                    progress.clear_retry(_fr_url)
+                    success += 1
+                    failed = max(0, failed - 1)
+                    utils.logger.info(
+                        f"[BatchCrawler] [最终重试] 补爬成功: {_fr_name}，"
+                        f"合计 {len(_fr_merged)} 条"
+                    )
+                    if pipeline_writer:
+                        try:
+                            _frpl = _load_creator_notes_for_pipeline(
+                                task_dir, _fr_uid, crawl_mode,
+                                date_start, date_end, min_interaction,
+                            )
+                            if _frpl:
+                                pipeline_writer.write_creator_async(_fr_name, _frpl)
+                        except Exception:
+                            pass
+
+            except SessionExpiredError:
+                utils.logger.warning(
+                    f"[BatchCrawler] [最终重试] {_fr_name} session 再次过期，放弃"
+                )
+                progress.mark_failed(_fr_url, "最终重试仍 session 过期")
+            except Exception as _fre:
+                utils.logger.error(
+                    f"[BatchCrawler] [最终重试] {_fr_name} 异常: {_fre}"
+                )
+                progress.mark_failed(_fr_url, f"最终重试异常: {_fre}")
+            finally:
+                if _fr_crawler:
+                    try:
+                        if getattr(_fr_crawler, "cdp_manager", None):
+                            await _fr_crawler.cdp_manager.cleanup(force=True)
+                        elif getattr(_fr_crawler, "browser_context", None):
+                            await _fr_crawler.browser_context.close()
+                    except Exception:
+                        pass
+                    try:
+                        import subprocess
+                        import platform as _platform
+                        if _platform.system() == "Linux":
+                            subprocess.run(
+                                ["pkill", "-f", "chromium"],
+                                capture_output=True, timeout=5,
+                            )
+                        await asyncio.sleep(2)
+                    except Exception:
+                        pass
+
     # 7. 汇总
     utils.logger.info("=" * 60)
     utils.logger.info("[BatchCrawler] 批量爬取完成!")
     utils.logger.info(f"  总计: {total} | 成功: {success} | 复用: {reused} | 失败: {failed} | 跳过: {skipped}")
+    if progress.has_retry():
+        utils.logger.info(f"  重试队列残留: {len(progress._retry_queue)} 个作者")
     utils.logger.info("=" * 60)
 
     # 7.5 数据完整性校验 + 自动补爬
