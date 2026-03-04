@@ -2,6 +2,7 @@
 """
 流水线飞书写入器
 每完成一个作者立即写入飞书，每满 10 条视频触发并发脚本提取。
+支持复用已有多维表格，增量追加新内容。
 """
 import json
 import os
@@ -13,6 +14,8 @@ from typing import Dict, List, Optional, Set
 
 from tools import utils
 from tools.feishu_bitable import FeishuBitableClient, map_note_to_feishu_record
+
+CONFIG_PATH = os.path.join("config", "anti_crawl_config.json")
 
 
 class PipelineFeishuWriter:
@@ -33,6 +36,7 @@ class PipelineFeishuWriter:
         feishu_app_secret: str,
         bitable_name: str = "",
         folder_token: str = "",
+        reuse_app_token: str = "",
     ):
         self.feishu_app_id = feishu_app_id
         self.feishu_app_secret = feishu_app_secret
@@ -42,11 +46,11 @@ class PipelineFeishuWriter:
             or f"小红书爬取数据_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         )
         self.folder_token = folder_token
+        self._reuse_app_token = reuse_app_token
 
         self._feishu_cfg: Dict = {}
         try:
-            cfg_path = os.path.join("config", "anti_crawl_config.json")
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 self._feishu_cfg = json.load(f).get("feishu", {})
         except Exception:
             pass
@@ -59,8 +63,13 @@ class PipelineFeishuWriter:
         self.summary_table_id: Optional[str] = None
         self._first_creator = True
         self._total_inserted = 0
+        self._total_skipped_existing = 0
         self._creator_count = 0
         self._video_serial = 0
+        self._is_reusing = False
+
+        self._existing_tables: Dict[str, str] = {}
+        self._table_name_to_id: Dict[str, str] = {}
 
         self._all_field_names: Set[str] = set()
         self._ordered_fields: List[str] = []
@@ -83,6 +92,40 @@ class PipelineFeishuWriter:
     def _ensure_bitable(self):
         if self.app_token:
             return
+
+        if self._reuse_app_token:
+            try:
+                tables = self.client.list_tables(self._reuse_app_token)
+                self.app_token = self._reuse_app_token
+                last_bi = self._feishu_cfg.get("last_bitable", {})
+                self.bitable_url = last_bi.get(
+                    "url",
+                    f"https://guanghe.feishu.cn/base/{self._reuse_app_token}",
+                )
+                for t in tables:
+                    name = t.get("name", "")
+                    tid = t.get("table_id", "")
+                    if name and tid:
+                        self._table_name_to_id[name] = tid
+                    if name == "视频汇总":
+                        self.summary_table_id = tid
+                        existing_records = self.client.list_all_records(
+                            self.app_token, tid
+                        )
+                        self._video_serial = len(existing_records)
+
+                self._is_reusing = True
+                self._first_creator = False
+                utils.logger.info(
+                    f"[Pipeline] 复用已有多维表格: {self.bitable_url} "
+                    f"({len(tables)} 个数据表)"
+                )
+                return
+            except Exception as e:
+                utils.logger.warning(
+                    f"[Pipeline] 复用表格失败({e})，将创建新表格"
+                )
+
         result = self.client.create_bitable(
             self.bitable_name, self.folder_token or None
         )
@@ -147,12 +190,73 @@ class PipelineFeishuWriter:
         )
         return self._script_extractor
 
+    # ==================== 去重辅助 ====================
+
+    def _get_existing_note_ids(self, table_id: str) -> Set[str]:
+        """从已有数据表中提取全部 note_id（通过链接字段解析）"""
+        try:
+            records = self.client.list_all_records(self.app_token, table_id)
+            note_ids: Set[str] = set()
+            for rec in records:
+                link = rec.get("fields", {}).get("链接", "")
+                url = ""
+                if isinstance(link, dict):
+                    url = link.get("link", "") or link.get("text", "")
+                elif isinstance(link, str):
+                    url = link
+                elif isinstance(link, list):
+                    for seg in link:
+                        if isinstance(seg, dict) and seg.get("link"):
+                            url = seg["link"]
+                            break
+                        elif isinstance(seg, dict) and seg.get("text"):
+                            url = seg["text"]
+                            break
+                if "/explore/" in url:
+                    nid = url.split("/explore/")[1].split("?")[0].split("/")[0]
+                    if nid:
+                        note_ids.add(nid)
+                elif "/discovery/item/" in url:
+                    nid = url.split("/discovery/item/")[1].split("?")[0].split("/")[0]
+                    if nid:
+                        note_ids.add(nid)
+            return note_ids
+        except Exception as e:
+            utils.logger.warning(f"[Pipeline] 查询已有记录失败: {e}")
+            return set()
+
     # ==================== 单作者写入 ====================
 
     def write_creator(self, creator_name: str, notes: List[Dict]):
         if not notes:
             return
         self._ensure_bitable()
+
+        safe_name = creator_name[:100]
+        existing_table_id = self._table_name_to_id.get(safe_name) if self._is_reusing else None
+        seq_offset = 0
+
+        if existing_table_id:
+            existing_note_ids = self._get_existing_note_ids(existing_table_id)
+            new_notes = [
+                n for n in notes
+                if n.get("note_id", "") not in existing_note_ids
+            ]
+            skipped = len(notes) - len(new_notes)
+            self._total_skipped_existing += skipped
+            if not new_notes:
+                utils.logger.info(
+                    f"[Pipeline] {safe_name}: 无新内容，跳过 "
+                    f"({len(notes)} 条均已存在于表格中)"
+                )
+                self._creator_count += 1
+                return
+            seq_offset = len(existing_note_ids)
+            utils.logger.info(
+                f"[Pipeline] {safe_name}: {len(new_notes)} 条新内容 "
+                f"(已有 {len(existing_note_ids)} 条，跳过 {skipped} 条)"
+            )
+            notes = new_notes
 
         records: List[Dict] = []
         for note in notes:
@@ -166,12 +270,20 @@ class PipelineFeishuWriter:
 
         self._rebuild_field_defs()
         ordered_with_serial = set(self._ordered_fields) | {"序号"}
-        safe_name = creator_name[:100]
-        utils.logger.info(
-            f"[Pipeline] 写入作者: {safe_name} ({len(records)} 条)"
-        )
 
-        if self._first_creator:
+        if existing_table_id:
+            table_id = existing_table_id
+            for fn in self._ordered_fields:
+                if fn == "序号":
+                    continue
+                try:
+                    self.client.add_field(
+                        self.app_token, table_id, fn,
+                        self._resolve_field_type(fn),
+                    )
+                except Exception:
+                    pass
+        elif self._first_creator:
             tables = self.client.list_tables(self.app_token)
             if tables:
                 table_id = tables[0]["table_id"]
@@ -197,15 +309,21 @@ class PipelineFeishuWriter:
                 )
             self._first_creator = False
         else:
+            utils.logger.info(
+                f"[Pipeline] 写入作者: {safe_name} ({len(records)} 条)"
+            )
             table_id = self.client.create_table(
                 self.app_token, safe_name, self._all_table_fields
             )
 
-        self.client.cleanup_default_fields_and_records(
-            self.app_token, table_id, ordered_with_serial
-        )
+        if not existing_table_id:
+            self.client.cleanup_default_fields_and_records(
+                self.app_token, table_id, ordered_with_serial
+            )
 
-        for i, rec in enumerate(records, 1):
+        self._table_name_to_id[safe_name] = table_id
+
+        for i, rec in enumerate(records, seq_offset + 1):
             rec["fields"]["序号"] = str(i)
 
         inserted = self.client.batch_insert_records(
@@ -214,23 +332,24 @@ class PipelineFeishuWriter:
         self._total_inserted += inserted
         self._creator_count += 1
 
-        try:
-            fields_list = self.client.list_fields(self.app_token, table_id)
-            hot_fid = ""
-            for f in fields_list:
-                if f and f.get("field_name") == "热门":
-                    hot_fid = f.get("field_id", "")
-                    break
-            if hot_fid:
-                self.client.create_view(
-                    self.app_token, table_id,
-                    view_name="🔥 热门作品",
-                    filter_conditions=[
-                        {"field_id": hot_fid, "operator": "isNotEmpty"}
-                    ],
-                )
-        except Exception:
-            pass
+        if not existing_table_id:
+            try:
+                fields_list = self.client.list_fields(self.app_token, table_id)
+                hot_fid = ""
+                for f in fields_list:
+                    if f and f.get("field_name") == "热门":
+                        hot_fid = f.get("field_id", "")
+                        break
+                if hot_fid:
+                    self.client.create_view(
+                        self.app_token, table_id,
+                        view_name="🔥 热门作品",
+                        filter_conditions=[
+                            {"field_id": hot_fid, "operator": "isNotEmpty"}
+                        ],
+                    )
+            except Exception:
+                pass
 
         video_records = []
         for rec in records:
@@ -249,6 +368,7 @@ class PipelineFeishuWriter:
 
         utils.logger.info(
             f"[Pipeline] {safe_name}: {inserted} 条写入完成"
+            + (f" (追加到已有表)" if existing_table_id else "")
             + (f", {len(video_records)} 条视频入汇总表"
                if video_records else "")
         )
@@ -512,10 +632,45 @@ class PipelineFeishuWriter:
                     f"[Pipeline] 最终脚本校验失败: {e}"
                 )
 
-        utils.logger.info(
-            f"[Pipeline] 全部完成: {self._total_inserted} 条, "
-            f"{self._creator_count} 个作者, URL: {self.bitable_url}"
+        self._save_bitable_to_config()
+
+        msg = (
+            f"[Pipeline] 全部完成: {self._total_inserted} 条新写入, "
+            f"{self._creator_count} 个作者"
         )
+        if self._total_skipped_existing > 0:
+            msg += f", {self._total_skipped_existing} 条已存在跳过"
+        msg += f", URL: {self.bitable_url}"
+        utils.logger.info(msg)
+
+    def _save_bitable_to_config(self):
+        """将当前多维表格信息回写到配置文件，供下次增量复用"""
+        if not self.app_token:
+            return
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            feishu = cfg.setdefault("feishu", {})
+            feishu["last_bitable"] = {
+                "app_token": self.app_token,
+                "url": self.bitable_url or "",
+                "tables": {
+                    name: tid
+                    for name, tid in self._table_name_to_id.items()
+                    if name != "视频汇总"
+                },
+                "summary_table_id": self.summary_table_id or "",
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            utils.logger.info(
+                f"[Pipeline] 多维表格信息已回写配置 "
+                f"(app_token={self.app_token}, "
+                f"{len(self._table_name_to_id)} 个数据表)"
+            )
+        except Exception as e:
+            utils.logger.warning(f"[Pipeline] 回写配置失败: {e}")
 
     def _write_public_video_urls(self):
         records = self.client.list_all_records(
@@ -576,6 +731,29 @@ class PipelineFeishuWriter:
         else:
             utils.logger.info(
                 "[Pipeline] 最终校验通过: 所有视频已有脚本"
+            )
+
+    def cleanup_local_media(self):
+        """删除本地已上传的图片和视频缓存（仅在数据已确认写入飞书后调用）"""
+        import shutil
+        dirs_to_clean = ["data/xhs/images", "data/xhs/videos"]
+        total_freed = 0
+        for d in dirs_to_clean:
+            if not os.path.exists(d):
+                continue
+            try:
+                count = sum(1 for _ in os.scandir(d) if _.is_dir())
+                shutil.rmtree(d)
+                os.makedirs(d, exist_ok=True)
+                total_freed += count
+                utils.logger.info(
+                    f"[Pipeline] 清理本地缓存: {d} ({count} 个目录)"
+                )
+            except Exception as e:
+                utils.logger.warning(f"[Pipeline] 清理 {d} 失败: {e}")
+        if total_freed > 0:
+            utils.logger.info(
+                f"[Pipeline] 本地媒体清理完成: 共 {total_freed} 个笔记目录"
             )
 
     def close(self):

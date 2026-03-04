@@ -2848,19 +2848,30 @@ async def run_batch_crawl(
     pipeline_writer = None
     pipeline_mode = False
     if not skip_feishu and not patch_only and feishu_app_id and feishu_app_secret:
+        _feishu_cfg_for_pipeline: Dict = {}
         try:
             _cfg_path = os.path.join("config", "anti_crawl_config.json")
             with open(_cfg_path, "r", encoding="utf-8") as _f:
-                _cfg_pl = json.load(_f)
-            pipeline_mode = _cfg_pl.get("feishu", {}).get("pipeline_mode", False)
+                _feishu_cfg_for_pipeline = json.load(_f).get("feishu", {})
+            pipeline_mode = _feishu_cfg_for_pipeline.get("pipeline_mode", False)
         except Exception:
             pass
         if pipeline_mode:
             from tools.pipeline_feishu_writer import PipelineFeishuWriter
+            _reuse_token = ""
+            if crawl_mode == "incremental" and _feishu_cfg_for_pipeline.get("reuse_bitable", False):
+                _last_bi = _feishu_cfg_for_pipeline.get("last_bitable", {})
+                _reuse_token = _last_bi.get("app_token", "")
+                if _reuse_token:
+                    utils.logger.info(
+                        f"[BatchCrawler] 增量模式: 将复用已有多维表格 "
+                        f"(token={_reuse_token})"
+                    )
             pipeline_writer = PipelineFeishuWriter(
                 feishu_app_id=feishu_app_id,
                 feishu_app_secret=feishu_app_secret,
                 folder_token=feishu_folder_token,
+                reuse_app_token=_reuse_token,
             )
             utils.logger.info("[BatchCrawler] 流水线模式已启用: 每完成一个作者立即写入飞书")
 
@@ -3477,6 +3488,8 @@ async def run_batch_crawl(
             if pipeline_writer.bitable_url:
                 _final_bitable_url = pipeline_writer.bitable_url
                 utils.logger.info(f"[Pipeline] 飞书表格链接: {_final_bitable_url}")
+            if _feishu_cfg_for_pipeline.get("cleanup_local_media", False):
+                pipeline_writer.cleanup_local_media()
         except Exception as e:
             utils.logger.error(f"[Pipeline] 收尾失败: {e}")
         finally:
