@@ -166,6 +166,11 @@ async def feishu_card_action(request: Request):
     except Exception:
         return JSONResponse(status_code=400, content={"error": "invalid json"})
 
+    # URL 验证（飞书首次配置回调地址时发送 challenge）
+    if body.get("type") == "url_verification":
+        challenge = body.get("challenge", "")
+        return JSONResponse(content={"challenge": challenge})
+
     # 验证 token
     creds = _load_feishu_credentials()
     expected_token = creds.get("verification_token", "")
