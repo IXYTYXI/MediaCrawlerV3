@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
-from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router, terminal_router, shell_router
+from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router, terminal_router, shell_router, feishu_event_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -63,7 +63,7 @@ _auth_tokens: set = set()
 _shell_tokens: set = set()
 _shell_challenges: dict = {}  # nonce -> expiry_time
 
-_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico", "/api/shell/challenge", "/api/shell/auth"}
+_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico", "/api/shell/challenge", "/api/shell/auth", "/api/feishu/event"}
 
 
 @app.post("/api/auth/login")
@@ -175,6 +175,7 @@ app.include_router(login_router, prefix="/api")
 app.include_router(control_router, prefix="/api")
 app.include_router(terminal_router, prefix="/api")
 app.include_router(shell_router, prefix="/api")
+app.include_router(feishu_event_router, prefix="/api")
 
 
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}

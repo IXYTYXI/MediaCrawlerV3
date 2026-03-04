@@ -158,11 +158,11 @@
     "reuse_bitable": true,
     "_reuse_bitable_desc": "增量爬取时复用已有多维表格，仅追加新内容（避免重复上传媒体）",
     "last_bitable": {
-      "app_token": "WSf0bZxvYarHQksvf6JcV4c9nET",
-      "url": "https://guanghe.feishu.cn/base/WSf0bZxvYarHQksvf6JcV4c9nET",
+      "app_token": "",
+      "url": "",
       "tables": {},
       "summary_table_id": "",
-      "updated_at": "2026-02-27"
+      "updated_at": ""
     },
     "_last_bitable_desc": "上次写入的多维表格信息，用于增量复用（自动维护，请勿手动修改）",
     "cleanup_local_media": false,
@@ -188,7 +188,11 @@
     "_chat_id_desc": "飞书群聊 chat_id（使用应用机器人时填写）",
     "_app_id_desc": "应用机器人 App ID（留空则复用飞书推送的 app_id）",
     "_app_secret_desc": "应用机器人 App Secret（留空则复用飞书推送的 app_secret）",
-    "_at_user_ids_desc": "通知时@的人: [\"all\"]表示@所有人, 或填具体open_id列表"
+    "_at_user_ids_desc": "通知时@的人: [\"all\"]表示@所有人, 或填具体open_id列表",
+    "verification_token": "",
+    "_verification_token_desc": "飞书事件订阅 Verification Token（事件订阅 → 验证信息）",
+    "encrypt_key": "",
+    "_encrypt_key_desc": "飞书事件订阅 Encrypt Key（可选，事件订阅 → 加密策略）"
   },
   "_desc": "Config file - auto loaded before each crawl",
   "评论随机等待": {
