@@ -63,7 +63,7 @@ _auth_tokens: set = set()
 _shell_tokens: set = set()
 _shell_challenges: dict = {}  # nonce -> expiry_time
 
-_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico", "/api/shell/challenge", "/api/shell/auth", "/api/feishu/event"}
+_PUBLIC_PATHS = {"/", "/api/health", "/api/auth/login", "/api/auth/check", "/favicon.ico", "/api/shell/challenge", "/api/shell/auth", "/api/feishu/event", "/api/feishu/card_action"}
 
 
 @app.post("/api/auth/login")

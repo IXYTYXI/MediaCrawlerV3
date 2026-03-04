@@ -151,6 +151,39 @@ def _do_reply(message_id: str):
     _reply_message(message_id, card, token)
 
 
+@router.post("/feishu/card_action")
+async def feishu_card_action(request: Request):
+    """
+    飞书卡片交互回调端点
+    当用户点击卡片中的按钮时，飞书会 POST 到此端点。
+    返回新的卡片 JSON 即可原地更新卡片内容。
+
+    飞书开放平台配置：应用 → 卡片回调 → 请求网址:
+    https://<域名>/crawler/api/feishu/card_action
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "invalid json"})
+
+    # 验证 token
+    creds = _load_feishu_credentials()
+    expected_token = creds.get("verification_token", "")
+    if expected_token and body.get("token") != expected_token:
+        return JSONResponse(status_code=403, content={"error": "token mismatch"})
+
+    action = body.get("action", {})
+    action_value = action.get("value", {})
+
+    if action_value.get("action") == "refresh_progress":
+        from tools.crawler_progress import parse_progress, build_progress_card
+        progress = parse_progress()
+        card = build_progress_card(progress)
+        return JSONResponse(content=card)
+
+    return JSONResponse(content={})
+
+
 @router.post("/feishu/event")
 async def feishu_event_callback(request: Request):
     """飞书事件订阅回调端点"""

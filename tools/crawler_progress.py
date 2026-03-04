@@ -439,6 +439,34 @@ def build_progress_card(p: CrawlerProgress) -> dict:
             }],
         })
 
+    # 运行中时显示"刷新进度"按钮，点击后卡片原地更新
+    if p.running:
+        _refresh_ts = datetime.now().strftime("%H:%M:%S")
+        refresh_actions = [{
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": "🔄 刷新进度"},
+            "type": "default",
+            "value": {"action": "refresh_progress"},
+        }]
+        elements.append({"tag": "hr"})
+        elements.append({"tag": "action", "actions": refresh_actions})
+        elements.append({
+            "tag": "note",
+            "elements": [{
+                "tag": "plain_text",
+                "content": f"数据截至 {_refresh_ts}　·　点击按钮刷新",
+            }],
+        })
+    else:
+        _done_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        elements.append({
+            "tag": "note",
+            "elements": [{
+                "tag": "plain_text",
+                "content": f"查询时间 {_done_ts}",
+            }],
+        })
+
     return {
         "config": {"wide_screen_mode": True},
         "header": {
