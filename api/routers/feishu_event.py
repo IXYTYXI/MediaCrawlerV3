@@ -184,7 +184,10 @@ async def feishu_card_action(request: Request):
         from tools.crawler_progress import parse_progress, build_progress_card
         progress = parse_progress()
         card = build_progress_card(progress)
-        return JSONResponse(content=card)
+        return JSONResponse(content={
+            "toast": {"type": "success", "content": "已刷新"},
+            "card": card,
+        })
 
     return JSONResponse(content={})
 
