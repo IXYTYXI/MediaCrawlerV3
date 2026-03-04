@@ -1032,10 +1032,9 @@ def _upload_note_video_to_feishu(
     if local_path:
         try:
             file_size_mb = os.path.getsize(local_path) / 1024 / 1024
-            # 飞书上传限制 20MB
-            if file_size_mb > 20:
+            if file_size_mb > 25:
                 utils.logger.warning(
-                    f"[视频上传] {note_id}: 视频 {file_size_mb:.1f}MB 超过 20MB 限制，跳过"
+                    f"[视频上传] {note_id}: 视频 {file_size_mb:.1f}MB 超过 25MB 限制，跳过"
                 )
                 return None
             file_token = client.upload_media(app_token, local_path)
@@ -1061,8 +1060,8 @@ def _upload_note_video_to_feishu(
                 return None
 
             # 检查大小
-            if len(resp.content) > 20 * 1024 * 1024:
-                utils.logger.warning(f"[视频上传] {note_id}: URL视频超过 20MB 限制，跳过")
+            if len(resp.content) > 25 * 1024 * 1024:
+                utils.logger.warning(f"[视频上传] {note_id}: URL视频超过 25MB 限制，跳过")
                 return None
 
             url_hash = hashlib.md5(video_url.encode()).hexdigest()[:12]

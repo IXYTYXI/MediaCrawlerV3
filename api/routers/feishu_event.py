@@ -78,10 +78,13 @@ def _reply_message(message_id: str, card: dict, token: str):
                     "content": json.dumps(card),
                 },
             )
-            if resp.json().get("code") != 0:
-                logger.warning(f"[FeishuEvent] 回复失败: {resp.json()}")
+            resp_data = resp.json()
+            if resp_data.get("code") != 0:
+                print(f"[feishu_reply] FAILED: {resp_data}")
+            else:
+                print(f"[feishu_reply] SUCCESS, message sent")
     except Exception as e:
-        logger.warning(f"[FeishuEvent] 回复异常: {e}")
+        print(f"[feishu_reply] EXCEPTION: {e}")
 
 
 def _is_duplicate(msg_id: str) -> bool:
@@ -108,16 +111,22 @@ def _handle_message_event(event: dict):
     chat_type = message.get("chat_type", "")
     msg_type = message.get("message_type", "")
 
+    print(f"[feishu_handler] msg_id={msg_id}, chat_type={chat_type}, msg_type={msg_type}")
+
     if not msg_id:
+        print("[feishu_handler] no msg_id, skip")
         return
 
     if _is_duplicate(msg_id):
+        print(f"[feishu_handler] duplicate msg_id={msg_id}, skip")
         return
 
     if chat_type == "group" and not message.get("mentions"):
+        print("[feishu_handler] group msg without mention, skip")
         return
 
     if msg_type != "text":
+        print(f"[feishu_handler] msg_type={msg_type}, not text, skip")
         return
 
     content_str = message.get("content", "{}")
@@ -128,35 +137,48 @@ def _handle_message_event(event: dict):
         text = content_str
 
     text_clean = re.sub(r"@\S+", "", text).strip()
+    print(f"[feishu_handler] text_clean='{text_clean}', has_match={bool(_PROGRESS_KEYWORDS.search(text_clean)) if text_clean else 'empty'}")
 
     if text_clean and _PROGRESS_KEYWORDS.search(text_clean):
-        _do_reply(msg_id)
+        try:
+            _do_reply(msg_id)
+        except Exception as e:
+            import traceback
+            print(f"[feishu_handler] _do_reply EXCEPTION: {e}\n{traceback.format_exc()}")
     elif not text_clean:
-        # @机器人 但没有其他文字 → 也回复进度
-        _do_reply(msg_id)
+        try:
+            _do_reply(msg_id)
+        except Exception as e:
+            import traceback
+            print(f"[feishu_handler] _do_reply EXCEPTION: {e}\n{traceback.format_exc()}")
 
 
 def _do_reply(message_id: str):
     """构建进度卡片并回复"""
+    import sys
     from tools.crawler_progress import parse_progress, build_progress_card
 
+    print(f"[feishu_reply] building card for msg_id={message_id}", flush=True)
     creds = _load_feishu_credentials()
     token = _get_tenant_token(creds.get("app_id", ""), creds.get("app_secret", ""))
     if not token:
-        logger.warning("[FeishuEvent] 获取 tenant_token 失败，无法回复")
+        print("[feishu_reply] FAILED to get tenant_token", flush=True)
         return
 
+    print(f"[feishu_reply] got tenant_token OK", flush=True)
     progress = parse_progress()
     card = build_progress_card(progress)
+    print(f"[feishu_reply] card built, size={len(json.dumps(card))}", flush=True)
     _reply_message(message_id, card, token)
 
 
 @router.post("/feishu/card_action")
 async def feishu_card_action(request: Request):
     """
-    飞书卡片交互回调端点
-    当用户点击卡片中的按钮时，飞书会 POST 到此端点。
-    返回新的卡片 JSON 即可原地更新卡片内容。
+    飞书卡片交互回调端点（兼容 v1 旧格式 和 v2.0 新格式）
+
+    v2.0 格式: action 在 body["event"]["action"]["value"] 中
+    v1 旧格式: action 在 body["action"]["value"] 中
 
     飞书开放平台配置：应用 → 卡片回调 → 请求网址:
     https://<域名>/crawler/api/feishu/card_action
@@ -164,34 +186,56 @@ async def feishu_card_action(request: Request):
     try:
         body = await request.json()
     except Exception:
+        print("[card_action] invalid json body", flush=True)
         return JSONResponse(status_code=400, content={"error": "invalid json"})
+
+    print(f"[card_action] body keys: {list(body.keys())}", flush=True)
 
     # URL 验证（飞书首次配置回调地址时发送 challenge）
     if body.get("type") == "url_verification":
         challenge = body.get("challenge", "")
+        print(f"[card_action] url_verification OK", flush=True)
         return JSONResponse(content={"challenge": challenge})
+
+    # 兼容 v2.0 和 v1 两种格式提取 action_value
+    schema = body.get("schema", "")
+    if schema == "2.0":
+        # v2.0: body → header.token, event.action.value
+        header = body.get("header", {})
+        event = body.get("event", {})
+        token_in_body = header.get("token", "")
+        action = event.get("action", {})
+        action_value = action.get("value", {})
+        print(f"[card_action] v2.0 format, event_type={header.get('event_type')}, action_value={action_value}", flush=True)
+    else:
+        # v1 旧格式: body → token, action.value
+        token_in_body = body.get("token", "")
+        action = body.get("action", {})
+        action_value = action.get("value", {})
+        print(f"[card_action] v1 format, action_value={action_value}", flush=True)
 
     # 验证 token
     creds = _load_feishu_credentials()
     expected_token = creds.get("verification_token", "")
-    if expected_token and body.get("token") != expected_token:
+    if expected_token and token_in_body != expected_token:
+        print(f"[card_action] token mismatch", flush=True)
         return JSONResponse(status_code=403, content={"error": "token mismatch"})
-
-    action = body.get("action", {})
-    action_value = action.get("value", {})
 
     if action_value.get("action") == "refresh_progress":
         from tools.crawler_progress import parse_progress, build_progress_card
         progress = parse_progress()
         card = build_progress_card(progress)
-        return JSONResponse(content={
+        resp_data = {
             "toast": {"type": "success", "content": "已刷新"},
             "card": {
                 "type": "raw",
                 "data": card,
             },
-        })
+        }
+        print(f"[card_action] returning card, size={len(json.dumps(resp_data))}", flush=True)
+        return JSONResponse(content=resp_data)
 
+    print(f"[card_action] no matching action, returning empty", flush=True)
     return JSONResponse(content={})
 
 
@@ -201,29 +245,36 @@ async def feishu_event_callback(request: Request):
     try:
         body = await request.json()
     except Exception:
+        print("[feishu_event] invalid json body")
         return JSONResponse(status_code=400, content={"error": "invalid json"})
 
-    # URL 验证（首次配置时飞书会发送 challenge）
+    print(f"[feishu_event] received body keys: {list(body.keys())}")
+
     if body.get("type") == "url_verification":
         creds = _load_feishu_credentials()
         expected_token = creds.get("verification_token", "")
         if expected_token and body.get("token") != expected_token:
             return JSONResponse(status_code=403, content={"error": "token mismatch"})
         challenge = body.get("challenge", "")
+        print(f"[feishu_event] url_verification, challenge={challenge[:20]}...")
         return JSONResponse(content={"challenge": challenge})
 
-    # V2 事件格式
     schema = body.get("schema")
     header = body.get("header", {})
     event = body.get("event", {})
 
-    # 验证 verification_token（防伪造请求）
     creds = _load_feishu_credentials()
     expected_token = creds.get("verification_token", "")
     if expected_token and header.get("token") != expected_token:
+        print(f"[feishu_event] token mismatch")
         return JSONResponse(status_code=403, content={"error": "token mismatch"})
 
-    if schema == "2.0" and header.get("event_type") == "im.message.receive_v1":
+    event_type = header.get("event_type", "")
+    print(f"[feishu_event] schema={schema}, event_type={event_type}")
+
+    if schema == "2.0" and event_type == "im.message.receive_v1":
+        message = event.get("message", {})
+        print(f"[feishu_event] message_id={message.get('message_id')}, chat_type={message.get('chat_type')}, content={message.get('content', '')[:100]}")
         threading.Thread(
             target=_handle_message_event,
             args=(event,),
@@ -231,4 +282,5 @@ async def feishu_event_callback(request: Request):
         ).start()
         return JSONResponse(content={"code": 0})
 
+    print(f"[feishu_event] unhandled event type: {event_type}")
     return JSONResponse(content={"code": 0})
