@@ -197,10 +197,16 @@ class PipelineFeishuWriter:
 
     def _get_existing_note_ids(self, table_id: str) -> Set[str]:
         """从已有数据表中提取全部 note_id（通过链接字段解析）"""
+        mapping = self._get_existing_note_map(table_id)
+        return set(mapping.keys())
+
+    def _get_existing_note_map(self, table_id: str) -> Dict[str, str]:
+        """返回 {note_id: record_id} 映射，用于去重和更新"""
         try:
             records = self.client.list_all_records(self.app_token, table_id)
-            note_ids: Set[str] = set()
+            note_map: Dict[str, str] = {}
             for rec in records:
+                record_id = rec.get("record_id", "")
                 link = rec.get("fields", {}).get("链接", "")
                 url = ""
                 if isinstance(link, dict):
@@ -215,18 +221,66 @@ class PipelineFeishuWriter:
                         elif isinstance(seg, dict) and seg.get("text"):
                             url = seg["text"]
                             break
+                nid = ""
                 if "/explore/" in url:
                     nid = url.split("/explore/")[1].split("?")[0].split("/")[0]
-                    if nid:
-                        note_ids.add(nid)
                 elif "/discovery/item/" in url:
                     nid = url.split("/discovery/item/")[1].split("?")[0].split("/")[0]
-                    if nid:
-                        note_ids.add(nid)
-            return note_ids
+                if nid and record_id:
+                    note_map[nid] = record_id
+            return note_map
         except Exception as e:
             utils.logger.warning(f"[Pipeline] 查询已有记录失败: {e}")
-            return set()
+            return {}
+
+    # ==================== 互动量增量更新 ====================
+
+    def _update_interaction_stats(
+        self,
+        table_id: str,
+        notes: List[Dict],
+        note_to_record: Dict[str, str],
+    ):
+        """对已存在的笔记批量更新互动量字段"""
+        def _safe_int(v):
+            if v is None or v == "":
+                return 0
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                return 0
+
+        update_records = []
+        for note in notes:
+            nid = note.get("note_id", "")
+            record_id = note_to_record.get(nid)
+            if not record_id:
+                continue
+            liked = _safe_int(note.get("liked_count", 0))
+            collected = _safe_int(note.get("collected_count", 0))
+            comment = _safe_int(note.get("comment_count", 0))
+            interaction = liked + collected + comment
+            is_hot = "🔥 热门" if interaction >= 50 else ""
+            update_records.append({
+                "record_id": record_id,
+                "fields": {
+                    "点赞数": str(liked),
+                    "收藏数": str(collected),
+                    "评论数": str(comment),
+                    "互动量": str(interaction),
+                    "热门": is_hot,
+                },
+            })
+
+        if not update_records:
+            return
+
+        updated = self.client.batch_update_records(
+            self.app_token, table_id, update_records,
+        )
+        utils.logger.info(
+            f"[Pipeline] 互动量更新: {updated}/{len(update_records)} 条成功"
+        )
 
     # ==================== 单作者写入 ====================
 
@@ -240,24 +294,36 @@ class PipelineFeishuWriter:
         seq_offset = 0
 
         if existing_table_id:
-            existing_note_ids = self._get_existing_note_ids(existing_table_id)
-            new_notes = [
-                n for n in notes
-                if n.get("note_id", "") not in existing_note_ids
-            ]
-            skipped = len(notes) - len(new_notes)
-            self._total_skipped_existing += skipped
+            note_to_record = self._get_existing_note_map(existing_table_id)
+            existing_note_ids = set(note_to_record.keys())
+
+            new_notes = []
+            update_notes = []
+            for n in notes:
+                nid = n.get("note_id", "")
+                if nid in existing_note_ids:
+                    update_notes.append(n)
+                else:
+                    new_notes.append(n)
+
+            # 批量更新已有笔记的互动量
+            if update_notes:
+                self._update_interaction_stats(
+                    existing_table_id, update_notes, note_to_record,
+                )
+
+            self._total_skipped_existing += len(update_notes)
             if not new_notes:
                 utils.logger.info(
-                    f"[Pipeline] {safe_name}: 无新内容，跳过 "
-                    f"({len(notes)} 条均已存在于表格中)"
+                    f"[Pipeline] {safe_name}: 无新内容 "
+                    f"({len(update_notes)} 条互动量已更新)"
                 )
                 self._creator_count += 1
                 return
             seq_offset = len(existing_note_ids)
             utils.logger.info(
                 f"[Pipeline] {safe_name}: {len(new_notes)} 条新内容 "
-                f"(已有 {len(existing_note_ids)} 条，跳过 {skipped} 条)"
+                f"(已有 {len(existing_note_ids)} 条，{len(update_notes)} 条互动量已更新)"
             )
             notes = new_notes
 
@@ -674,7 +740,7 @@ class PipelineFeishuWriter:
             f"{self._creator_count} 个作者"
         )
         if self._total_skipped_existing > 0:
-            msg += f", {self._total_skipped_existing} 条已存在跳过"
+            msg += f", {self._total_skipped_existing} 条已存在(互动量已更新)"
         msg += f", URL: {self.bitable_url}"
         utils.logger.info(msg)
 
