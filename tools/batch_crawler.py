@@ -2960,7 +2960,7 @@ async def run_batch_crawl(
                 )
                 if pipeline_writer and reuse_notes:
                     try:
-                        pipeline_writer.write_creator(creator_name, reuse_notes)
+                        pipeline_writer.write_creator_async(creator_name, reuse_notes)
                     except Exception as _pw_e:
                         utils.logger.warning(f"[Pipeline] 写入失败: {creator_name} - {_pw_e}")
                 continue
@@ -3146,7 +3146,7 @@ async def run_batch_crawl(
                             date_start, date_end, min_interaction,
                         )
                         if _pl_notes:
-                            pipeline_writer.write_creator(creator_name, _pl_notes)
+                            pipeline_writer.write_creator_async(creator_name, _pl_notes)
                     except Exception as _pw_e:
                         utils.logger.warning(
                             f"[Pipeline] 写入失败: {creator_name} - {_pw_e}"

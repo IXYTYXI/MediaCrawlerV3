@@ -89,6 +89,9 @@ class PipelineFeishuWriter:
         self.total_videos_uploaded = 0
         self.total_videos_skipped = 0
 
+        self._write_executor: Optional[ThreadPoolExecutor] = None
+        self._write_futures: List = []
+
     def _ensure_bitable(self):
         if self.app_token:
             return
@@ -373,6 +376,36 @@ class PipelineFeishuWriter:
                if video_records else "")
         )
 
+    def write_creator_async(self, creator_name: str, notes: List[Dict]):
+        """异步版本：提交到后台队列，不阻塞主爬虫线程"""
+        if not notes:
+            return
+        self._ensure_bitable()
+        if self._write_executor is None:
+            self._write_executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="feishu-writer"
+            )
+        future = self._write_executor.submit(
+            self.write_creator, creator_name, list(notes)
+        )
+        self._write_futures.append(future)
+
+    def _drain_write_queue(self):
+        """等待所有后台写入完成（finalize 时调用）"""
+        if not self._write_futures:
+            return
+        total = len(self._write_futures)
+        utils.logger.info(f"[Pipeline] 等待 {total} 个写入任务完成...")
+        for i, f in enumerate(self._write_futures, 1):
+            try:
+                f.result()
+            except Exception as e:
+                utils.logger.error(f"[Pipeline] 写入任务 {i} 异常: {e}")
+        self._write_futures.clear()
+        if self._write_executor:
+            self._write_executor.shutdown(wait=False)
+            self._write_executor = None
+
     # ==================== 图片/视频上传 ====================
 
     def _upload_images_for_records(
@@ -568,6 +601,8 @@ class PipelineFeishuWriter:
     # ==================== 收尾 ====================
 
     def finalize(self):
+        self._drain_write_queue()
+
         if self._pending_videos:
             self._trigger_extraction(self._pending_videos)
             self._pending_videos = []

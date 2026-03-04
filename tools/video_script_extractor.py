@@ -183,10 +183,16 @@ class VideoScriptExtractor:
                         err_body = resp.read().decode(errors="replace")[:500]
                         last_err = f"HTTP {resp.status_code}: {err_body}"
                         utils.logger.warning(
-                            f"[ScriptExtractor] Gemini 请求失败 (尝试 {attempt}): {last_err}"
+                            f"[ScriptExtractor] Gemini 请求失败 "
+                            f"(尝试 {attempt}/{self.retry_count}): "
+                            f"HTTP {resp.status_code}"
                         )
                         if attempt < self.retry_count:
-                            time.sleep(5)
+                            backoff = min(15 * (2 ** (attempt - 1)), 120)
+                            utils.logger.info(
+                                f"[ScriptExtractor] 等待 {backoff}s 后重试..."
+                            )
+                            time.sleep(backoff)
                         continue
 
                     content = self._parse_sse_content(resp)
@@ -199,10 +205,12 @@ class VideoScriptExtractor:
             except Exception as e:
                 last_err = str(e)
                 utils.logger.warning(
-                    f"[ScriptExtractor] Gemini 调用异常 (尝试 {attempt}): {e}"
+                    f"[ScriptExtractor] Gemini 调用异常 "
+                    f"(尝试 {attempt}/{self.retry_count}): {e}"
                 )
             if attempt < self.retry_count:
-                time.sleep(10 * attempt)
+                backoff = min(15 * (2 ** (attempt - 1)), 120)
+                time.sleep(backoff)
 
         return f"[提取失败] {last_err}"
 
