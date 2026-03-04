@@ -330,7 +330,7 @@ async def _verify_ws_dash(web_session: str) -> bool:
 class BatchStartRequest(BaseModel):
     limit: int = 0
     min_interaction: int = 0
-    skip_feishu: bool = True
+    skip_feishu: Optional[bool] = None
     enable_comments: bool = False
     max_notes: int = 3000
     force_recrawl: bool = False
@@ -359,7 +359,14 @@ async def start_batch_crawl(request: BatchStartRequest):
 
     # 构建命令
     cmd = ["conda", "run", "--no-capture-output", "-n", "uvenv", "python", "-u", "-m", "tools.batch_crawler"]
-    if request.skip_feishu:
+    skip_feishu = request.skip_feishu
+    if skip_feishu is None:
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as _f:
+                skip_feishu = not json.load(_f).get("feishu", {}).get("enabled", False)
+        except Exception:
+            skip_feishu = True
+    if skip_feishu:
         cmd.append("--skip-feishu")
     if request.limit > 0:
         cmd.extend(["--limit", str(request.limit)])

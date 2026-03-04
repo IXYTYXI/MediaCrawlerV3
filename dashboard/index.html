@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MediaCrawler Dashboard</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <script>window.Vue || document.write('<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -157,13 +158,11 @@
           class="w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition">
           导出数据
         </button>
-        <a href="/terminal" target="_blank"
+        <a :href="(basePath||'') + '/terminal'" target="_blank"
           class="block w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-center mt-1.5">
           🖥 终端日志
         </a>
-        <a href="/control" class="block w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-center mt-1.5">
-          ⚡ 控制面板
-        </a>
+        <!-- 控制面板入口仅管理员知晓，不在用户界面暴露 -->
       </div>
     </nav>
 
@@ -414,8 +413,24 @@
         </div>
         
         <div class="card rounded-xl p-4">
-          <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">作者主页链接</label>
+          <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">单独爬取 — 作者主页链接</label>
           <textarea v-model="creatorIdsText" rows="3" placeholder="每行一个，如：https://www.xiaohongshu.com/user/profile/..." class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-none"></textarea>
+          <p class="text-[11px] text-gray-600 mt-1">此处填写的链接用于「开始爬取」按钮的单次爬取，与批量爬取的作者列表互不影响</p>
+        </div>
+
+        <div class="card rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">批量爬取作者列表（Excel，共 {{ creators.length }} 位）</label>
+            <button @click="activeTab = '批量爬取'" class="text-xs text-blue-400 hover:text-blue-300">管理作者 &rarr;</button>
+          </div>
+          <div v-if="creators.length === 0" class="text-gray-500 text-xs mt-2">暂无作者，请在「批量爬取」页面添加</div>
+          <div v-else class="mt-2 space-y-1 max-h-36 overflow-y-auto pr-1">
+            <div v-for="(c, i) in creators" :key="i" class="flex items-center gap-2 text-xs bg-gray-800/50 rounded-lg px-3 py-1.5">
+              <span class="text-gray-400 w-5 text-right shrink-0">{{ i + 1 }}.</span>
+              <span class="text-white font-medium shrink-0" v-if="c.name">{{ c.name }}</span>
+              <span class="text-gray-500 truncate">{{ c.url }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="flex items-center gap-3 mt-8 mb-4">
@@ -932,8 +947,9 @@ const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue
 
 createApp({
   setup() {
-    const API = '/api/dashboard'
-    const AUTH_API = '/api/auth'
+    const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
+    const API = basePath + '/api/dashboard'
+    const AUTH_API = basePath + '/api/auth'
 
     const authenticated = ref(false)
     const loginPassword = ref('')
@@ -1440,7 +1456,7 @@ createApp({
       setInterval(() => { if (authenticated.value) loadSessionStatus() }, 30000)
     })
 
-    return { config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions }
+    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions }
   }
 }).mount('#app')
 </script>

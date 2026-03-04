@@ -155,6 +155,7 @@
             { name: 'api.log', label: 'API' },
         ];
 
+        const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
         let currentFile = 'crawler.log';
         let ws = null;
         let paused = false;
@@ -237,7 +238,7 @@
 
             const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const token = localStorage.getItem('mc_token') || '';
-            const url = `${proto}//${location.host}/api/terminal/ws?token=${encodeURIComponent(token)}`;
+            const url = `${proto}//${location.host}${basePath}/api/terminal/ws?token=${encodeURIComponent(token)}`;
             ws = new WebSocket(url);
 
             ws.onopen = () => {

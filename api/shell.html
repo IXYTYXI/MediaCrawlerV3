@@ -127,6 +127,7 @@
         let term = null;
         let fitAddon = null;
         let inputBuffer = '';
+        const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
         let shellToken = '';
         let xtermLoaded = false;
 
@@ -153,7 +154,7 @@
             const btn = document.getElementById('loginBtn');
             if (btn) { btn.disabled = true; btn.textContent = '验证中...'; }
             try {
-                const challengeRes = await fetch('/api/shell/challenge');
+                const challengeRes = await fetch(basePath + '/api/shell/challenge');
                 const challengeData = await challengeRes.json();
                 const nonce = challengeData.nonce;
                 if (!nonce) {
@@ -162,7 +163,7 @@
                 }
                 const pwdHash = await sha256Hex(pwd);
                 const response = await sha256Hex(nonce + pwdHash);
-                const authRes = await fetch('/api/shell/auth', {
+                const authRes = await fetch(basePath + '/api/shell/auth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ nonce, response }),
@@ -269,7 +270,7 @@
             setStatus('connecting');
             let opened = false;
             const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url = `${proto}//${location.host}/api/shell/ws?token=${encodeURIComponent(shellToken)}`;
+            const url = `${proto}//${location.host}${basePath}/api/shell/ws?token=${encodeURIComponent(shellToken)}`;
             ws = new WebSocket(url);
 
             ws.onopen = () => { opened = true; setStatus('connected'); };

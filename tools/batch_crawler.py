@@ -2875,6 +2875,7 @@ async def run_batch_crawl(
             user_id = creator_url.split("/user/profile/")[1].split("?")[0]
 
         # 每作者开始时恢复日期停止配置（增量模式会在下面覆盖）
+        config.INCREMENTAL_MODE = False
         if crawl_mode == "date_range" and date_start:
             config.DATE_EARLY_STOP_ENABLED = True
             config.CRAWL_DATE_START = date_start
@@ -2905,6 +2906,7 @@ async def run_batch_crawl(
                 config.DATE_EARLY_STOP_ENABLED = True
                 config.DATE_EARLY_STOP_THRESHOLD = 5
                 config.CRAWL_DATE_START = last_date
+                config.INCREMENTAL_MODE = True
                 utils.logger.info(
                     f"[BatchCrawler] [{idx}/{total}] [增量更新] {creator_name}，"
                     f"只爬 {last_date} 之后的新内容"

@@ -25,7 +25,7 @@ _IS_LINUX = _platform.system() == "Linux"
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = "web_session=040069b8083b3cc3b8d61fe4aa3b4b31c37ce7"
+COOKIES = "web_session=040069b8083b3cc3b8d6cad4923b4b5eb876b0"
 
 # ==================== 手动 Session 回退 ====================
 # 当扫码登录失败、shared cookie 过期、浏览器 session 过期时，
@@ -175,6 +175,7 @@ XHS_CURRENT_USER_ID = ""
 DATE_EARLY_STOP_ENABLED = False
 DATE_EARLY_STOP_THRESHOLD = 5  # 连续多少条超出范围后停止
 CRAWL_DATE_START = ""  # 由 batch_crawler 动态注入，格式 "2025-01-01"
+INCREMENTAL_MODE = False  # 由 batch_crawler 动态注入，仅增量更新模式下为 True
 
 # 假动作策略：随机访问无关内容，模拟真实用户浏览
 FAKE_ACTION_ENABLED = True

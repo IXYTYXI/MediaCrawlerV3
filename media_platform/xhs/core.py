@@ -426,6 +426,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 # ========== 初始化日期停止标记 ==========
                 self._early_stop_requested = False
                 self._consecutive_old_batches = 0
+                self._consecutive_all_skip_batches = 0
 
                 # ========== 断点续爬：初始化进度管理器 ==========
                 self._progress_manager: CrawlProgressManager = get_progress_manager("xhs", "creator")
@@ -851,6 +852,21 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 )
         else:
             self._consecutive_old_batches = 0  # 本批次没有超期，重置
+
+        # ========== 全跳过批次检测（仅增量模式：无新内容时快速跳过） ==========
+        _incremental = getattr(config, 'INCREMENTAL_MODE', False)
+        if _incremental and skip_count == total and success_count == 0:
+            if not hasattr(self, '_consecutive_all_skip_batches'):
+                self._consecutive_all_skip_batches = 0
+            self._consecutive_all_skip_batches += 1
+            if self._consecutive_all_skip_batches >= 3:
+                self._early_stop_requested = True
+                utils.logger.info(
+                    f"[日期检测] 连续 {self._consecutive_all_skip_batches} 个批次全部跳过（无新内容），"
+                    f"通知外层停止该作者的爬取"
+                )
+        elif success_count > 0:
+            self._consecutive_all_skip_batches = 0
 
         # ========== 跳过批次：防限流延迟 ==========
         if total > 0 and skip_count > total * 0.5:

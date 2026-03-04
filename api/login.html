@@ -385,6 +385,7 @@
 
         createApp({
             setup() {
+                const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
                 const state = ref('idle');        // idle | connecting | live | success | error | closed
                 const message = ref('');
                 const loginSuccess = ref(false);
@@ -529,7 +530,7 @@
                     message.value = '正在连接服务器...';
 
                     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    const url = `${proto}//${location.host}/api/login/ws/browser`;
+                    const url = `${proto}//${location.host}${basePath}/api/login/ws/browser`;
                     ws = new WebSocket(url);
 
                     ws.binaryType = 'blob';
@@ -634,7 +635,7 @@
                     message.value = '正在清除浏览器缓存...';
 
                     try {
-                        const resp = await fetch('/api/login/clear-browser-cache', { method: 'POST' });
+                        const resp = await fetch(basePath + '/api/login/clear-browser-cache', { method: 'POST' });
                         const result = await resp.json();
                         if (result.success) {
                             state.value = 'idle';

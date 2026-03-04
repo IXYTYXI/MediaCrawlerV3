@@ -5,7 +5,8 @@
 (function () {
   'use strict';
 
-  const API_BASE = '/api/dashboard';
+  const _BP = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
+  const API_BASE = _BP + '/api/dashboard';
   const CHECK_INTERVAL = 2000;
   let injected = false;
 

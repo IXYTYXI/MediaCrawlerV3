@@ -180,26 +180,34 @@ app.include_router(shell_router, prefix="/api")
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}
 
 
+DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard")
+
+
 @app.get("/")
-async def serve_control_page_root():
-    """控制面板作为首页"""
-    control_path = os.path.join(os.path.dirname(__file__), "control.html")
-    if os.path.exists(control_path):
-        return FileResponse(control_path, media_type="text/html", headers=_NO_CACHE_HEADERS)
-    return {"message": "Control panel not found"}
+async def serve_dashboard_root():
+    """用户首页 → 数据仪表盘"""
+    index_path = os.path.join(DASHBOARD_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html", headers=_NO_CACHE_HEADERS)
+    return {"message": "Dashboard not found"}
+
+
+@app.get("/dashboard")
+async def serve_dashboard():
+    """数据仪表盘（保留旧路径兼容）"""
+    index_path = os.path.join(DASHBOARD_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html", headers=_NO_CACHE_HEADERS)
+    return {"message": "Dashboard not found"}
 
 
 @app.get("/control")
 async def serve_control_page():
-    """控制面板（保留旧路径兼容）"""
+    """管理员控制面板（需知道地址才能访问）"""
     control_path = os.path.join(os.path.dirname(__file__), "control.html")
     if os.path.exists(control_path):
         return FileResponse(control_path, media_type="text/html", headers=_NO_CACHE_HEADERS)
     return {"message": "Control panel not found"}
-
-
-# React Dashboard 移至 /notuse
-DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard")
 
 
 @app.get("/notuse")
@@ -209,15 +217,6 @@ async def serve_frontend_hidden():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"message": "WebUI not found"}
-
-
-@app.get("/dashboard")
-async def serve_dashboard():
-    """Return Dashboard page"""
-    index_path = os.path.join(DASHBOARD_DIR, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path, media_type="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
-    return {"message": "Dashboard not found"}
 
 
 @app.get("/login")

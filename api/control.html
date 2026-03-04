@@ -297,9 +297,9 @@
 
         <!-- Nav -->
         <div class="nav-links">
-            <a href="/shell">命令行</a>
-            <a href="/login">远程登录</a>
-            <a href="/dashboard">数据仪表盘</a>
+            <a :href="(basePath||'') + '/shell'">命令行</a>
+            <a :href="(basePath||'') + '/login'">远程登录</a>
+            <a :href="(basePath||'') + '/'">用户仪表盘</a>
         </div>
 
         <!-- Tabs -->
@@ -854,7 +854,7 @@
 
                     <div class="launch-info" style="max-width: 400px; text-align: center; line-height: 1.8;">
                         启动前请确保：<br/>
-                        1. 已通过 <a href="/login" style="color: var(--primary);">远程登录</a> 完成扫码<br/>
+                        1. 已通过 <a :href="(basePath||'') + '/login'" style="color: var(--primary);">远程登录</a> 完成扫码<br/>
                         2. 配置项已按需调整
                     </div>
                 </div>
@@ -962,13 +962,16 @@
 
     </div>
 
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script>window.Vue || document.write('<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>')</script>
     <script>
     (function() {
         const { createApp, ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
 
-        createApp({
+        const app = createApp({
             setup() {
+                const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
+
                 // ── 认证状态 ──
                 const authChecking = ref(true);
                 const authenticated = ref(false);
@@ -980,7 +983,7 @@
                 async function doLogin() {
                     loginError.value = '';
                     try {
-                        const res = await fetch('/api/auth/login', {
+                        const res = await fetch(basePath + '/api/auth/login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ password: loginPassword.value }),
@@ -1007,7 +1010,7 @@
                 async function checkAuth() {
                     if (!authToken) return false;
                     try {
-                        const res = await fetch('/api/auth/check', {
+                        const res = await fetch(basePath + '/api/auth/check', {
                             headers: { 'Authorization': 'Bearer ' + authToken },
                         });
                         const data = await res.json();
@@ -1064,7 +1067,7 @@
                 }
 
                 // ── API 基地址 ──
-                const API = '/api/control';
+                const API = basePath + '/api/control';
 
                 // ── 配置 ──
                 async function loadConfig() {
@@ -1406,7 +1409,7 @@
                     if (logWs && logWs.readyState <= 1) return; // 已连接
 
                     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    const url = `${proto}//${location.host}/api/control/ws/log?token=${encodeURIComponent(authToken)}`;
+                    const url = `${proto}//${location.host}${basePath}/api/control/ws/log?token=${encodeURIComponent(authToken)}`;
                     logWs = new WebSocket(url);
 
                     logWs.onmessage = (evt) => {
@@ -1467,7 +1470,7 @@
 
                 async function loadFiles() {
                     try {
-                        const res = await authFetch('/api/dashboard/files');
+                        const res = await authFetch(basePath + '/api/dashboard/files');
                         const data = await res.json();
                         if (data.success) files.value = data.data || [];
                     } catch (e) {
@@ -1551,6 +1554,7 @@
                     showToast, loadConfig, saveConfig,
                     startCrawler, stopCrawler, formatDuration,
                     clearLogs, switchToLog,
+                    basePath,
                     sessionPool, loadSessions, addSession, deleteSession, verifySession, verifyAllSessions,
                     creators, newCreator, editIdx, editCreator,
                     loadCreators, addCreator, startEdit, saveEdit, deleteCreator,
@@ -1558,7 +1562,12 @@
                     files, fileView, loadFiles, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, switchToFiles,
                 };
             }
-        }).mount('#app');
+        });
+        app.config.errorHandler = (err, vm, info) => {
+            console.error('[Vue Error]', err, info);
+            document.title = 'ERROR: ' + err.message;
+        };
+        app.mount('#app');
     })();
     </script>
 </body>
