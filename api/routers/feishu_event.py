@@ -186,7 +186,10 @@ async def feishu_card_action(request: Request):
         card = build_progress_card(progress)
         return JSONResponse(content={
             "toast": {"type": "success", "content": "已刷新"},
-            "card": card,
+            "card": {
+                "type": "raw",
+                "data": card,
+            },
         })
 
     return JSONResponse(content={})
