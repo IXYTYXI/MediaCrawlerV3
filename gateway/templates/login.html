@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediaCrawler - 登录</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    color: #e2e8f0;
+  }
+  .card {
+    background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 16px;
+    padding: 40px; width: 100%; max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  }
+  h1 { font-size: 24px; font-weight: 600; text-align: center; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 32px; }
+  .form-group { margin-bottom: 20px; }
+  label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; font-weight: 500; }
+  input {
+    width: 100%; padding: 12px 16px; background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px;
+    color: #e2e8f0; font-size: 15px; transition: border-color 0.2s;
+  }
+  input:focus { outline: none; border-color: #3b82f6; }
+  .btn {
+    width: 100%; padding: 12px; background: #3b82f6; border: none; border-radius: 8px;
+    color: white; font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #2563eb; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; padding: 10px 14px;
+    border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>MediaCrawler</h1>
+  <p class="subtitle">多租户爬虫管理平台</p>
+  <div class="error" id="error"></div>
+  <form id="loginForm">
+    <div class="form-group">
+      <label>用户名</label>
+      <input type="text" id="username" autocomplete="username" placeholder="输入用户名" required>
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="password" id="password" autocomplete="current-password" placeholder="输入密码" required>
+    </div>
+    <button type="submit" class="btn" id="loginBtn">登 录</button>
+  </form>
+</div>
+<script>
+  const form = document.getElementById('loginForm');
+  const errorEl = document.getElementById('error');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorEl.style.display = 'none';
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = '登录中...';
+    try {
+      const resp = await fetch(BASE + '/manage/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value.trim(),
+          password: document.getElementById('password').value,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || '登录失败');
+      if (data.is_admin) {
+        window.location.href = BASE + '/manage/admin';
+      } else {
+        window.location.href = BASE + '/manage/portal';
+      }
+    } catch (err) {
+      errorEl.textContent = err.message; errorEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = '登 录';
+    }
+  });
+</script>
+</body>
+</html>

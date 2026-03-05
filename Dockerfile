@@ -14,11 +14,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# ---- 系统依赖 ----
+# ---- 系统依赖（含 Playwright Chromium 运行时依赖）----
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    fonts-noto-cjk \
-    locales \
+    curl fonts-noto-cjk fonts-unifont locales \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+    libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libxshmfence1 \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
@@ -29,8 +30,8 @@ RUN pip install --upgrade pip \
     && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple \
        $(python -c "import tomllib,pathlib;d=tomllib.loads(pathlib.Path('pyproject.toml').read_text());print(' '.join(d['project']['dependencies']))")
 
-# ---- Playwright Chromium ----
-RUN playwright install chromium && playwright install-deps
+# ---- Playwright Chromium（跳过系统依赖安装，上面已手动安装）----
+RUN playwright install chromium
 
 # ---- conda shim（让代码中 conda run -n uvenv ... 在容器内透传执行）----
 RUN printf '#!/bin/bash\nshift\nwhile [[ $# -gt 0 ]]; do\n  case "$1" in\n    --*) shift ;;\n    -n)  shift; shift ;;\n    *)   break ;;\n  esac\ndone\nexec "$@"\n' \

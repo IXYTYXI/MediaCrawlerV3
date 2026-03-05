@@ -57,8 +57,10 @@ app.add_middleware(
 # ==================== 访问密码保护 ====================
 # 修改这里设置你的密码（请改成你自己的复杂密码）
 DASHBOARD_PASSWORD = os.environ.get("MC_DASHBOARD_PWD", "changeme")
+SHELL_PASSWORD = os.environ.get("MC_SHELL_PWD", "") or DASHBOARD_PASSWORD
 
 _PASSWORD_HASH = hashlib.sha256(DASHBOARD_PASSWORD.encode()).hexdigest()
+_SHELL_PASSWORD_HASH = hashlib.sha256(SHELL_PASSWORD.encode()).hexdigest()
 _auth_tokens: set = set()
 _shell_tokens: set = set()
 _shell_challenges: dict = {}  # nonce -> expiry_time
@@ -129,7 +131,7 @@ async def shell_auth(request: Request):
         return JSONResponse(status_code=401, content={"success": False, "message": "挑战已过期"})
     del _shell_challenges[nonce]
 
-    expected = hashlib.sha256((nonce + _PASSWORD_HASH).encode()).hexdigest()
+    expected = hashlib.sha256((nonce + _SHELL_PASSWORD_HASH).encode()).hexdigest()
     if not hmac.compare_digest(response, expected):
         return JSONResponse(status_code=401, content={"success": False, "message": "解锁失败"})
 

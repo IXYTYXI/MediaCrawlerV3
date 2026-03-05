@@ -1,0 +1,30 @@
+# ============================================================
+# MediaCrawler 多租户架构
+# 启动: GATEWAY_ADMIN_PWD=xxx docker compose -f docker-compose.multi.yml up -d
+# ============================================================
+services:
+  gateway:
+    build: ./gateway
+    container_name: mediacrawler-gateway
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/mc-gateway:/data/mc-gateway
+      - /data/mc-users:/data/mc-users
+    environment:
+      - GATEWAY_ADMIN_PWD=${GATEWAY_ADMIN_PWD:-admin123}
+      - MC_IMAGE=mediacrawler:latest
+      - MC_USERS_DIR=/data/mc-users
+      - GATEWAY_DATA_DIR=/data/mc-gateway
+      - MC_PORT_START=9020
+      - MC_PORT_END=9040
+      - MC_MEM_LIMIT=2g
+      - MC_SHM_SIZE=512m
+      - BASE_PATH=/gateway
+      - MC_SHELL_PWD=${MC_SHELL_PWD:-shellAdmin!2026}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/manage/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

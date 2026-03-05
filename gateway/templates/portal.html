@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediaCrawler - 用户门户</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a; color: #e2e8f0; min-height: 100vh;
+  }
+  .header {
+    background: rgba(30, 41, 59, 0.9); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header-actions { display: flex; gap: 12px; align-items: center; }
+  .container { max-width: 640px; margin: 0 auto; padding: 32px 24px; }
+  .card {
+    background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 12px; padding: 24px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .info-row { display: flex; justify-content: space-between; padding: 10px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08); font-size: 14px; }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: #94a3b8; }
+  .btn {
+    padding: 10px 20px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary { background: #3b82f6; color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-ghost { background: transparent; color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
+  .btn-ghost:hover { color: #e2e8f0; border-color: rgba(148, 163, 184, 0.4); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-block { width: 100%; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  .form-group input {
+    width: 100%; padding: 10px 14px; background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px;
+    color: #e2e8f0; font-size: 14px;
+  }
+  .form-group input:focus { outline: none; border-color: #3b82f6; }
+  .status-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+  }
+  .status-running { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+  .status-exited { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+  .msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }
+  .msg-ok { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+  .msg-err { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>MediaCrawler</h1>
+  <div class="header-actions">
+    <span id="userLabel" style="font-size:13px;color:#94a3b8;"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">退出</button>
+  </div>
+</div>
+<div class="container">
+  <div class="card">
+    <h2>我的服务</h2>
+    <div class="info-row"><span class="info-label">用户名</span><span id="infoUser">-</span></div>
+    <div class="info-row"><span class="info-label">邮箱</span><span id="infoEmail">-</span></div>
+    <div class="info-row"><span class="info-label">容器状态</span><span id="infoStatus">-</span></div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary btn-block" onclick="openDashboard()">打开 Dashboard</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>修改密码</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:16px;">同时修改登录密码、Dashboard 密码和邮箱密码</p>
+    <div id="pwdMsg" class="msg"></div>
+    <div class="form-group"><label>当前密码</label><input id="oldPwd" type="password"></div>
+    <div class="form-group"><label>新密码</label><input id="newPwd" type="password" placeholder="至少6位"></div>
+    <div class="form-group"><label>确认新密码</label><input id="newPwd2" type="password"></div>
+    <button class="btn btn-primary" onclick="changePwd()">确认修改</button>
+  </div>
+</div>
+
+<script>
+  async function api(url, opts = {}) {
+    const resp = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...opts.headers } });
+    if (resp.status === 401) { window.location.href = BASE + '/manage/login'; return; }
+    return resp.json();
+  }
+
+  async function loadInfo() {
+    const data = await api(BASE + '/manage/api/me');
+    if (!data?.data) return;
+    const d = data.data;
+    document.getElementById('userLabel').textContent = d.username;
+    document.getElementById('infoUser').textContent = d.username;
+    document.getElementById('infoEmail').textContent = d.email || (d.username + '@ooioo.us.ci');
+    const st = d.container?.status || 'unknown';
+    const stText = { running: '运行中', exited: '已停止', not_created: '未创建' }[st] || st;
+    const cls = st === 'running' ? 'status-running' : 'status-exited';
+    document.getElementById('infoStatus').innerHTML = `<span class="status-badge ${cls}">${stText}</span>`;
+  }
+
+  function openDashboard() { window.location.href = BASE + '/workspace/dashboard'; }
+
+  async function changePwd() {
+    const msgEl = document.getElementById('pwdMsg');
+    msgEl.style.display = 'none';
+    const oldPwd = document.getElementById('oldPwd').value;
+    const newPwd = document.getElementById('newPwd').value;
+    const newPwd2 = document.getElementById('newPwd2').value;
+    if (!oldPwd || !newPwd) { showMsg('请填写完整', false); return; }
+    if (newPwd !== newPwd2) { showMsg('两次输入的新密码不一致', false); return; }
+    if (newPwd.length < 6) { showMsg('新密码至少6位', false); return; }
+    const data = await api(BASE + '/manage/api/user/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
+    });
+    if (data?.success) {
+      showMsg(data.message, true);
+      document.getElementById('oldPwd').value = '';
+      document.getElementById('newPwd').value = '';
+      document.getElementById('newPwd2').value = '';
+    } else {
+      showMsg(data?.detail || '修改失败', false);
+    }
+  }
+
+  function showMsg(text, ok) {
+    const el = document.getElementById('pwdMsg');
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+    el.style.display = 'block';
+  }
+
+  async function logout() {
+    await api(BASE + '/manage/api/logout', { method: 'POST' });
+    window.location.href = BASE + '/manage/login';
+  }
+
+  loadInfo();
+</script>
+</body>
+</html>

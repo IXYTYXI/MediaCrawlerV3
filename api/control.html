@@ -970,7 +970,7 @@
 
         const app = createApp({
             setup() {
-                const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; const m = p.match(/^(\/[^/]+)(?:\/|$)/); if (!m) return ''; const first = m[1].substring(1); return segs.includes(first) ? '' : m[1]; })();
+                const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal']; for (const s of segs) { const i = p.indexOf('/' + s); if (i >= 0) return p.substring(0, i); } return ''; })();
 
                 // ── 认证状态 ──
                 const authChecking = ref(true);

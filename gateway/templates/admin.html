@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediaCrawler - 管理面板</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a; color: #e2e8f0; min-height: 100vh;
+  }
+
+  .header {
+    background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 28px 32px; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 16px; margin-bottom: 32px;
+  }
+  .stat-card {
+    background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 14px; padding: 22px 24px; position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .stat-card:nth-child(1)::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+  .stat-card:nth-child(2)::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+  .stat-card:nth-child(3)::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+  .stat-card .value { font-size: 32px; font-weight: 800; margin-top: 6px; letter-spacing: -0.02em; }
+  .stat-card:nth-child(1) .value { color: #60a5fa; }
+  .stat-card:nth-child(2) .value { color: #4ade80; }
+  .stat-card:nth-child(3) .value { color: #fbbf24; }
+
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .section-header h2 { font-size: 17px; font-weight: 700; }
+
+  .btn {
+    padding: 8px 18px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #3b82f6; color: white; }
+  .btn-primary:hover { background: #2563eb; box-shadow: 0 2px 12px rgba(59, 130, 246, 0.3); }
+  .btn-success { background: #22c55e; color: white; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-warning { background: #f59e0b; color: #1e293b; }
+  .btn-warning:hover { background: #d97706; }
+  .btn-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+  .btn-danger:hover { background: #ef4444; color: white; }
+  .btn-ghost { background: rgba(148, 163, 184, 0.08); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.15); }
+  .btn-ghost:hover { background: rgba(148, 163, 184, 0.15); color: #f1f5f9; border-color: rgba(148, 163, 184, 0.3); }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+  .btn-xs { padding: 7px 14px; font-size: 13px; border-radius: 7px; }
+
+  .user-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .user-card {
+    background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 14px; padding: 20px 24px;
+    display: flex; justify-content: space-between; align-items: center; gap: 20px;
+    transition: border-color 0.2s;
+  }
+  .user-card:hover { border-color: rgba(148, 163, 184, 0.2); }
+
+  .user-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+  .user-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .user-name { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+  .user-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .meta-item { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 4px; }
+  .meta-item span { color: #94a3b8; }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .status-badge::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+  }
+  .status-running { background: rgba(34, 197, 94, 0.12); color: #4ade80; }
+  .status-running::before { background: #4ade80; box-shadow: 0 0 6px rgba(74, 222, 128, 0.5); }
+  .status-exited { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
+  .status-exited::before { background: #fca5a5; }
+  .status-not_created { background: rgba(148, 163, 184, 0.1); color: #94a3b8; }
+  .status-not_created::before { background: #94a3b8; }
+
+  .user-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #1e293b; border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 16px; padding: 28px 32px; width: 100%; max-width: 420px;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.3);
+  }
+  .modal h3 { font-size: 18px; margin-bottom: 22px; font-weight: 700; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; font-weight: 500; }
+  .form-group input {
+    width: 100%; padding: 10px 14px; background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px;
+    color: #e2e8f0; font-size: 14px; transition: border-color 0.15s;
+  }
+  .form-group input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+  .empty { text-align: center; padding: 60px 20px; color: #475569; font-size: 14px; }
+  .empty-icon { font-size: 36px; margin-bottom: 12px; display: block; opacity: 0.4; }
+
+  .toast {
+    position: fixed; top: 24px; right: 24px; z-index: 200;
+    padding: 14px 20px; border-radius: 10px; font-size: 14px; font-weight: 500;
+    max-width: 400px; animation: slideIn 0.3s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .toast-success { background: #166534; color: #bbf7d0; border: 1px solid rgba(74, 222, 128, 0.2); }
+  .toast-error { background: #7f1d1d; color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.2); }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  @media (max-width: 768px) {
+    .container { padding: 16px; }
+    .stats { grid-template-columns: 1fr; }
+    .user-card { grid-template-columns: 1fr; }
+    .user-actions { justify-content: flex-start; }
+    .header { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>MediaCrawler 管理面板</h1>
+  <div class="header-actions">
+    <span id="adminUser" style="font-size:13px;color:#94a3b8;"></span>
+    <button class="btn btn-ghost btn-sm" onclick="showPwdModal()">修改密码</button>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">退出</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card"><div class="label">用户总数</div><div class="value" id="totalUsers">-</div></div>
+    <div class="stat-card"><div class="label">运行中</div><div class="value" id="runningCount">-</div></div>
+    <div class="stat-card"><div class="label">已停止</div><div class="value" id="stoppedCount">-</div></div>
+  </div>
+
+  <div class="section-header">
+    <h2>用户列表</h2>
+    <button class="btn btn-primary btn-sm" onclick="showCreateModal()">+ 创建用户</button>
+  </div>
+
+  <div class="user-list" id="userList">
+    <div class="empty"><span class="empty-icon">...</span>加载中</div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h3>创建新用户</h3>
+    <div class="form-group"><label>用户名</label><input id="newUsername" placeholder="小写字母和数字" autocomplete="off"></div>
+    <div class="form-group"><label>密码</label><input id="newPassword" type="password" placeholder="设置密码"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="hideCreateModal()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="createUser()">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pwdModal">
+  <div class="modal">
+    <h3>修改管理员密码</h3>
+    <div class="form-group"><label>当前密码</label><input id="oldPwd" type="password" placeholder="输入当前密码"></div>
+    <div class="form-group"><label>新密码</label><input id="newPwd" type="password" placeholder="至少6位"></div>
+    <div class="form-group"><label>确认新密码</label><input id="newPwd2" type="password" placeholder="再次输入新密码"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="hidePwdModal()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="changePassword()">确认修改</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="resetPwdModal">
+  <div class="modal">
+    <h3>修改用户密码</h3>
+    <div class="form-group"><label>用户</label><input id="resetPwdUser" disabled style="opacity:0.7;"></div>
+    <div class="form-group"><label>新密码</label><input id="resetPwdNew" type="password" placeholder="至少6位"></div>
+    <div class="form-group"><label>确认新密码</label><input id="resetPwdNew2" type="password" placeholder="再次输入新密码"></div>
+    <p style="font-size:12px;color:#94a3b8;margin-top:8px;">将同时修改 Gateway 登录密码、Dashboard 密码和邮箱密码，容器会自动重启。</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="hideResetPwdModal()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="resetUserPassword()">确认修改</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let users = [];
+
+  function showToast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = msg;
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3000);
+  }
+
+  async function api(url, opts = {}) {
+    const resp = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...opts.headers } });
+    if (resp.status === 401 || resp.status === 403) { window.location.href = BASE + '/manage/login'; return; }
+    return resp.json();
+  }
+
+  async function loadUsers() {
+    const data = await api(BASE + '/manage/api/admin/users');
+    if (!data || !data.success) return;
+    users = data.data;
+    document.getElementById('totalUsers').textContent = users.length;
+    document.getElementById('runningCount').textContent = users.filter(u => u.container?.status === 'running').length;
+    document.getElementById('stoppedCount').textContent = users.filter(u => u.container?.status !== 'running').length;
+    const list = document.getElementById('userList');
+    if (!users.length) {
+      list.innerHTML = '<div class="empty"><span class="empty-icon">+</span>暂无用户，点击右上角「创建用户」开始</div>';
+      return;
+    }
+    list.innerHTML = users.map(u => {
+      const st = u.container?.status || 'not_created';
+      const stText = { running: '运行中', exited: '已停止', created: '已创建', not_created: '未创建' }[st] || st;
+      return `<div class="user-card">
+        <div class="user-info">
+          <div class="user-top">
+            <span class="user-name">${u.username}</span>
+            <span class="status-badge status-${st}">${stText}</span>
+          </div>
+          <div class="user-meta">
+            <div class="meta-item">邮箱 <span>${u.email || '-'}</span></div>
+            <div class="meta-item">端口 <span>${u.port}</span></div>
+            <div class="meta-item">创建 <span>${u.created_at || '-'}</span></div>
+          </div>
+        </div>
+        <div class="user-actions">
+          ${st === 'running'
+            ? `<button class="btn btn-primary btn-xs" onclick="openDashboard('${u.username}')">打开面板</button>
+               <button class="btn btn-warning btn-xs" onclick="openShell('${u.username}')">Shell</button>
+               <button class="btn btn-ghost btn-xs" onclick="stopUser('${u.username}')">停止</button>`
+            : `<button class="btn btn-success btn-xs" onclick="startUser('${u.username}')">启动</button>`}
+          <button class="btn btn-ghost btn-xs" onclick="showResetPwdModal('${u.username}')">改密</button>
+          <button class="btn btn-danger btn-xs" onclick="deleteUser('${u.username}')">删除</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function startUser(name) {
+    const data = await api(`${BASE}/manage/api/admin/users/${name}/start`, { method: 'POST' });
+    if (data?.success) showToast(data.message);
+    loadUsers();
+  }
+  async function stopUser(name) {
+    const data = await api(`${BASE}/manage/api/admin/users/${name}/stop`, { method: 'POST' });
+    if (data?.success) showToast(data.message);
+    loadUsers();
+  }
+  async function deleteUser(name) {
+    if (!confirm(`确定删除用户 ${name}？\n容器和邮箱都将被移除，此操作不可撤销。`)) return;
+    const data = await api(`${BASE}/manage/api/admin/users/${name}`, { method: 'DELETE' });
+    if (data?.success) showToast(data.message);
+    loadUsers();
+  }
+  function openDashboard(name) {
+    window.open(`${BASE}/manage/proxy/${name}/dashboard`, '_blank');
+  }
+  function openShell(name) {
+    window.open(`${BASE}/manage/proxy/${name}/shell`, '_blank');
+  }
+
+  function showCreateModal() { document.getElementById('createModal').classList.add('active'); document.getElementById('newUsername').focus(); }
+  function hideCreateModal() { document.getElementById('createModal').classList.remove('active'); }
+  async function createUser() {
+    const username = document.getElementById('newUsername').value.trim();
+    const password = document.getElementById('newPassword').value;
+    if (!username || !password) { showToast('请填写完整', 'error'); return; }
+    const data = await api(BASE + '/manage/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    if (data?.success) {
+      hideCreateModal();
+      document.getElementById('newUsername').value = '';
+      document.getElementById('newPassword').value = '';
+      showToast(data.message);
+      loadUsers();
+    } else {
+      showToast(data?.detail || '创建失败', 'error');
+    }
+  }
+
+  function showResetPwdModal(username) {
+    document.getElementById('resetPwdUser').value = username;
+    document.getElementById('resetPwdNew').value = '';
+    document.getElementById('resetPwdNew2').value = '';
+    document.getElementById('resetPwdModal').classList.add('active');
+    document.getElementById('resetPwdNew').focus();
+  }
+  function hideResetPwdModal() { document.getElementById('resetPwdModal').classList.remove('active'); }
+  async function resetUserPassword() {
+    const username = document.getElementById('resetPwdUser').value;
+    const newPwd = document.getElementById('resetPwdNew').value;
+    const newPwd2 = document.getElementById('resetPwdNew2').value;
+    if (!newPwd) { showToast('请输入新密码', 'error'); return; }
+    if (newPwd !== newPwd2) { showToast('两次输入的密码不一致', 'error'); return; }
+    if (newPwd.length < 6) { showToast('密码至少6位', 'error'); return; }
+    const data = await api(`${BASE}/manage/api/admin/users/${username}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPwd }),
+    });
+    if (data?.success) {
+      showToast(data.message);
+      hideResetPwdModal();
+      loadUsers();
+    } else {
+      showToast(data?.detail || '修改失败', 'error');
+    }
+  }
+
+  function showPwdModal() { document.getElementById('pwdModal').classList.add('active'); document.getElementById('oldPwd').focus(); }
+  function hidePwdModal() {
+    document.getElementById('pwdModal').classList.remove('active');
+    document.getElementById('oldPwd').value = '';
+    document.getElementById('newPwd').value = '';
+    document.getElementById('newPwd2').value = '';
+  }
+  async function changePassword() {
+    const oldPwd = document.getElementById('oldPwd').value;
+    const newPwd = document.getElementById('newPwd').value;
+    const newPwd2 = document.getElementById('newPwd2').value;
+    if (!oldPwd || !newPwd) { showToast('请填写完整', 'error'); return; }
+    if (newPwd !== newPwd2) { showToast('两次输入的新密码不一致', 'error'); return; }
+    if (newPwd.length < 6) { showToast('新密码至少6位', 'error'); return; }
+    const data = await api(BASE + '/manage/api/admin/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
+    });
+    if (data?.success) {
+      showToast('密码修改成功，即将跳转登录页...');
+      hidePwdModal();
+      setTimeout(() => { window.location.href = BASE + '/manage/login'; }, 1500);
+    } else {
+      showToast(data?.detail || '修改失败', 'error');
+    }
+  }
+
+  async function logout() {
+    await api(BASE + '/manage/api/logout', { method: 'POST' });
+    window.location.href = BASE + '/manage/login';
+  }
+
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('active'); });
+  });
+
+  async function init() {
+    const me = await api(BASE + '/manage/api/me');
+    if (me?.data) document.getElementById('adminUser').textContent = me.data.username;
+    loadUsers();
+    setInterval(loadUsers, 15000);
+  }
+  init();
+</script>
+</body>
+</html>
