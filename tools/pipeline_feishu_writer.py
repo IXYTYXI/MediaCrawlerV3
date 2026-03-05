@@ -82,6 +82,9 @@ class PipelineFeishuWriter:
         self._extraction_futures: list = []
         self._extraction_pool: Optional[ThreadPoolExecutor] = None
         self._script_extractor = None
+        self._script_hot_only = self._feishu_cfg.get(
+            "video_script_scope", "hot"
+        ) == "hot"
         self._lock = threading.Lock()
 
         self.total_images_uploaded = 0
@@ -566,6 +569,8 @@ class PipelineFeishuWriter:
             self.app_token, self.summary_table_id, video_records
         )
 
+        hot_count = 0
+        skip_count = 0
         for rec in inserted:
             record_id = rec.get("record_id", "")
             fields = rec.get("fields", {})
@@ -575,6 +580,20 @@ class PipelineFeishuWriter:
             ft = video_attach[0].get("file_token", "")
             if not ft or not record_id:
                 continue
+
+            # 根据配置决定是否只对热门视频提取脚本
+            if self._script_hot_only:
+                hot_raw = fields.get("热门", "")
+                if isinstance(hot_raw, list):
+                    hot_val = "".join(
+                        seg.get("text", "") if isinstance(seg, dict)
+                        else str(seg) for seg in hot_raw
+                    ).strip()
+                else:
+                    hot_val = str(hot_raw).strip() if hot_raw else ""
+                if not hot_val:
+                    skip_count += 1
+                    continue
 
             title_raw = fields.get("标题", "")
             if isinstance(title_raw, list):
@@ -595,6 +614,13 @@ class PipelineFeishuWriter:
                 "title": title,
                 "account": account,
             })
+            hot_count += 1
+
+        if skip_count > 0:
+            utils.logger.info(
+                f"[Pipeline] 视频脚本: {hot_count} 条热门待提取, "
+                f"{skip_count} 条非热门跳过"
+            )
 
         while len(self._pending_videos) >= 10:
             batch = self._pending_videos[:10]
@@ -809,30 +835,10 @@ class PipelineFeishuWriter:
             )
 
     def _final_script_sweep(self):
-        extractor = self._get_script_extractor()
-        if extractor is None:
-            utils.logger.info(
-                "[Pipeline] 脚本提取未启用，跳过最终校验"
-            )
-            return
+        # 不再重复全量扫描，batch 后处理 _run_video_script_extraction 会兜底
         utils.logger.info(
-            "[Pipeline] 最终校验: 扫描所有视频确保脚本完整..."
+            "[Pipeline] 跳过最终全量扫描（由 batch 后处理统一兜底）"
         )
-        result = extractor.extract_and_write(
-            app_token=self.app_token,
-            table_id=self.summary_table_id,
-            skip_existing=True,
-        )
-        proc = result.get("processed", 0)
-        fail = result.get("failed", 0)
-        if proc > 0 or fail > 0:
-            utils.logger.info(
-                f"[Pipeline] 最终校验: 补充 {proc}, 失败 {fail}"
-            )
-        else:
-            utils.logger.info(
-                "[Pipeline] 最终校验通过: 所有视频已有脚本"
-            )
 
     def cleanup_local_media(self):
         """删除本地已上传的图片和视频缓存（仅在数据已确认写入飞书后调用）"""

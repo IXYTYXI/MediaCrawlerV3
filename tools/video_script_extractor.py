@@ -221,6 +221,7 @@ class VideoScriptExtractor:
         app_token: str,
         table_id: str = "",
         skip_existing: bool = True,
+        hot_only: bool = True,
         on_progress: Optional[Callable[[int, int, str], None]] = None,
     ) -> Dict:
         """
@@ -230,6 +231,7 @@ class VideoScriptExtractor:
             app_token: 多维表格 token
             table_id: 视频汇总表 ID（空则自动查找）
             skip_existing: 跳过已有脚本的记录
+            hot_only: True=仅处理热门视频, False=处理全部视频
             on_progress: 进度回调 (current, total, title)
 
         Returns:
@@ -269,6 +271,10 @@ class VideoScriptExtractor:
         # 4. 筛选需要处理的记录
         to_process: List[Dict] = []
         skipped = 0
+        skipped_not_hot = 0
+        scope_label = "仅热门" if hot_only else "全部"
+        utils.logger.info(f"[ScriptExtractor] 提取范围: {scope_label}")
+
         for rec in records:
             fields = rec.get("fields", {})
             video_attach = fields.get("视频附件")
@@ -278,6 +284,15 @@ class VideoScriptExtractor:
             ft = video_attach[0].get("file_token", "")
             if not ft:
                 continue
+
+            # 热门过滤（hot_only=True 时仅处理热门视频）
+            if hot_only:
+                hot_val = self._extract_text_field(
+                    fields.get("热门", "")
+                ).strip()
+                if not hot_val:
+                    skipped_not_hot += 1
+                    continue
 
             # 检查是否已有脚本（失败记录不跳过，允许重试）
             if skip_existing:
@@ -301,6 +316,11 @@ class VideoScriptExtractor:
                 "title": title,
                 "account": account,
             })
+
+        if skipped_not_hot > 0:
+            utils.logger.info(
+                f"[ScriptExtractor] 跳过 {skipped_not_hot} 条非热门视频"
+            )
 
         total = len(to_process)
         utils.logger.info(

@@ -148,6 +148,8 @@
     "video_script_api_key": "sk-rPy1iWlU1wbUejU5wcssqpMpAq6xFa8PX7jZgmNw7qub6BNZ",
     "video_script_model": "gemini-3-pro-preview",
     "video_script_concurrency": 3,
+    "video_script_scope": "hot",
+    "_video_script_scope_desc": "脚本提取范围: hot=仅热门视频, all=全部视频",
     "_video_script_enabled_desc": "爬取完成后是否自动调用AI提取视频脚本",
     "_video_script_gateway_url_desc": "AI网关地址（OpenAI兼容接口）",
     "_video_script_api_key_desc": "AI网关API Key（必填，否则跳过脚本提取）",

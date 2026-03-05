@@ -518,9 +518,41 @@ async def _save_cookies_to_file(browser_context, platform: str):
         with open(cookie_file, "w", encoding="utf-8") as f:
             json.dump(cookie_data, f, ensure_ascii=False, indent=2)
 
+        _record_session_history(platform, web_session, cookie_dict)
         print(f"[Login] ✅ Cookie 已同步到 {cookie_file} (web_session={web_session[:16]}...)")
     except Exception as e:
         print(f"[Login] ⚠️ 保存 cookie 文件失败: {e}")
+
+
+def _record_session_history(platform: str, web_session: str, cookie_dict: dict):
+    """记录每次 session 到历史文件，用于分析 token 结构"""
+    try:
+        import json, time, os
+        history_file = os.path.join(os.getcwd(), "data", "cookies", f"{platform}_session_history.json")
+        history = []
+        if os.path.exists(history_file):
+            with open(history_file, "r", encoding="utf-8") as f:
+                history = json.load(f)
+
+        if history and history[-1].get("web_session") == web_session:
+            return
+
+        entry = {
+            "web_session": web_session,
+            "a1": cookie_dict.get("a1", ""),
+            "webId": cookie_dict.get("webId", ""),
+            "gid": cookie_dict.get("gid", ""),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "epoch": int(time.time()),
+            "session_hex_len": len(web_session),
+            "session_bytes": len(bytes.fromhex(web_session)) if all(c in "0123456789abcdef" for c in web_session.lower()) else None,
+        }
+        history.append(entry)
+        with open(history_file, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        print(f"[SessionHistory] 已记录第 {len(history)} 条 session (hex_len={entry['session_hex_len']})")
+    except Exception as e:
+        print(f"[SessionHistory] 记录失败: {e}")
 
 
 # 用于记录扫码前的 web_session，检测变化

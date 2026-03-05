@@ -454,7 +454,7 @@ def build_progress_card(p: CrawlerProgress) -> dict:
             "tag": "note",
             "elements": [{
                 "tag": "plain_text",
-                "content": f"数据截至 {_refresh_ts}　·　点击按钮刷新",
+                "content": f"数据截至 {_refresh_ts}　·　再次 @机器人 可原地刷新此卡片",
             }],
         })
     else:

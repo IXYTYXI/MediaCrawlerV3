@@ -774,10 +774,23 @@
               placeholder="自定义提示词..."></textarea>
             <p class="text-[10px] text-gray-600 mt-1.5">修改提示词可以调整脚本提取的效果，如要求输出结构化分析、摘要等</p>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-4 flex-wrap">
             <div class="flex items-center gap-2">
               <input type="checkbox" id="skipExisting" v-model="scriptExtract.skipExisting" class="rounded">
               <label for="skipExisting" class="text-[11px] text-gray-400">跳过已有脚本的记录</label>
+            </div>
+            <div class="flex items-center gap-1 ml-4">
+              <span class="text-[11px] text-gray-500 mr-1">提取范围</span>
+              <label class="inline-flex items-center gap-1 cursor-pointer">
+                <input type="radio" v-model="scriptExtract.scope" value="hot"
+                  class="accent-emerald-500" style="width:14px;height:14px">
+                <span class="text-[11px]" :class="scriptExtract.scope === 'hot' ? 'text-emerald-400' : 'text-gray-500'">仅热门视频</span>
+              </label>
+              <label class="inline-flex items-center gap-1 cursor-pointer ml-2">
+                <input type="radio" v-model="scriptExtract.scope" value="all"
+                  class="accent-amber-500" style="width:14px;height:14px">
+                <span class="text-[11px]" :class="scriptExtract.scope === 'all' ? 'text-amber-400' : 'text-gray-500'">全部视频</span>
+              </label>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -1073,7 +1086,7 @@ createApp({
     // AI 视频脚本提取
     const scriptExtract = reactive({
       appToken: '', apiKey: '', baseUrl: 'https://ops-ai-gateway.yc345.tv/v1',
-      model: 'gemini-3-pro-preview', skipExisting: true,
+      model: 'gemini-3-pro-preview', skipExisting: true, scope: 'hot',
       prompt: `# 角色
 你是一位专业的短视频脚本拆解专家。你的任务是根据视频的口播内容和元信息，还原出一份完整的、可复现的视频拍摄脚本。
 
@@ -1318,6 +1331,7 @@ createApp({
             gemini_base_url: scriptExtract.baseUrl.trim(),
             gemini_model: scriptExtract.model.trim(),
             skip_existing: scriptExtract.skipExisting,
+            scope: scriptExtract.scope,
             prompt: scriptExtract.prompt.trim(),
           }),
         })

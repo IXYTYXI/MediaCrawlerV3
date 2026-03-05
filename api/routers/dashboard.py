@@ -610,8 +610,11 @@ def _resolve_progress_path() -> Path:
     return PROJECT_ROOT / "data" / f"batch_progress_{task_id}.json"
 
 
+_creator_count_cache = {"count": 0, "mtime": 0.0, "path": ""}
+
+
 def _get_task_summary() -> dict:
-    """读取当前任务摘要"""
+    """读取当前任务摘要（Excel 作者数量带缓存，避免频繁读文件）"""
     summary = {"task_id": "", "excel_path": "", "total_creators": 0, "completed": 0, "failed": 0, "partial": 0, "skipped": 0, "remaining": 0}
     try:
         if CONFIG_PATH.exists():
@@ -630,9 +633,18 @@ def _get_task_summary() -> dict:
         if not os.path.isabs(excel_path):
             excel_path = str(PROJECT_ROOT / excel_path)
         if os.path.exists(excel_path):
-            from tools.excel_reader import ExcelCreatorReader
-            with ExcelCreatorReader(excel_path) as reader:
-                summary["total_creators"] = len(reader.get_creators())
+            mtime = os.path.getmtime(excel_path)
+            if (excel_path == _creator_count_cache["path"]
+                    and mtime == _creator_count_cache["mtime"]):
+                summary["total_creators"] = _creator_count_cache["count"]
+            else:
+                from tools.excel_reader import ExcelCreatorReader
+                with ExcelCreatorReader(excel_path) as reader:
+                    count = len(reader.get_creators())
+                _creator_count_cache["count"] = count
+                _creator_count_cache["mtime"] = mtime
+                _creator_count_cache["path"] = excel_path
+                summary["total_creators"] = count
     except Exception:
         pass
 
@@ -1104,10 +1116,23 @@ async def verify_session():
                            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             )
 
-            # 读取 cookie
+            # 读取 cookie（优先浏览器，其次 config 文件）
             cookies = await ctx.cookies()
             _, cookie_dict = utils.convert_cookies(cookies)
             web_session = cookie_dict.get("web_session", "")
+            session_source = "browser"
+
+            if not web_session:
+                try:
+                    cookie_file = PROJECT_ROOT / "data" / "cookies" / "xhs_cookies.json"
+                    if cookie_file.exists():
+                        import json as _json
+                        with open(cookie_file, "r", encoding="utf-8") as _f:
+                            _saved = _json.load(_f)
+                        web_session = _saved.get("web_session", "")
+                        session_source = "config"
+                except Exception:
+                    pass
 
             if not web_session:
                 await ctx.close()
@@ -1115,7 +1140,7 @@ async def verify_session():
                     "success": True,
                     "data": {
                         "status": "none",
-                        "message": "浏览器中无 web_session，需要登录",
+                        "message": "未找到任何 web_session，需要登录",
                     },
                 }
 
@@ -1143,11 +1168,16 @@ async def verify_session():
             await ctx.close()
 
             masked = web_session[:8] + "..." + web_session[-4:] if len(web_session) > 12 else web_session
+            source_hint = "（来自配置文件，浏览器中已清理）" if session_source == "config" else ""
+            if is_valid:
+                msg = "Session 有效，可正常爬取"
+            else:
+                msg = f"Session 已过期{source_hint}，请重新登录"
             return {
                 "success": True,
                 "data": {
                     "status": "valid" if is_valid else "expired",
-                    "message": "Session 有效，可正常爬取" if is_valid else "Session 已过期，请重新登录",
+                    "message": msg,
                     "web_session": masked,
                 },
             }
@@ -1307,6 +1337,7 @@ class ExtractScriptsRequest(BaseModel):
     app_token: str
     table_id: str = ""
     skip_existing: bool = True
+    scope: str = "hot"  # "hot" = 仅热门视频, "all" = 全部视频
     gemini_base_url: str = "https://ops-ai-gateway.yc345.tv/v1"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3-pro-preview"
@@ -1372,6 +1403,7 @@ async def extract_video_scripts(request: ExtractScriptsRequest):
                     app_token=request.app_token.strip(),
                     table_id=request.table_id.strip(),
                     skip_existing=request.skip_existing,
+                    hot_only=(request.scope == "hot"),
                     on_progress=on_progress,
                 )
             _script_task["status"] = "completed"

@@ -26,13 +26,18 @@ logger = logging.getLogger("MediaCrawler")
 CONFIG_PATH = os.path.join("config", "anti_crawl_config.json")
 
 _PROGRESS_KEYWORDS = re.compile(
-    r"进度|状态|情况|多少了|跑到哪|几个了|crawl|progress|status"
+    r"进度|状态|情况|刷新|多少了|跑到哪|几个了|crawl|progress|status|refresh"
 )
 
 _dedup_lock = threading.Lock()
 _processed_events: dict = {}
 _DEDUP_TTL = 300
 _DEDUP_MAX_SIZE = 1000
+
+# 记住最近发送的进度卡片 message_id，用于原地更新
+_last_card_lock = threading.Lock()
+_last_card_msg_id: Optional[str] = None
+_last_card_time: float = 0
 
 
 def _load_feishu_credentials() -> dict:
@@ -66,8 +71,8 @@ def _get_tenant_token(app_id: str, app_secret: str) -> Optional[str]:
         return None
 
 
-def _reply_message(message_id: str, card: dict, token: str):
-    """回复飞书消息（在后台线程执行，避免阻塞）"""
+def _reply_message(message_id: str, card: dict, token: str) -> Optional[str]:
+    """回复飞书消息，返回发出的消息 message_id"""
     try:
         with httpx.Client(timeout=15) as client:
             resp = client.post(
@@ -80,11 +85,37 @@ def _reply_message(message_id: str, card: dict, token: str):
             )
             resp_data = resp.json()
             if resp_data.get("code") != 0:
-                print(f"[feishu_reply] FAILED: {resp_data}")
-            else:
-                print(f"[feishu_reply] SUCCESS, message sent")
+                print(f"[feishu_reply] FAILED: {resp_data}", flush=True)
+                return None
+            sent_msg_id = resp_data.get("data", {}).get("message_id", "")
+            print(f"[feishu_reply] SUCCESS, sent_msg_id={sent_msg_id}", flush=True)
+            return sent_msg_id
     except Exception as e:
-        print(f"[feishu_reply] EXCEPTION: {e}")
+        print(f"[feishu_reply] EXCEPTION: {e}", flush=True)
+        return None
+
+
+def _patch_card(card_msg_id: str, card: dict, token: str) -> bool:
+    """PATCH 更新已发送的卡片消息，实现原地刷新"""
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.patch(
+                f"https://open.feishu.cn/open-apis/im/v1/messages/{card_msg_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "msg_type": "interactive",
+                    "content": json.dumps(card),
+                },
+            )
+            resp_data = resp.json()
+            if resp_data.get("code") != 0:
+                print(f"[feishu_patch] FAILED: {resp_data}", flush=True)
+                return False
+            print(f"[feishu_patch] SUCCESS, card updated in place", flush=True)
+            return True
+    except Exception as e:
+        print(f"[feishu_patch] EXCEPTION: {e}", flush=True)
+        return False
 
 
 def _is_duplicate(msg_id: str) -> bool:
@@ -137,7 +168,7 @@ def _handle_message_event(event: dict):
         text = content_str
 
     text_clean = re.sub(r"@\S+", "", text).strip()
-    print(f"[feishu_handler] text_clean='{text_clean}', has_match={bool(_PROGRESS_KEYWORDS.search(text_clean)) if text_clean else 'empty'}")
+    print(f"[feishu_handler] text_clean='{text_clean}', has_match={bool(_PROGRESS_KEYWORDS.search(text_clean)) if text_clean else 'no-text'}")
 
     if text_clean and _PROGRESS_KEYWORDS.search(text_clean):
         try:
@@ -145,17 +176,13 @@ def _handle_message_event(event: dict):
         except Exception as e:
             import traceback
             print(f"[feishu_handler] _do_reply EXCEPTION: {e}\n{traceback.format_exc()}")
-    elif not text_clean:
-        try:
-            _do_reply(msg_id)
-        except Exception as e:
-            import traceback
-            print(f"[feishu_handler] _do_reply EXCEPTION: {e}\n{traceback.format_exc()}")
+    else:
+        print(f"[feishu_handler] no matching command, skip. text='{text_clean}'")
 
 
 def _do_reply(message_id: str):
-    """构建进度卡片并回复"""
-    import sys
+    """构建进度卡片：优先 PATCH 更新已有卡片，否则发新卡片"""
+    global _last_card_msg_id, _last_card_time
     from tools.crawler_progress import parse_progress, build_progress_card
 
     print(f"[feishu_reply] building card for msg_id={message_id}", flush=True)
@@ -165,11 +192,30 @@ def _do_reply(message_id: str):
         print("[feishu_reply] FAILED to get tenant_token", flush=True)
         return
 
-    print(f"[feishu_reply] got tenant_token OK", flush=True)
     progress = parse_progress()
     card = build_progress_card(progress)
     print(f"[feishu_reply] card built, size={len(json.dumps(card))}", flush=True)
-    _reply_message(message_id, card, token)
+
+    # 优先尝试 PATCH 更新已有卡片（30 分钟内的卡片才复用）
+    with _last_card_lock:
+        existing_msg_id = _last_card_msg_id
+        existing_time = _last_card_time
+
+    if existing_msg_id and (time.time() - existing_time < 1800):
+        print(f"[feishu_reply] trying PATCH existing card {existing_msg_id}", flush=True)
+        if _patch_card(existing_msg_id, card, token):
+            with _last_card_lock:
+                _last_card_time = time.time()
+            return
+
+    # PATCH 失败或没有已有卡片 → 发新卡片
+    print(f"[feishu_reply] sending new card as reply", flush=True)
+    sent_id = _reply_message(message_id, card, token)
+    if sent_id:
+        with _last_card_lock:
+            _last_card_msg_id = sent_id
+            _last_card_time = time.time()
+        print(f"[feishu_reply] saved card msg_id={sent_id} for future PATCH", flush=True)
 
 
 @router.post("/feishu/card_action")
@@ -225,6 +271,18 @@ async def feishu_card_action(request: Request):
         from tools.crawler_progress import parse_progress, build_progress_card
         progress = parse_progress()
         card = build_progress_card(progress)
+
+        # 同时尝试 PATCH 更新（作为双保险）
+        open_message_id = body.get("open_message_id") or ""
+        if open_message_id:
+            creds_for_patch = _load_feishu_credentials()
+            patch_token = _get_tenant_token(
+                creds_for_patch.get("app_id", ""),
+                creds_for_patch.get("app_secret", ""),
+            )
+            if patch_token:
+                _patch_card(open_message_id, card, patch_token)
+
         resp_data = {
             "toast": {"type": "success", "content": "已刷新"},
             "card": {

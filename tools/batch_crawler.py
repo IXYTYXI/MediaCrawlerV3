@@ -2277,9 +2277,12 @@ def _run_video_script_extraction(
     gateway_url = feishu_cfg.get("video_script_gateway_url", "https://ops-ai-gateway.yc345.tv/v1")
     model = feishu_cfg.get("video_script_model", "gemini-3-pro-preview")
     concurrency = int(feishu_cfg.get("video_script_concurrency", 5))
+    scope = feishu_cfg.get("video_script_scope", "hot")
+    hot_only = (scope == "hot")
 
+    scope_label = "仅热门" if hot_only else "全部"
     utils.logger.info(
-        f"[飞书] 开始自动提取视频脚本 (模型: {model}, 并发: {concurrency})..."
+        f"[飞书] 开始自动提取视频脚本 (模型: {model}, 并发: {concurrency}, 范围: {scope_label})..."
     )
 
     from tools.video_script_extractor import VideoScriptExtractor
@@ -2299,6 +2302,7 @@ def _run_video_script_extraction(
             app_token=app_token,
             table_id=summary_table_id,
             skip_existing=True,
+            hot_only=hot_only,
             on_progress=_on_progress,
         )
 
