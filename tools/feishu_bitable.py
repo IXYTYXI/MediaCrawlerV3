@@ -710,3 +710,139 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     fields["序号"] = ""
 
     return {"fields": fields}
+
+
+# ==================== 搜索模式笔记映射（B 部门） ====================
+
+def map_search_note_to_feishu_record(
+    note_data: Dict[str, Any],
+    comment_summary: str = "",
+) -> Dict[str, Any]:
+    """
+    将搜索模式爬取的笔记数据映射为飞书多维表格记录（含评论摘要）
+    """
+    note_type = note_data.get("type", "")
+    content_type = "视频" if note_type == "video" else "图片"
+
+    time_raw = note_data.get("time", "")
+    time_ms = None
+    if isinstance(time_raw, (int, float)) and time_raw > 0:
+        time_ms = int(time_raw) if time_raw > 1e12 else int(time_raw * 1000)
+
+    note_url = note_data.get("note_url", "")
+
+    def _safe_int(v):
+        if v is None or v == "":
+            return 0
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 0
+
+    liked = _safe_int(note_data.get("liked_count", 0))
+    collected = _safe_int(note_data.get("collected_count", 0))
+    comment_count = _safe_int(note_data.get("comment_count", 0))
+    share_count = _safe_int(note_data.get("share_count", 0))
+
+    fields: Dict[str, Any] = {
+        "序号": "",
+        "搜索关键词": str(note_data.get("source_keyword", "")),
+        "标题": str(note_data.get("title", "")),
+        "正文": str(note_data.get("desc", "")),
+        "内容类型": content_type,
+        "作者昵称": str(note_data.get("nickname", "")),
+        "作者ID": str(note_data.get("user_id", "")),
+        "发布时间": time_ms if time_ms else "",
+        "点赞数": str(liked),
+        "收藏数": str(collected),
+        "评论数": str(comment_count),
+        "分享数": str(share_count),
+        "标签": str(note_data.get("tag_list", "")),
+        "IP属地": str(note_data.get("ip_location", "")),
+        "链接": {"link": note_url, "text": note_url} if note_url else "",
+        "评论摘要": comment_summary,
+    }
+
+    return {"fields": fields}
+
+
+# ==================== 评论数据映射 ====================
+
+def map_comment_to_feishu_record(comment_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    将爬取的评论数据映射为飞书多维表格记录
+
+    字段映射:
+    笔记ID | 笔记标题 | 评论级别 | 评论内容 | 评论者昵称 | 评论者ID |
+    评论时间 | IP属地 | 点赞数 | 二级评论数 | 父评论ID | 评论图片
+    """
+    parent_id = comment_data.get("parent_comment_id", 0)
+    is_sub = parent_id and parent_id != 0 and str(parent_id) != "0"
+    level = "二级评论" if is_sub else "一级评论"
+
+    time_raw = comment_data.get("create_time", "")
+    time_ms = None
+    if isinstance(time_raw, (int, float)) and time_raw > 0:
+        time_ms = int(time_raw) if time_raw > 1e12 else int(time_raw * 1000)
+
+    def _safe_int(v):
+        if v is None or v == "":
+            return 0
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 0
+
+    fields: Dict[str, Any] = {
+        "序号": "",
+        "笔记ID": str(comment_data.get("note_id", "")),
+        "笔记标题": str(comment_data.get("note_title", "")),
+        "评论级别": level,
+        "评论内容": str(comment_data.get("content", "")),
+        "评论者昵称": str(comment_data.get("nickname", "")),
+        "评论者ID": str(comment_data.get("user_id", "")),
+        "评论时间": time_ms if time_ms else "",
+        "IP属地": str(comment_data.get("ip_location", "")),
+        "点赞数": str(_safe_int(comment_data.get("like_count", 0))),
+        "二级评论数": str(_safe_int(comment_data.get("sub_comment_count", 0))),
+        "父评论ID": str(parent_id) if is_sub else "",
+        "评论图片": str(comment_data.get("pictures", "")),
+    }
+
+    return {"fields": fields}
+
+
+def build_comment_summary(comments: List[Dict[str, Any]], top_n: int = 5) -> str:
+    """
+    从评论列表中提取热门一级评论，生成摘要文本。
+
+    Args:
+        comments: 该笔记下的所有评论
+        top_n: 展示前 N 条
+
+    Returns:
+        格式化的评论摘要文本
+    """
+    first_level = []
+    for c in comments:
+        pid = c.get("parent_comment_id", 0)
+        if pid and pid != 0 and str(pid) != "0":
+            continue
+        content = str(c.get("content", "")).strip()
+        if not content:
+            continue
+        like = 0
+        try:
+            like = int(c.get("like_count", 0))
+        except (ValueError, TypeError):
+            pass
+        first_level.append((like, content))
+
+    first_level.sort(key=lambda x: x[0], reverse=True)
+
+    lines = []
+    for i, (like, content) in enumerate(first_level[:top_n], 1):
+        preview = content[:80] + ("..." if len(content) > 80 else "")
+        lines.append(f"{i}. [赞{like}] {preview}")
+
+    return "\n".join(lines) if lines else ""

@@ -13,7 +13,18 @@ from datetime import datetime
 from typing import Dict, List, Optional, Set
 
 from tools import utils
-from tools.feishu_bitable import FeishuBitableClient, map_note_to_feishu_record
+from tools.feishu_bitable import (
+    FeishuBitableClient,
+    map_note_to_feishu_record,
+    map_search_note_to_feishu_record,
+    map_comment_to_feishu_record,
+    build_comment_summary,
+    FIELD_TYPE_TEXT,
+    FIELD_TYPE_NUMBER,
+    FIELD_TYPE_DATE,
+    FIELD_TYPE_SELECT,
+    FIELD_TYPE_URL,
+)
 
 CONFIG_PATH = os.path.join("config", "anti_crawl_config.json")
 
@@ -474,6 +485,162 @@ class PipelineFeishuWriter:
         if self._write_executor:
             self._write_executor.shutdown(wait=False)
             self._write_executor = None
+
+    # ==================== 搜索模式写入（笔记 + 评论两张表） ====================
+
+    _SEARCH_NOTE_FIELDS = [
+        {"field_name": "搜索关键词", "type": FIELD_TYPE_TEXT},
+        {"field_name": "标题", "type": FIELD_TYPE_TEXT},
+        {"field_name": "正文", "type": FIELD_TYPE_TEXT},
+        {"field_name": "内容类型", "type": FIELD_TYPE_SELECT},
+        {"field_name": "作者昵称", "type": FIELD_TYPE_TEXT},
+        {"field_name": "作者ID", "type": FIELD_TYPE_TEXT},
+        {"field_name": "发布时间", "type": FIELD_TYPE_DATE},
+        {"field_name": "点赞数", "type": FIELD_TYPE_NUMBER},
+        {"field_name": "收藏数", "type": FIELD_TYPE_NUMBER},
+        {"field_name": "评论数", "type": FIELD_TYPE_NUMBER},
+        {"field_name": "分享数", "type": FIELD_TYPE_NUMBER},
+        {"field_name": "标签", "type": FIELD_TYPE_TEXT},
+        {"field_name": "IP属地", "type": FIELD_TYPE_TEXT},
+        {"field_name": "链接", "type": FIELD_TYPE_URL},
+        {"field_name": "评论摘要", "type": FIELD_TYPE_TEXT},
+    ]
+
+    _COMMENT_FIELDS = [
+        {"field_name": "笔记ID", "type": FIELD_TYPE_TEXT},
+        {"field_name": "笔记标题", "type": FIELD_TYPE_TEXT},
+        {"field_name": "评论级别", "type": FIELD_TYPE_SELECT},
+        {"field_name": "评论内容", "type": FIELD_TYPE_TEXT},
+        {"field_name": "评论者昵称", "type": FIELD_TYPE_TEXT},
+        {"field_name": "评论者ID", "type": FIELD_TYPE_TEXT},
+        {"field_name": "评论时间", "type": FIELD_TYPE_DATE},
+        {"field_name": "IP属地", "type": FIELD_TYPE_TEXT},
+        {"field_name": "点赞数", "type": FIELD_TYPE_NUMBER},
+        {"field_name": "二级评论数", "type": FIELD_TYPE_NUMBER},
+        {"field_name": "父评论ID", "type": FIELD_TYPE_TEXT},
+        {"field_name": "评论图片", "type": FIELD_TYPE_TEXT},
+    ]
+
+    def write_search_results(
+        self,
+        notes: List[Dict],
+        comments_by_note: Dict[str, List[Dict]],
+        note_table_name: str = "笔记数据",
+        comment_table_name: str = "评论数据",
+    ):
+        """
+        搜索模式写入：笔记表 + 评论表
+
+        Args:
+            notes: 笔记数据列表
+            comments_by_note: {note_id: [comment_dict, ...]} 评论按笔记分组
+            note_table_name: 笔记数据表名称
+            comment_table_name: 评论数据表名称
+        """
+        if not notes:
+            utils.logger.info("[Pipeline] 无笔记数据，跳过写入")
+            return
+
+        self._ensure_bitable()
+
+        # --- 构建笔记记录（含评论摘要）---
+        note_records: List[Dict] = []
+        for note in notes:
+            note_id = note.get("note_id", "")
+            note_comments = comments_by_note.get(note_id, [])
+            summary = build_comment_summary(note_comments, top_n=5)
+            record = map_search_note_to_feishu_record(note, summary)
+            note_records.append(record)
+
+        # --- 构建评论记录 ---
+        comment_records: List[Dict] = []
+        for note_id, clist in comments_by_note.items():
+            for c in clist:
+                comment_records.append(map_comment_to_feishu_record(c))
+
+        # --- 创建/复用笔记表 ---
+        note_table_id = self._table_name_to_id.get(note_table_name)
+        if note_table_id:
+            utils.logger.info(
+                f"[Pipeline] 复用已有笔记表: {note_table_name}"
+            )
+        else:
+            tables = self.client.list_tables(self.app_token)
+            if tables and self._first_creator:
+                note_table_id = tables[0]["table_id"]
+                try:
+                    self.client.rename_table(
+                        self.app_token, note_table_id, note_table_name
+                    )
+                except Exception:
+                    pass
+                for fd in self._SEARCH_NOTE_FIELDS:
+                    try:
+                        self.client.add_field(
+                            self.app_token, note_table_id,
+                            fd["field_name"], fd["type"],
+                        )
+                    except Exception:
+                        pass
+                self._first_creator = False
+            else:
+                note_table_id = self.client.create_table(
+                    self.app_token, note_table_name,
+                    self._SEARCH_NOTE_FIELDS,
+                )
+
+            note_keep = {"序号"} | {
+                fd["field_name"] for fd in self._SEARCH_NOTE_FIELDS
+            }
+            self.client.cleanup_default_fields_and_records(
+                self.app_token, note_table_id, note_keep,
+            )
+            self._table_name_to_id[note_table_name] = note_table_id
+
+        for i, rec in enumerate(note_records, 1):
+            rec["fields"]["序号"] = str(i)
+
+        note_inserted = self.client.batch_insert_records(
+            self.app_token, note_table_id, note_records,
+        )
+        self._total_inserted += note_inserted
+        utils.logger.info(
+            f"[Pipeline] 笔记表写入: {note_inserted}/{len(note_records)} 条"
+        )
+
+        # --- 创建/复用评论表 ---
+        if not comment_records:
+            utils.logger.info("[Pipeline] 无评论数据，跳过评论表")
+        else:
+            comment_table_id = self._table_name_to_id.get(comment_table_name)
+            if comment_table_id:
+                utils.logger.info(
+                    f"[Pipeline] 复用已有评论表: {comment_table_name}"
+                )
+            else:
+                comment_table_id = self.client.create_table(
+                    self.app_token, comment_table_name,
+                    self._COMMENT_FIELDS,
+                )
+                comment_keep = {"序号"} | {
+                    fd["field_name"] for fd in self._COMMENT_FIELDS
+                }
+                self.client.cleanup_default_fields_and_records(
+                    self.app_token, comment_table_id, comment_keep,
+                )
+                self._table_name_to_id[comment_table_name] = comment_table_id
+
+            for i, rec in enumerate(comment_records, 1):
+                rec["fields"]["序号"] = str(i)
+
+            comment_inserted = self.client.batch_insert_records(
+                self.app_token, comment_table_id, comment_records,
+            )
+            utils.logger.info(
+                f"[Pipeline] 评论表写入: {comment_inserted}/{len(comment_records)} 条"
+            )
+
+        self._save_bitable_to_config()
 
     # ==================== 图片/视频上传 ====================
 

@@ -565,6 +565,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             )
             return []
 
+        max_sub = getattr(config, "CRAWLER_MAX_SUB_COMMENTS_PER_COMMENT", 0)
         result = []
         for comment in comments:
             note_id = comment.get("note_id")
@@ -578,8 +579,16 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
 
             root_comment_id = comment.get("id")
             sub_comment_cursor = comment.get("sub_comment_cursor")
+            sub_count_for_this_comment = len(sub_comments) if sub_comments else 0
 
             while sub_comment_has_more:
+                if max_sub > 0 and sub_count_for_this_comment >= max_sub:
+                    utils.logger.info(
+                        f"[XiaoHongShuClient.get_comments_all_sub_comments] "
+                        f"Reached sub-comment limit ({max_sub}) for comment {root_comment_id}"
+                    )
+                    break
+
                 comments_res = await self.get_note_sub_comments(
                     note_id=note_id,
                     root_comment_id=root_comment_id,
@@ -600,13 +609,16 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                         f"[XiaoHongShuClient.get_comments_all_sub_comments] No 'comments' key found in response: {comments_res}"
                     )
                     break
-                comments = comments_res["comments"]
+                fetched = comments_res["comments"]
+                if max_sub > 0 and sub_count_for_this_comment + len(fetched) > max_sub:
+                    fetched = fetched[: max_sub - sub_count_for_this_comment]
+                    sub_comment_has_more = False
                 if callback:
-                    await callback(note_id, comments)
-                # Dynamic random sleep for each request
+                    await callback(note_id, fetched)
                 actual_sleep = crawl_interval + random.uniform(0, crawl_interval * 0.5) if crawl_interval > 0 else random.uniform(0.3, 0.8)
                 await asyncio.sleep(actual_sleep)
-                result.extend(comments)
+                result.extend(fetched)
+                sub_count_for_this_comment += len(fetched)
         return result
 
     async def get_creator_info(

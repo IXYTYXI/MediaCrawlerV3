@@ -42,7 +42,8 @@ def init_loging_config():
     _logger.setLevel(level)
 
     # 日志文件：按天轮转，保留 14 天，第 15 天自动删除
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+    # 使用 CWD 而非 __file__，确保多实例（符号链接部署）各自写入独立日志
+    log_dir = os.path.join(os.getcwd(), "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "crawler.log")
 
