@@ -25,7 +25,7 @@ from urllib.parse import urlencode
 
 import httpx
 from playwright.async_api import BrowserContext, Page
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_fixed
 
 import config
 from base.base_crawler import AbstractApiClient
@@ -198,7 +198,12 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             return getattr(self, '_post_recovery_multiplier', 1.0)
         return 1.0
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+    # 登录过期时仍重试几次，便于用户在 UI 侧刷新 session 后下一次重试成功
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(1),
+        retry=retry_if_not_exception_type(IPBlockError),
+    )
     async def request(self, method, url, **kwargs) -> Union[str, Any]:
         """
         Wrapper for httpx common request method, processes request response
@@ -221,14 +226,17 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         if response.status_code == 471 or response.status_code == 461:
             verify_type = response.headers.get("Verifytype", "unknown")
             verify_uuid = response.headers.get("Verifyuuid", "unknown")
-            resp_text = response.text[:200]
-            msg = f"CAPTCHA appeared, request failed, Verifytype: {verify_type}, Verifyuuid: {verify_uuid}, Response: {resp_text}"
-            utils.logger.error(msg)
+            resp_text = response.text[:500]
+            msg = f"CAPTCHA/验证异常, Verifytype: {verify_type}, Verifyuuid: {verify_uuid}, Response: {resp_text}"
 
+            # 登录/账号异常时直接抛 SessionExpiredError，便于上层友好退出
+            if "登录已过期" in resp_text or "登录过期" in resp_text or "账号异常" in resp_text or "请先登录" in resp_text:
+                utils.logger.error(f"[XiaoHongShuClient] {msg}")
+                raise SessionExpiredError("登录已过期或账号异常，请重新登录后重试")
+            utils.logger.error(msg)
             # 检测"访问频繁"类限流，递增等待后重试
             if "300013" in resp_text or "访问频繁" in resp_text or "300012" in resp_text:
                 await self._handle_rate_limit()
-
             raise DataFetchError(msg)
 
         if return_response:
@@ -249,6 +257,9 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             raise IPBlockError(self.IP_ERROR_STR)
         else:
             err_msg = data.get("msg", None) or f"{response.text}"
+            # 登录/会话失效时直接抛 SessionExpiredError，不再重试，便于上层友好退出
+            if err_msg and ("登录已过期" in err_msg or "登录过期" in err_msg or "账号异常" in err_msg or "请先登录" in err_msg):
+                raise SessionExpiredError(err_msg)
             raise DataFetchError(err_msg)
 
     async def get(self, uri: str, params: Optional[Dict] = None) -> Dict:

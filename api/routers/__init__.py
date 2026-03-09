@@ -25,5 +25,6 @@ from .control import router as control_router
 from .terminal import router as terminal_router
 from .shell import router as shell_router
 from .feishu_event import router as feishu_event_router
+from .task import router as task_router
 
-__all__ = ["crawler_router", "data_router", "websocket_router", "dashboard_router", "login_router", "control_router", "terminal_router", "shell_router", "feishu_event_router"]
+__all__ = ["crawler_router", "data_router", "websocket_router", "dashboard_router", "login_router", "control_router", "terminal_router", "shell_router", "feishu_event_router", "task_router"]

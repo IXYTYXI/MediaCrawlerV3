@@ -7,15 +7,7 @@
 # Licensed under NON-COMMERCIAL LEARNING LICENSE 1.1
 #
 
-# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：
-# 1. 不得用于任何商业用途。
-# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。
-# 3. 不得进行大规模爬取或对平台造成运营干扰。
-# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。
-# 5. 不得用于任何非法或不当的用途。
-#
-# 详细许可条款请参阅项目根目录下的LICENSE文件。
-# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
+# 声明：本代码仅供学习和研究目的使用。
 
 # 基础配置
 import os
@@ -25,7 +17,7 @@ _IS_LINUX = _platform.system() == "Linux"
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = "web_session=040069b8083b3cc3b8d6cad4923b4b5eb876b0"
+COOKIES = "web_session=040069b8083b3cc3b8d6b3e99b3b4b78bdc37e"
 
 # ==================== 手动 Session 回退 ====================
 # 当扫码登录失败、shared cookie 过期、浏览器 session 过期时，
@@ -127,6 +119,9 @@ COMMENTS_CONCURRENCY = 2
 # 是否开启爬二级评论模式, 默认不开启爬二级评论
 # 老版本项目使用了 db, 则需参考 schema/tables.sql line 287 增加表字段
 ENABLE_GET_SUB_COMMENTS = False
+
+# 每条一级评论下最多爬取的二级评论数量（0表示无限制）
+CRAWLER_MAX_SUB_COMMENTS_PER_COMMENT = 30
 
 # 词云相关
 # 是否开启生成评论词云图

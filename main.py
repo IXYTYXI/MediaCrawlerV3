@@ -44,6 +44,8 @@ from media_platform.kuaishou import KuaishouCrawler
 from media_platform.tieba import TieBaCrawler
 from media_platform.weibo import WeiboCrawler
 from media_platform.xhs import XiaoHongShuCrawler
+from media_platform.xhs.exception import SessionExpiredError
+from tenacity import RetryError
 from media_platform.zhihu import ZhihuCrawler
 from tools.async_file_writer import AsyncFileWriter
 from var import crawler_type_var
@@ -99,8 +101,79 @@ async def _generate_wordcloud_if_needed() -> None:
         print(f"[Main] Error generating wordcloud: {e}")
 
 
+def _push_search_results_to_feishu() -> None:
+    """搜索模式爬完后，读取本次生成的 JSON 数据，写入飞书多维表格"""
+    import json
+    import os
+
+    cfg_path = os.path.join("config", "anti_crawl_config.json")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            acfg = json.load(f)
+    except Exception:
+        acfg = {}
+
+    feishu_cfg = acfg.get("feishu", {})
+    if not feishu_cfg.get("enabled"):
+        print("[Main] 飞书未启用，跳过写入")
+        return
+
+    app_id = feishu_cfg.get("app_id", "")
+    app_secret = feishu_cfg.get("app_secret", "")
+    folder_token = feishu_cfg.get("folder_token", "")
+    if not app_id or not app_secret:
+        print("[Main] 飞书 app_id/app_secret 未配置，跳过写入")
+        return
+
+    from tools.async_file_writer import AsyncFileWriter
+    session_ts = AsyncFileWriter.get_session_timestamp()
+    json_dir = f"data/{config.PLATFORM}/json"
+    notes_file = os.path.join(json_dir, f"search_contents_{session_ts}.json")
+    comments_file = os.path.join(json_dir, f"search_comments_{session_ts}.json")
+
+    notes = []
+    if os.path.exists(notes_file):
+        with open(notes_file, "r", encoding="utf-8") as f:
+            notes = json.load(f)
+    if not notes:
+        print("[Main] 无笔记数据，跳过飞书写入")
+        return
+
+    comments_by_note = {}
+    if os.path.exists(comments_file):
+        with open(comments_file, "r", encoding="utf-8") as f:
+            raw_comments = json.load(f)
+        for group in raw_comments:
+            nid = group.get("note_id", "")
+            clist = group.get("comments", [])
+            if nid and clist:
+                comments_by_note[nid] = clist
+
+    print(f"[Main] 开始写入飞书: {len(notes)} 条笔记, "
+          f"{sum(len(v) for v in comments_by_note.values())} 条评论")
+
+    try:
+        from tools.pipeline_feishu_writer import PipelineFeishuWriter
+        with PipelineFeishuWriter(
+            feishu_app_id=app_id,
+            feishu_app_secret=app_secret,
+            bitable_name=f"搜索爬取_{session_ts}",
+            folder_token=folder_token,
+        ) as writer:
+            writer.write_search_results(
+                notes=notes,
+                comments_by_note=comments_by_note,
+            )
+        print(f"[Main] 飞书写入完成: {writer.bitable_url}")
+    except Exception as e:
+        print(f"[Main] 飞书写入失败: {e}")
+
+
 async def main() -> None:
     global crawler
+
+    # 先加载配置文件作为默认值，再解析命令行参数（CLI 参数优先级更高）
+    apply_anti_crawl_config(config)
 
     args = await cmd_arg.parse_cmd()
     if args.init_db:
@@ -108,24 +181,56 @@ async def main() -> None:
         print(f"Database {args.init_db} initialized successfully.")
         return
 
+    # 搜索模式：若未传关键词（为空或仍是 base 默认），则从关键词池加载
+    if config.CRAWLER_TYPE == "search":
+        from tools.search_keyword_pool import load_search_keyword_pool
+        pool_keywords = load_search_keyword_pool()
+        if pool_keywords:
+            base_default = "编程副业,编程兼职"
+            current = (config.KEYWORDS or "").strip()
+            if not current or current == base_default:
+                config.KEYWORDS = pool_keywords
+
     # 重置文件写入器的会话时间戳，确保新运行生成新文件
     from tools.async_file_writer import AsyncFileWriter
     AsyncFileWriter.reset_session_timestamp()
-
-    # 加载反反爬配置（从 config/anti_crawl_config.json 读取）
-    apply_anti_crawl_config(config)
 
     # 重置统计（新的爬取任务）
     reset_statistics(platform=config.PLATFORM)
 
     crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
-    await crawler.start()
+    try:
+        await crawler.start()
+    except SessionExpiredError as e:
+        print("\n[MediaCrawler] 登录已过期或会话失效，请刷新 session 后点击重试。", file=sys.stderr)
+        print(f"  详情: {e}", file=sys.stderr)
+        sys.exit(1)
+    except RetryError as e:
+        # 重试耗尽后可能是 SessionExpiredError，从 last_attempt 取出原因并友好退出
+        # tenacity 的 last_attempt 是 asyncio.Future，用 exception() 取异常，无 failed() 方法
+        last_exc = None
+        if getattr(e, "last_attempt", None) is not None:
+            att = e.last_attempt
+            if hasattr(att, "exception") and callable(getattr(att, "exception", None)):
+                last_exc = att.exception()
+            if last_exc is None and hasattr(att, "exception_info") and callable(getattr(att, "exception_info", None)):
+                info = att.exception_info()
+                last_exc = info[1] if len(info) > 1 else info[0]
+        if isinstance(last_exc, SessionExpiredError):
+            print("\n[MediaCrawler] 登录已过期或会话失效，请刷新 session 后点击重试。", file=sys.stderr)
+            print(f"  详情: {last_exc}", file=sys.stderr)
+            sys.exit(1)
+        raise
 
     _flush_excel_if_needed()
 
     # Generate wordcloud after crawling is complete
     # Only for JSON save mode
     await _generate_wordcloud_if_needed()
+
+    # 搜索模式爬完后自动写入飞书（如果飞书已配置）
+    if config.CRAWLER_TYPE == "search" and config.SAVE_DATA_OPTION == "json":
+        _push_search_results_to_feishu()
 
     # 生成并保存爬取统计摘要
     try:

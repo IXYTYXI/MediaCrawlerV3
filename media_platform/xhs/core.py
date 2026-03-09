@@ -400,6 +400,9 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     sleep_seconds = self._get_sleep_seconds()
                     await asyncio.sleep(sleep_seconds)
                     utils.logger.info(f"[XiaoHongShuCrawler.search] Sleeping for {sleep_seconds} seconds after page {page-1}")
+                except SessionExpiredError:
+                    utils.logger.error("[XiaoHongShuCrawler.search] 登录已过期，请重新登录后重试")
+                    raise
                 except DataFetchError:
                     utils.logger.error("[XiaoHongShuCrawler.search] Get note detail error")
                     break

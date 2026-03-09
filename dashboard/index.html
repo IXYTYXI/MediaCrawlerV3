@@ -123,6 +123,10 @@
         <span class="w-1.5 h-1.5 rounded-full" :class="batchStatus.status === 'running' ? 'bg-green-400 pulse-dot' : batchStatus.status === 'completed' ? 'bg-blue-400' : 'bg-gray-600'"></span>
         <span class="text-xs font-medium">{{ batchStatus.status === 'running' ? '爬取中' : batchStatus.status === 'completed' ? '已完成' : '空闲' }}</span>
       </div>
+      <input ref="fullConfigImportInput" type="file" accept=".json,application/json" class="hidden" @change="onFullConfigImportFile" />
+      <button @click="exportConfigOnly()" class="px-4 py-2 rounded-lg text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 transition" title="仅导出全局配置（config/anti_crawl_config.json），不含进度">导出配置</button>
+      <button @click="exportFullConfig()" class="px-4 py-2 rounded-lg text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 transition" title="导出配置 + 批量进度 + 各作者进度，用于备份/恢复">导出增量配置</button>
+      <button @click="openFullConfigImport()" class="px-4 py-2 rounded-lg text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 transition" title="选择导出的完整配置 JSON，将自动恢复反爬、爬取设置与进度">导入完整配置</button>
       <button @click="saveConfig" :disabled="!configDirty"
         class="px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200"
         :class="configDirty ? 'btn-primary text-white shadow-lg' : 'bg-gray-800 text-gray-500 cursor-default'">
@@ -387,6 +391,17 @@
           <p class="text-[10px] text-gray-600 mt-3" v-if="config.batch_crawl.crawl_mode === 'full'">全量模式：爬取所有作品，不限日期</p>
           <p class="text-[10px] text-gray-600 mt-3" v-else-if="config.batch_crawl.crawl_mode === 'date_range'">日期范围模式：只爬取 {{ config.batch_crawl.date_start || '?' }} ~ {{ config.batch_crawl.date_end || '?' }} 范围内的作品</p>
           <p class="text-[10px] text-gray-600 mt-3" v-else>增量模式：已完成的作者仅爬取上次之后的新内容，已有作品只更新互动量</p>
+        </div>
+
+        <!-- 增量配置备份：导出/导入 -->
+        <div class="card rounded-xl p-5 mb-4 border border-amber-500/20 bg-amber-500/5">
+          <div class="flex items-center gap-2 mb-3"><span>📦</span><h3 class="text-sm font-semibold text-white">增量配置备份</h3></div>
+          <p class="text-xs text-gray-400 mb-4">导出配置：仅全局配置（反爬、爬取设置等）。导出增量配置：配置 + 批量进度 + 各作者进度，便于备份或换机恢复；恢复时使用「导入完整配置」选择导出的 JSON。</p>
+          <div class="flex flex-wrap gap-3">
+            <button @click="exportConfigOnly()" class="px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-600 hover:bg-gray-500 text-white transition">导出配置</button>
+            <button @click="exportFullConfig()" class="px-4 py-2.5 rounded-lg text-sm font-medium bg-amber-600 hover:bg-amber-500 text-white transition">导出增量配置</button>
+            <button @click="openFullConfigImport()" class="px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 transition">导入完整配置</button>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -678,6 +693,165 @@
               class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-purple-600/30">导出 Excel</button>
             <button @click="resetProgress"
               class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg text-[11px] transition ml-auto">重置进度</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 任务管理 ========== -->
+      <section v-show="activeTab === 'tasks'" class="space-y-5 animate-in">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📌</span>
+            <div><h2 class="text-lg font-semibold text-white">任务管理</h2><p class="text-xs text-gray-500">创建、管理和运行独立的爬取任务</p></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input ref="taskImportFileInput" type="file" accept=".json,application/json" class="hidden" @change="onTaskImportFile" />
+            <button @click="openTaskImportDialog()" class="px-4 py-2 rounded-lg text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 transition">导入任务</button>
+            <button @click="taskShowForm = !taskShowForm; taskEditId = ''" class="btn-primary px-4 py-2 rounded-lg text-xs font-medium text-white">
+              {{ taskShowForm && !taskEditId ? '取消' : '+ 新建任务' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 创建/编辑任务表单 -->
+        <div v-if="taskShowForm" class="card rounded-xl p-6 space-y-4 animate-in">
+          <h3 class="text-sm font-semibold text-white">{{ taskEditId ? '编辑任务' : '创建新任务' }}</h3>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">任务名称</label>
+              <input v-model="taskForm.name" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="例: B部门-小学数学">
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">平台</label>
+              <select v-model="taskForm.platform" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
+                <option value="xhs">小红书</option><option value="dy">抖音</option><option value="ks">快手</option>
+                <option value="bili">B站</option><option value="wb">微博</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">爬取模式</label>
+              <select v-model="taskForm.crawler_type" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
+                <option value="search">关键词搜索</option><option value="creator">创作者主页</option><option value="detail">帖子详情</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">数据格式</label>
+              <select v-model="taskForm.save_data_option" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
+                <option value="json">JSON</option><option value="csv">CSV</option><option value="excel">Excel</option><option value="sqlite">SQLite</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 搜索模式 -->
+          <div v-if="taskForm.crawler_type === 'search'">
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">搜索关键词</label>
+            <textarea v-model="taskForm.keywords" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="多个关键词用逗号分隔，如: 小学数学,数学网课,陪读经验"></textarea>
+            <p class="text-[10px] text-gray-600 mt-1">每个关键词最多爬取 <input v-model.number="taskForm.max_notes_per_keyword" type="number" class="w-14 px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-center text-white inline-block mx-0.5 text-[11px]"> 条笔记</p>
+          </div>
+
+          <!-- 创作者模式 -->
+          <div v-if="taskForm.crawler_type === 'creator'">
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">创作者 URL 列表</label>
+            <textarea v-model="taskCreatorUrlsText" rows="3" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="每行一个创作者主页 URL"></textarea>
+          </div>
+
+          <!-- 评论设置 -->
+          <div class="grid grid-cols-3 gap-4">
+            <div class="card rounded-lg p-4 flex items-center justify-between">
+              <div><label class="text-xs text-gray-300">爬取评论</label></div>
+              <div class="toggle" :class="{ active: taskForm.enable_comments }" @click="taskForm.enable_comments = !taskForm.enable_comments"></div>
+            </div>
+            <div v-if="taskForm.enable_comments" class="card rounded-lg p-4">
+              <label class="text-[11px] text-gray-500">一级评论上限</label>
+              <input v-model.number="taskForm.max_comments" type="number" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white">
+            </div>
+            <div v-if="taskForm.enable_comments" class="card rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-[11px] text-gray-500">二级评论</label>
+                <div class="toggle" style="width:36px;height:20px" :class="{ active: taskForm.enable_sub_comments }" @click="taskForm.enable_sub_comments = !taskForm.enable_sub_comments">
+                  <style scoped>.toggle::after{width:16px!important;height:16px!important}</style>
+                </div>
+              </div>
+              <input v-if="taskForm.enable_sub_comments" v-model.number="taskForm.max_sub_comments" type="number" class="input-field w-full rounded-lg px-3 py-2 text-sm text-white" placeholder="上限">
+            </div>
+          </div>
+
+          <!-- Cookie & 备注 -->
+          <div>
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">Cookie</label>
+            <input v-model="taskForm.cookies" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="web_session=xxx">
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">备注</label>
+            <input v-model="taskForm.notes" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="任务用途说明">
+          </div>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button @click="taskShowForm = false" class="px-4 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition">取消</button>
+            <button @click="saveTask" class="btn-primary px-5 py-2 rounded-lg text-xs text-white font-medium">
+              {{ taskEditId ? '保存修改' : '创建任务' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div v-if="taskList.length === 0 && !taskShowForm" class="card rounded-xl p-12 text-center">
+          <p class="text-gray-500 text-sm">暂无任务</p>
+          <p class="text-gray-600 text-xs mt-1">点击右上角"新建任务"开始</p>
+        </div>
+
+        <div v-for="t in taskList" :key="t.task_id" class="card rounded-xl p-5 animate-in">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="w-2.5 h-2.5 rounded-full" :class="t.status === 'running' ? 'bg-green-400 pulse-dot' : t.status === 'completed' ? 'bg-blue-400' : t.status === 'error' ? 'bg-red-400' : 'bg-gray-600'"></span>
+              <div>
+                <h4 class="text-sm font-semibold text-white">{{ t.name || t.task_id }}</h4>
+                <div class="flex items-center gap-3 mt-0.5">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">{{ t.platform }}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">{{ t.crawler_type === 'search' ? '搜索' : t.crawler_type === 'creator' ? '创作者' : '详情' }}</span>
+                  <span v-if="t.enable_comments" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">含评论</span>
+                  <span class="text-[10px] text-gray-600">{{ t.status === 'running' ? '运行中' : t.status === 'completed' ? '已完成' : t.status === 'error' ? '出错' : '空闲' }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button v-if="t.status !== 'running'" @click="startTaskRun(t.task_id)" class="btn-success px-3 py-1.5 rounded-lg text-[11px] text-white">启动</button>
+              <button v-if="t.status === 'running'" @click="stopTaskRun(t.task_id)" class="btn-danger px-3 py-1.5 rounded-lg text-[11px] text-white">停止</button>
+              <button @click="viewTaskLogs(t.task_id)" class="px-3 py-1.5 rounded-lg text-[11px] bg-gray-800 hover:bg-gray-700 text-gray-300 transition">日志</button>
+              <button @click="exportTask(t.task_id)" class="px-3 py-1.5 rounded-lg text-[11px] bg-gray-800 hover:bg-gray-700 text-gray-300 transition" title="导出为 JSON，可备份或迁移后导入">导出</button>
+              <button v-if="t.status !== 'running'" @click="editTask(t)" class="px-3 py-1.5 rounded-lg text-[11px] bg-gray-800 hover:bg-gray-700 text-gray-300 transition">编辑</button>
+              <button v-if="t.status !== 'running'" @click="deleteTask(t.task_id, t.name)" class="px-2 py-1.5 rounded-lg text-[11px] bg-gray-800 hover:bg-red-900/50 text-gray-500 hover:text-red-400 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+          <div v-if="t.keywords" class="mt-2 text-xs text-gray-500 truncate">关键词: {{ t.keywords }}</div>
+          <div v-if="t.last_run_at" class="mt-1 text-[10px] text-gray-600">上次运行: {{ t.last_run_at }}</div>
+          <div v-if="t.notes" class="mt-1 text-[10px] text-gray-600 italic">{{ t.notes }}</div>
+        </div>
+
+        <!-- 任务日志弹窗 -->
+        <div v-if="taskLogView.visible" class="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="taskLogView.visible = false">
+          <div class="bg-gray-900 border border-gray-700 rounded-xl w-[80%] max-w-3xl max-h-[75vh] overflow-hidden flex flex-col shadow-2xl">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-200">任务日志</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 font-mono">{{ taskLogView.task_id }}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded" :class="taskLogView.status === 'running' ? 'bg-green-500/10 text-green-400' : taskLogView.status === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-gray-800 text-gray-500'">{{ taskLogView.status }}</span>
+              </div>
+              <div class="flex gap-2">
+                <button @click="refreshTaskLogs(taskLogView.task_id)" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300">刷新</button>
+                <button @click="taskLogView.visible = false" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300">关闭</button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-auto p-3 log-container bg-black/30" ref="taskLogContainer">
+              <div v-for="log in taskLogView.logs" :key="log.id" class="py-0.5 leading-relaxed text-xs"
+                :class="log.message.includes('ERROR') ? 'text-red-400/90' : log.message.includes('WARNING') ? 'text-amber-400/80' : log.message.includes('完成') || log.message.includes('成功') ? 'text-emerald-400/80' : 'text-gray-400'">
+                <span class="text-gray-600 select-none">{{ log.timestamp }} </span>{{ log.message }}
+              </div>
+              <div v-if="!taskLogView.logs.length" class="text-center py-12 text-gray-700 text-sm">暂无日志</div>
+            </div>
           </div>
         </div>
       </section>
@@ -999,6 +1173,7 @@ createApp({
       { id: 'crawl', name: '爬取设置', icon: '🔍' },
       { id: 'anti', name: '反爬策略', icon: '🛡️' },
       { id: 'batch', name: '批量爬取', icon: '📦' },
+      { id: 'tasks', name: '任务管理', icon: '📌' },
       { id: 'feishu', name: '飞书配置', icon: '📊' },
       { id: 'resume', name: '断点续爬', icon: '💾' },
       { id: 'logs', name: '日志/文件', icon: '📋' },
@@ -1127,6 +1302,231 @@ createApp({
 3. 口播文案必须忠实于原文，可适当断句但不改动用词`,
       status: 'idle', progress: '', result: null,
     })
+
+    // ==================== 任务管理 ====================
+    const TASK_API = basePath + '/api/dashboard/tasks'
+    const taskList = ref([])
+    const taskShowForm = ref(false)
+    const taskEditId = ref('')
+    const taskForm = reactive({
+      name: '', platform: 'xhs', crawler_type: 'search', keywords: '', creator_urls: [],
+      max_notes_per_keyword: 80, enable_comments: false, max_comments: 50,
+      enable_sub_comments: false, max_sub_comments: 30, save_data_option: 'json',
+      cookies: '', headless: true, notes: '',
+    })
+    const taskLogView = reactive({ visible: false, task_id: '', status: '', logs: [] })
+    const taskLogContainer = ref(null)
+    const taskImportFileInput = ref(null)
+    const fullConfigImportInput = ref(null)
+    let _taskLogPollTimer = null
+
+    const taskCreatorUrlsText = computed({
+      get: () => (taskForm.creator_urls || []).join('\n'),
+      set: (val) => { taskForm.creator_urls = val.split('\n').map(s => s.trim()).filter(Boolean) }
+    })
+
+    function _resetTaskForm() {
+      Object.assign(taskForm, {
+        name: '', platform: 'xhs', crawler_type: 'search', keywords: '', creator_urls: [],
+        max_notes_per_keyword: 80, enable_comments: false, max_comments: 50,
+        enable_sub_comments: false, max_sub_comments: 30, save_data_option: 'json',
+        cookies: '', headless: true, notes: '',
+      })
+    }
+
+    async function loadTasks() {
+      try {
+        const r = await fetch(TASK_API, { headers: getAuthHeaders() })
+        if (r.status === 401) { authenticated.value = false; return }
+        const data = await r.json()
+        if (data?.success) taskList.value = data.tasks || []
+      } catch (e) { /* silent */ }
+    }
+
+    async function saveTask() {
+      const url = taskEditId.value ? `${TASK_API}/${taskEditId.value}` : TASK_API
+      const method = taskEditId.value ? 'PUT' : 'POST'
+      try {
+        const r = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(taskForm) })
+        const data = await r.json()
+        if (data?.success) {
+          showToast(data.message || '操作成功', 'success')
+          taskShowForm.value = false
+          taskEditId.value = ''
+          _resetTaskForm()
+          loadTasks()
+        } else {
+          showToast(data?.detail || data?.message || '操作失败', 'error')
+        }
+      } catch (e) { showToast('请求失败: ' + e.message, 'error') }
+    }
+
+    function editTask(t) {
+      taskEditId.value = t.task_id
+      Object.assign(taskForm, {
+        name: t.name || '', platform: t.platform || 'xhs', crawler_type: t.crawler_type || 'search',
+        keywords: t.keywords || '', creator_urls: t.creator_urls || [],
+        max_notes_per_keyword: t.max_notes_per_keyword || 80,
+        enable_comments: !!t.enable_comments, max_comments: t.max_comments || 50,
+        enable_sub_comments: !!t.enable_sub_comments, max_sub_comments: t.max_sub_comments || 30,
+        save_data_option: t.save_data_option || 'json', cookies: t.cookies || '',
+        headless: t.headless !== false, notes: t.notes || '',
+      })
+      taskShowForm.value = true
+    }
+
+    async function deleteTask(taskId, name) {
+      if (!confirm(`确认删除任务 "${name || taskId}" ？`)) return
+      try {
+        const r = await fetch(`${TASK_API}/${taskId}`, { method: 'DELETE', headers: getAuthHeaders() })
+        const data = await r.json()
+        if (data?.success) { showToast('任务已删除', 'success'); loadTasks() }
+        else showToast(data?.detail || '删除失败', 'error')
+      } catch (e) { showToast('请求失败', 'error') }
+    }
+
+    async function exportTask(taskId) {
+      try {
+        const r = await fetch(`${TASK_API}/${taskId}/export`, { headers: getAuthHeaders() })
+        if (!r.ok) { const d = await r.json().catch(() => ({})); showToast(d?.detail || '导出失败', 'error'); return }
+        const blob = await r.blob()
+        const filename = r.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/)?.[1] || `${taskId}.json`
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(a.href)
+        showToast('已导出任务 JSON', 'success')
+      } catch (e) { showToast('导出失败: ' + e.message, 'error') }
+    }
+
+    function openTaskImportDialog() {
+      const el = taskImportFileInput.value
+      if (el && el.click) el.click()
+    }
+
+    async function downloadExportResponse(r, defaultName) {
+      const blob = await r.blob()
+      let name = defaultName
+      const disp = r.headers.get('Content-Disposition')
+      if (disp) {
+        const m = disp.match(/filename="?([^";\n]+)"?/)
+        if (m && m[1]) name = m[1]
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    async function exportConfigOnly() {
+      try {
+        let r = await fetch(API + '/config/export', { method: 'POST', headers: getAuthHeaders() })
+        if (r.status === 405) r = await fetch(API + '/config/export', { method: 'GET', headers: getAuthHeaders() })
+        if (!r.ok) { const t = await r.text(); showToast(t || '导出失败', 'error'); return }
+        await downloadExportResponse(r, 'config.json')
+        showToast('配置已导出（仅全局配置）', 'success')
+      } catch (e) { showToast('导出失败: ' + e.message, 'error') }
+    }
+
+    async function exportFullConfig() {
+      try {
+        let r = await fetch(API + '/config/export-full', { method: 'POST', headers: getAuthHeaders() })
+        if (r.status === 405) r = await fetch(API + '/config/export-full', { method: 'GET', headers: getAuthHeaders() })
+        if (!r.ok) { const t = await r.text(); showToast(t || '导出失败', 'error'); return }
+        await downloadExportResponse(r, 'incremental_config.json')
+        showToast('增量配置已导出（配置+进度）', 'success')
+      } catch (e) { showToast('导出失败: ' + e.message, 'error') }
+    }
+
+    function openFullConfigImport() {
+      const el = fullConfigImportInput.value
+      if (el && el.click) el.click()
+    }
+
+    async function onFullConfigImportFile(ev) {
+      const file = ev.target?.files?.[0]
+      if (!file) return
+      ev.target.value = ''
+      const form = new FormData()
+      form.append('file', file)
+      const headers = { ...getAuthHeaders() }
+      delete headers['Content-Type']
+      try {
+        const r = await fetch(API + '/config/import-full', { method: 'POST', headers, body: form })
+        const data = await r.json()
+        if (data?.success) {
+          const s = data.summary || {}
+          const msg = s.config ? `已恢复配置${s.batch_progress ? '与批量进度' : ''}${s.creator_progress ? `及 ${s.creator_progress} 个作者进度` : ''}` : data.message
+          showToast(msg, 'success')
+          await loadConfig()
+        } else {
+          showToast(data?.detail || data?.message || '导入失败', 'error')
+        }
+        if (data?.errors?.length) data.errors.forEach(e => showToast(e, 'error'))
+      } catch (e) { showToast('导入失败: ' + e.message, 'error') }
+    }
+
+    async function onTaskImportFile(ev) {
+      const file = ev.target?.files?.[0]
+      if (!file) return
+      ev.target.value = ''
+      const form = new FormData()
+      form.append('file', file)
+      const headers = { ...getAuthHeaders() }
+      delete headers['Content-Type'] // 让浏览器为 FormData 自动设置 multipart boundary
+      try {
+        const r = await fetch(`${TASK_API}/import/file`, { method: 'POST', headers, body: form })
+        const data = await r.json()
+        if (data?.success) { showToast(data.message || '导入成功', 'success'); loadTasks() }
+        else showToast(data?.detail || '导入失败', 'error')
+      } catch (e) { showToast('导入失败: ' + e.message, 'error') }
+    }
+
+    async function startTaskRun(taskId) {
+      try {
+        const r = await fetch(`${TASK_API}/${taskId}/start`, { method: 'POST', headers: getAuthHeaders() })
+        const data = await r.json()
+        if (data?.success) { showToast(data.message || '任务已启动', 'success'); loadTasks() }
+        else showToast(data?.detail || '启动失败', 'error')
+      } catch (e) { showToast('请求失败', 'error') }
+    }
+
+    async function stopTaskRun(taskId) {
+      try {
+        const r = await fetch(`${TASK_API}/${taskId}/stop`, { method: 'POST', headers: getAuthHeaders() })
+        const data = await r.json()
+        if (data?.success) { showToast(data.message || '任务已停止', 'info'); loadTasks() }
+        else showToast(data?.detail || '停止失败', 'error')
+      } catch (e) { showToast('请求失败', 'error') }
+    }
+
+    async function refreshTaskLogs(taskId) {
+      try {
+        const r = await fetch(`${TASK_API}/${taskId}/status`, { headers: getAuthHeaders() })
+        const data = await r.json()
+        if (data?.success) {
+          taskLogView.status = data.status
+          taskLogView.logs = data.logs || []
+          nextTick(() => { if (taskLogContainer.value) taskLogContainer.value.scrollTop = taskLogContainer.value.scrollHeight })
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    function viewTaskLogs(taskId) {
+      taskLogView.visible = true
+      taskLogView.task_id = taskId
+      taskLogView.status = ''
+      taskLogView.logs = []
+      refreshTaskLogs(taskId)
+      if (_taskLogPollTimer) clearInterval(_taskLogPollTimer)
+      _taskLogPollTimer = setInterval(() => {
+        if (!taskLogView.visible) { clearInterval(_taskLogPollTimer); _taskLogPollTimer = null; return }
+        refreshTaskLogs(taskLogView.task_id)
+      }, 3000)
+    }
 
     const creatorIdsText = computed({
       get: () => (config.crawl_settings.creator_ids || []).join('\n'),
@@ -1443,11 +1843,12 @@ createApp({
     }
 
     function initDashboard() {
-      loadConfig(); loadCreators(); loadFiles(); loadSessionStatus(); loadSessions()
+      loadConfig(); loadCreators(); loadFiles(); loadSessionStatus(); loadSessions(); loadTasks()
     }
 
     watch(activeTab, (tab) => {
       if (tab === 'logs') { refreshLogs(); loadFiles() }
+      if (tab === 'tasks') { loadTasks() }
     })
 
     onMounted(async () => {
@@ -1468,9 +1869,10 @@ createApp({
         if (batchStatus.status === 'running' || activeTab.value === 'logs') refreshLogs()
       }, 5000)
       setInterval(() => { if (authenticated.value) loadSessionStatus() }, 30000)
+      setInterval(() => { if (authenticated.value && activeTab.value === 'tasks') loadTasks() }, 5000)
     })
 
-    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions }
+    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, fullConfigImportInput, exportConfigOnly, exportFullConfig, openFullConfigImport, onFullConfigImportFile, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions, taskList, taskShowForm, taskEditId, taskForm, taskLogView, taskLogContainer, taskImportFileInput, taskCreatorUrlsText, loadTasks, saveTask, editTask, deleteTask, exportTask, openTaskImportDialog, onTaskImportFile, startTaskRun, stopTaskRun, viewTaskLogs, refreshTaskLogs }
   }
 }).mount('#app')
 </script>

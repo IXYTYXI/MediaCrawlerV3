@@ -1680,7 +1680,8 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
     """
     from tools.feishu_bitable import (
         FeishuBitableClient, build_feishu_fields,
-        map_note_to_feishu_record
+        map_note_to_feishu_record,
+        DEFAULT_FIELD_NAMES_NOTE,
     )
 
     if not app_id or not app_secret:
@@ -1694,9 +1695,10 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
     if not bitable_name:
         bitable_name = f"小红书爬取数据_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    # 提前读取图片模式配置
+    # 提前读取飞书配置（图片模式 + 字段名）
     feishu_image_mode = "link"
     feishu_image_threads = 2
+    fn_note = dict(DEFAULT_FIELD_NAMES_NOTE)
     try:
         config_path_img = os.path.join("config", "anti_crawl_config.json")
         with open(config_path_img, "r", encoding="utf-8") as f:
@@ -1704,6 +1706,9 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
         feishu_cfg = cfg_img.get("feishu", {})
         feishu_image_mode = feishu_cfg.get("image_mode", "link")
         feishu_image_threads = feishu_cfg.get("image_threads", 2)
+        raw_fn = feishu_cfg.get("field_names", {}) or {}
+        if raw_fn.get("note"):
+            fn_note.update(raw_fn["note"])
     except Exception:
         pass
 
@@ -1735,33 +1740,38 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             for creator_name, creator_notes in grouped.items():
                 records = []
                 for note in creator_notes:
-                    record = map_note_to_feishu_record(creator_name, note)
+                    record = map_note_to_feishu_record(creator_name, note, field_names=fn_note)
                     records.append(record)
                     all_field_names.update(record.get("fields", {}).keys())
                 all_grouped_records[creator_name] = records
                 all_grouped_raw_notes[creator_name] = creator_notes
 
-            # 4. 确定字段顺序
-            ordered_fields = ["账号名称", "内容类型", "标题", "正文", "标签", "链接",
-                              "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门",
-                              "视频附件", "视频脚本"]
+            # 4. 确定字段顺序（来自 config.feishu.field_names.note）
+            logical_order = [
+                "creator_name", "content_type", "title", "desc", "tag_list", "link",
+                "time", "liked_count", "collected_count", "comment_count", "interaction", "hot",
+                "video_attachment", "video_script", "seq",
+            ]
+            ordered_fields = [fn_note.get(k, DEFAULT_FIELD_NAMES_NOTE.get(k, k)) for k in logical_order]
+            img_prefix = fn_note.get("image_prefix", "图片")
             image_field_names = sorted(
-                [f for f in all_field_names if f.startswith("图片")],
-                key=lambda x: int(x.replace("图片", "") or "0")
+                [f for f in all_field_names if f.startswith(img_prefix)],
+                key=lambda x: int(x.replace(img_prefix, "") or "0")
             )
             ordered_fields.extend(image_field_names)
             for f in all_field_names:
                 if f not in ordered_fields:
                     ordered_fields.append(f)
 
-            url_fields = {"链接"}
-            attachment_fields = {"视频附件"}
-            date_fields = {"发布时间"}
-            # image 模式：图片字段也创建为附件类型
+            url_fields = {fn_note.get("link", "链接")}
+            attachment_fields = {fn_note.get("video_attachment", "视频附件")}
+            date_fields = {fn_note.get("time", "发布时间")}
+            seq_name = fn_note.get("seq", "序号")
+            va_name = fn_note.get("video_attachment", "视频附件")
             if is_image_mode:
                 attachment_fields.update(image_field_names)
 
-            ordered_with_serial = set(ordered_fields) | {"序号"}
+            ordered_with_serial = set(ordered_fields) | {seq_name}
             total_inserted = 0
             total_images_uploaded = 0
             total_images_failed = 0
@@ -1809,7 +1819,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                             total_images_failed += (expected - uploaded)
                         # 移除没有成功上传的图片字段（附件类型不能写入URL文本）
                         for i in range(1, len(image_urls) + 1):
-                            fn = f"图片{i}"
+                            fn = f"{img_prefix}{i}"
                             if fn not in image_tokens and fn in record["fields"]:
                                 # 未成功上传的，清空字段值（附件类型不接受字符串）
                                 del record["fields"][fn]
@@ -1832,7 +1842,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                     for record in records:
                         fields = record.get("fields", {})
                         for key in list(fields.keys()):
-                            if key.startswith("图片") and isinstance(fields[key], str):
+                            if key.startswith(img_prefix) and isinstance(fields[key], str):
                                 del fields[key]
                                 cleaned += 1
                 if cleaned > 0:
@@ -1862,12 +1872,12 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                             client, app_token, note_id, video_url
                         )
                         if attachment:
-                            record["fields"]["视频附件"] = attachment
+                            record["fields"][va_name] = attachment
                             total_videos_uploaded += 1
                         else:
                             # 未上传成功，清空字段（附件类型不接受字符串）
-                            if "视频附件" in record["fields"]:
-                                del record["fields"]["视频附件"]
+                            if va_name in record["fields"]:
+                                del record["fields"][va_name]
                             total_videos_skipped += 1
 
                         # 进度日志
@@ -1892,8 +1902,8 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 for creator_name, records in all_grouped_records.items():
                     for record in records:
                         fields = record.get("fields", {})
-                        if "视频附件" in fields and isinstance(fields["视频附件"], str):
-                            del fields["视频附件"]
+                        if va_name in fields and isinstance(fields[va_name], str):
+                            del fields[va_name]
                             video_cleaned += 1
                 if video_cleaned > 0:
                     utils.logger.info(f"[视频上传] 清理 {video_cleaned} 个未处理的视频字段")
@@ -1930,7 +1940,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                             utils.logger.warning(f"[飞书] 重命名默认表失败: {e}")
                         # 默认表需要逐个添加字段
                         for field_name in ordered_fields:
-                            if field_name == "序号":
+                            if field_name == seq_name:
                                 continue
                             try:
                                 client.add_field(app_token, table_id, field_name, _resolve_field_type(field_name))
@@ -1945,7 +1955,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
 
                 # 填充序号
                 for i, record in enumerate(records, 1):
-                    record["fields"]["序号"] = str(i)
+                    record["fields"][seq_name] = str(i)
 
                 # 写入
                 inserted = client.batch_insert_records(app_token, table_id, records)
@@ -1955,8 +1965,9 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                 try:
                     fields = client.list_fields(app_token, table_id)
                     hot_field_id = ""
+                    hot_fname = fn_note.get("hot", "热门")
                     for f in fields:
-                        if f and f.get("field_name") == "热门":
+                        if f and f.get("field_name") == hot_fname:
                             hot_field_id = f.get("field_id", "")
                             break
                     if hot_field_id:
@@ -1987,19 +1998,22 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             try:
                 # 收集所有作者的视频记录
                 video_records = []
+                ct_name = fn_note.get("content_type", "内容类型")
+                va_name = fn_note.get("video_attachment", "视频附件")
+                creator_fname = fn_note.get("creator_name", "账号名称")
                 for creator_name, records in all_grouped_records.items():
                     for record in records:
                         fields = record.get("fields", {})
-                        note_type = fields.get("内容类型", "")
+                        note_type = fields.get(ct_name, "")
                         # 视频类型 或 有视频附件的
                         has_video = (
                             note_type == "video"
-                            or fields.get("视频附件")
+                            or fields.get(va_name)
                         )
                         if has_video:
                             # 复制 record，确保有账号名称字段
                             video_record = {"fields": dict(fields)}
-                            video_record["fields"]["账号名称"] = creator_name
+                            video_record["fields"][creator_fname] = creator_name
                             video_records.append(video_record)
 
                 if video_records:
@@ -2015,7 +2029,7 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
                     )
                     # 填充序号
                     for i, record in enumerate(video_records, 1):
-                        record["fields"]["序号"] = str(i)
+                        record["fields"][seq_name] = str(i)
                     # 写入
                     summary_inserted = client.batch_insert_records(
                         app_token, summary_table_id, video_records

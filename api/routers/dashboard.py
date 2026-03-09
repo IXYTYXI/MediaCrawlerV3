@@ -13,7 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -57,9 +58,173 @@ async def update_config(config: dict):
         raise HTTPException(status_code=500, detail=f"保存配置失败: {e}")
 
 
+# 导出/导入必须放在 PATCH /config/{section} 之前，否则 /config/export-full 会被 {section} 匹配，只允许 PATCH 导致 405
+@router.get("/config/export")
+@router.post("/config/export")
+async def export_config_only():
+    """
+    导出当前全局配置（仅 config/anti_crawl_config.json），不含批量进度、作者进度。
+    适用于：备份/分享反爬与爬取设置，或按「仅配置」区分导出。
+    """
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取配置失败: {e}")
+    body = json.dumps(config, ensure_ascii=False, indent=2)
+    filename = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/config/export-full")
+@router.post("/config/export-full")
+async def export_full_config():
+    """
+    导出当前增量更新（批量作者）的完整配置，含：
+    - crawler_config：反爬、爬取设置、batch_crawl、飞书等（config/anti_crawl_config.json）
+    - batch_progress：批量任务进度（data/batch_progress_{task_id}.json）
+    - creator_progress：各作者增量进度（data/xhs/progress/creator_*_progress.json）
+    导出后可凭「导入完整配置」恢复。
+    """
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            crawler_config = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取配置失败: {e}")
+
+    batch_cfg = crawler_config.get("batch_crawl", {}) or {}
+    batch_task_id = batch_cfg.get("task_id", "") or datetime.now().strftime("task_%Y%m%d")
+    progress_path = PROJECT_ROOT / "data" / f"batch_progress_{batch_task_id}.json"
+
+    batch_progress = {}
+    if progress_path.exists():
+        try:
+            with open(progress_path, "r", encoding="utf-8") as f:
+                batch_progress = json.load(f)
+        except Exception:
+            pass
+
+    creator_urls = list(crawler_config.get("crawl_settings", {}).get("creator_ids", []) or [])
+
+    progress_dir = PROJECT_ROOT / "data" / "xhs" / "progress"
+    creator_progress = {}
+    if progress_dir.exists():
+        for pf in progress_dir.glob("creator_*_progress.json"):
+            if pf.name.startswith("_") or "_backup" in str(pf):
+                continue
+            try:
+                uid = pf.stem.replace("creator_", "").rsplit("_progress", 1)[0]
+                with open(pf, "r", encoding="utf-8") as f:
+                    creator_progress[uid] = json.load(f)
+            except Exception:
+                continue
+
+    export_data = {
+        "_desc": "增量更新（批量作者）完整配置导出，用于备份或迁移后通过「导入完整配置」恢复。",
+        "_restore_instructions": "在仪表盘点击「导入完整配置」选择本文件即可恢复反爬配置、批量进度与各作者进度。",
+        "task_type": "batch_creator",
+        "batch_task_id": batch_task_id,
+        "name": "A部门-18位作者增量",
+        "platform": crawler_config.get("crawl_settings", {}).get("platform", "xhs"),
+        "crawler_type": crawler_config.get("crawl_settings", {}).get("crawler_type", "creator"),
+        "creator_urls": creator_urls,
+        "batch_progress": batch_progress,
+        "creator_progress": creator_progress,
+        "crawler_config": crawler_config,
+    }
+
+    body = json.dumps(export_data, ensure_ascii=False, indent=2)
+    filename = f"incremental_config_{batch_task_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/config/import-full")
+async def import_full_config(file: UploadFile = File(..., description="完整配置 JSON（含 crawler_config / batch_progress / creator_progress）")):
+    """
+    导入完整配置 JSON（如 18 位作者任务导出），自动写回：
+    - crawler_config -> config/anti_crawl_config.json（反爬、爬取设置、batch_crawl、飞书等）
+    - batch_progress -> data/batch_progress_{batch_task_id}.json
+    - creator_progress -> data/xhs/progress/creator_{user_id}_progress.json
+    导入成功后前端应重新 loadConfig 以刷新界面。
+    """
+    raw = await file.read()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"不是合法的 JSON: {e}")
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="JSON 须为对象")
+
+    summary = {"config": False, "batch_progress": False, "creator_progress": 0}
+    errors = []
+
+    # 1) 写回爬虫/反爬配置
+    crawler_config = data.get("crawler_config")
+    if crawler_config and isinstance(crawler_config, dict):
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(crawler_config, f, ensure_ascii=False, indent=2)
+            summary["config"] = True
+        except Exception as e:
+            errors.append(f"写回 config 失败: {e}")
+    else:
+        errors.append("缺少 crawler_config 或格式不对")
+
+    # 2) 写回批量进度
+    batch_progress = data.get("batch_progress")
+    batch_task_id = data.get("batch_task_id") or (crawler_config or {}).get("batch_crawl", {}).get("task_id", "")
+    if batch_progress and isinstance(batch_progress, dict) and batch_task_id:
+        progress_path = PROJECT_ROOT / "data" / f"batch_progress_{batch_task_id}.json"
+        try:
+            progress_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(progress_path, "w", encoding="utf-8") as f:
+                json.dump(batch_progress, f, ensure_ascii=False, indent=2)
+            summary["batch_progress"] = True
+        except Exception as e:
+            errors.append(f"写回 batch_progress 失败: {e}")
+
+    # 3) 写回各作者进度
+    creator_progress = data.get("creator_progress")
+    if creator_progress and isinstance(creator_progress, dict):
+        progress_dir = PROJECT_ROOT / "data" / "xhs" / "progress"
+        progress_dir.mkdir(parents=True, exist_ok=True)
+        for user_id, prog in creator_progress.items():
+            if not user_id or not isinstance(prog, dict):
+                continue
+            try:
+                p = progress_dir / f"creator_{user_id}_progress.json"
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(prog, f, ensure_ascii=False, indent=2)
+                summary["creator_progress"] += 1
+            except Exception as e:
+                errors.append(f"写回 creator {user_id} 失败: {e}")
+
+    if errors:
+        return {
+            "success": True,
+            "message": "部分导入完成，存在错误",
+            "summary": summary,
+            "errors": errors,
+        }
+    return {
+        "success": True,
+        "message": "完整配置已导入，反爬与进度已恢复",
+        "summary": summary,
+    }
+
+
 @router.patch("/config/{section}")
 async def update_config_section(section: str, data: dict):
-    """更新配置的某个部分"""
+    """更新配置的某个部分（须在 /config/export、/config/export-full、/config/import-full 之后注册，避免被误匹配）"""
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -67,7 +232,6 @@ async def update_config_section(section: str, data: dict):
         if section not in config:
             raise HTTPException(status_code=404, detail=f"配置项 '{section}' 不存在")
 
-        # 合并更新
         if isinstance(config[section], dict):
             config[section].update(data)
         else:

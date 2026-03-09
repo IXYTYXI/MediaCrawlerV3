@@ -190,6 +190,8 @@ def apply_anti_crawl_config(target_config) -> None:
             target_config.COMMENTS_DELAY_SEC = crawl_settings.get("comments_delay_sec")
         if crawl_settings.get("max_comments_per_note") is not None:
             target_config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = crawl_settings.get("max_comments_per_note")
+        if crawl_settings.get("max_sub_comments_per_comment") is not None:
+            target_config.CRAWLER_MAX_SUB_COMMENTS_PER_COMMENT = crawl_settings.get("max_sub_comments_per_comment")
         if crawl_settings.get("comments_concurrency") is not None:
             target_config.COMMENTS_CONCURRENCY = crawl_settings.get("comments_concurrency")
     

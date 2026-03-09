@@ -641,25 +641,54 @@ def build_record(field_names: List[str], data: Dict[str, Any]) -> Dict[str, Any]
 
 
 # ==================== 数据映射 ====================
+# 默认字段名（与 config.feishu.field_names 中 key 对应），可被配置覆盖
+DEFAULT_FIELD_NAMES_NOTE = {
+    "creator_name": "账号名称", "content_type": "内容类型", "title": "标题", "desc": "正文",
+    "tag_list": "标签", "link": "链接", "time": "发布时间", "liked_count": "点赞数",
+    "collected_count": "收藏数", "comment_count": "评论数", "interaction": "互动量",
+    "hot": "热门", "video_attachment": "视频附件", "video_script": "视频脚本",
+    "seq": "序号", "image_prefix": "图片",
+}
+DEFAULT_FIELD_NAMES_SEARCH_NOTE = {
+    "seq": "序号", "keyword": "搜索关键词", "title": "标题", "desc": "正文",
+    "content_type": "内容类型", "nickname": "作者昵称", "user_id": "作者ID", "time": "发布时间",
+    "liked_count": "点赞数", "collected_count": "收藏数", "comment_count": "评论数",
+    "share_count": "分享数", "tag_list": "标签", "ip_location": "IP属地", "link": "链接",
+    "comment_summary": "评论摘要",
+}
+DEFAULT_FIELD_NAMES_COMMENT = {
+    "seq": "序号", "note_id": "笔记ID", "note_title": "笔记标题", "level": "评论级别",
+    "content": "评论内容", "nickname": "评论者昵称", "user_id": "评论者ID", "time": "评论时间",
+    "ip_location": "IP属地", "like_count": "点赞数", "sub_comment_count": "二级评论数",
+    "parent_comment_id": "父评论ID", "pictures": "评论图片",
+}
 
-def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> Dict[str, Any]:
+
+def _field_name(field_names: Optional[Dict[str, str]], logical_key: str, default: str) -> str:
+    """从配置取字段显示名，无配置则用默认"""
+    if not field_names:
+        return default
+    return field_names.get(logical_key, default)
+
+
+def map_note_to_feishu_record(
+    creator_name: str,
+    note_data: Dict[str, Any],
+    field_names: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     """
-    将爬取的笔记数据映射为飞书多维表格记录
-    
-    字段映射（根据 Excel Sheet2 的定义）:
-    账号名称 | 内容类型 | 标题 | 正文 | 标签 | 链接 | 发布时间 | 图片 | 视频脚本
+    将爬取的笔记数据映射为飞书多维表格记录。
+    field_names 来自 config.feishu.field_names.note，不传则用内置默认字段名。
     """
-    # 内容类型
+    n = lambda k, d: _field_name(field_names, k, d)
     note_type = note_data.get("type", "")
     content_type = "视频" if note_type == "video" else "图片"
 
-    # 发布时间：飞书日期字段需要毫秒时间戳
     time_raw = note_data.get("time", "")
     time_ms = None
     if isinstance(time_raw, (int, float)) and time_raw > 0:
         time_ms = int(time_raw) if time_raw > 1e12 else int(time_raw * 1000)
 
-    # 图片拆分为独立字段
     image_raw = note_data.get("image_list", "")
     if isinstance(image_raw, list):
         image_urls = [url for url in image_raw if url and str(url).startswith("http")]
@@ -668,10 +697,8 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     else:
         image_urls = []
 
-    # 链接
     note_url = note_data.get("note_url", "")
 
-    # 互动数据
     def _safe_int(v):
         if v is None or v == "": return 0
         try: return int(v)
@@ -683,32 +710,25 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
     interaction = liked + collected + comment
     is_hot = "🔥 热门" if interaction >= 50 else ""
 
+    img_prefix = n("image_prefix", "图片")
     fields: Dict[str, Any] = {
-        "账号名称": creator_name,
-        "内容类型": content_type,
-        "标题": note_data.get("title", ""),
-        "正文": note_data.get("desc", ""),
-        "标签": note_data.get("tag_list", ""),
-        "链接": {"link": note_url, "text": note_url} if note_url else "",
-        "发布时间": time_ms if time_ms else "",
-        "点赞数": str(liked),
-        "收藏数": str(collected),
-        "评论数": str(comment),
-        "互动量": str(interaction),
-        "热门": is_hot,
-        "视频脚本": "",
+        n("creator_name", "账号名称"): creator_name,
+        n("content_type", "内容类型"): content_type,
+        n("title", "标题"): note_data.get("title", ""),
+        n("desc", "正文"): note_data.get("desc", ""),
+        n("tag_list", "标签"): note_data.get("tag_list", ""),
+        n("link", "链接"): {"link": note_url, "text": note_url} if note_url else "",
+        n("time", "发布时间"): time_ms if time_ms else "",
+        n("liked_count", "点赞数"): str(liked),
+        n("collected_count", "收藏数"): str(collected),
+        n("comment_count", "评论数"): str(comment),
+        n("interaction", "互动量"): str(interaction),
+        n("hot", "热门"): is_hot,
+        n("video_script", "视频脚本"): "",
     }
-
-    # 附件字段（预留，后续存视频文件）
-    # 注：附件类型字段不能写字符串，留空不写入
-    
-    # 动态图片字段
     for i, url in enumerate(image_urls, 1):
-        fields[f"图片{i}"] = url
-
-    # 序号字段（由外部在批量写入时填充）
-    fields["序号"] = ""
-
+        fields[f"{img_prefix}{i}"] = url
+    fields[n("seq", "序号")] = ""
     return {"fields": fields}
 
 
@@ -717,10 +737,13 @@ def map_note_to_feishu_record(creator_name: str, note_data: Dict[str, Any]) -> D
 def map_search_note_to_feishu_record(
     note_data: Dict[str, Any],
     comment_summary: str = "",
+    field_names: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
-    将搜索模式爬取的笔记数据映射为飞书多维表格记录（含评论摘要）
+    将搜索模式爬取的笔记数据映射为飞书多维表格记录。
+    field_names 来自 config.feishu.field_names.search_note。
     """
+    n = lambda k, d: _field_name(field_names, k, d)
     note_type = note_data.get("type", "")
     content_type = "视频" if note_type == "video" else "图片"
 
@@ -745,37 +768,37 @@ def map_search_note_to_feishu_record(
     share_count = _safe_int(note_data.get("share_count", 0))
 
     fields: Dict[str, Any] = {
-        "序号": "",
-        "搜索关键词": str(note_data.get("source_keyword", "")),
-        "标题": str(note_data.get("title", "")),
-        "正文": str(note_data.get("desc", "")),
-        "内容类型": content_type,
-        "作者昵称": str(note_data.get("nickname", "")),
-        "作者ID": str(note_data.get("user_id", "")),
-        "发布时间": time_ms if time_ms else "",
-        "点赞数": str(liked),
-        "收藏数": str(collected),
-        "评论数": str(comment_count),
-        "分享数": str(share_count),
-        "标签": str(note_data.get("tag_list", "")),
-        "IP属地": str(note_data.get("ip_location", "")),
-        "链接": {"link": note_url, "text": note_url} if note_url else "",
-        "评论摘要": comment_summary,
+        n("seq", "序号"): "",
+        n("keyword", "搜索关键词"): str(note_data.get("source_keyword", "")),
+        n("title", "标题"): str(note_data.get("title", "")),
+        n("desc", "正文"): str(note_data.get("desc", "")),
+        n("content_type", "内容类型"): content_type,
+        n("nickname", "作者昵称"): str(note_data.get("nickname", "")),
+        n("user_id", "作者ID"): str(note_data.get("user_id", "")),
+        n("time", "发布时间"): time_ms if time_ms else "",
+        n("liked_count", "点赞数"): str(liked),
+        n("collected_count", "收藏数"): str(collected),
+        n("comment_count", "评论数"): str(comment_count),
+        n("share_count", "分享数"): str(share_count),
+        n("tag_list", "标签"): str(note_data.get("tag_list", "")),
+        n("ip_location", "IP属地"): str(note_data.get("ip_location", "")),
+        n("link", "链接"): {"link": note_url, "text": note_url} if note_url else "",
+        n("comment_summary", "评论摘要"): comment_summary,
     }
-
     return {"fields": fields}
 
 
 # ==================== 评论数据映射 ====================
 
-def map_comment_to_feishu_record(comment_data: Dict[str, Any]) -> Dict[str, Any]:
+def map_comment_to_feishu_record(
+    comment_data: Dict[str, Any],
+    field_names: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     """
-    将爬取的评论数据映射为飞书多维表格记录
-
-    字段映射:
-    笔记ID | 笔记标题 | 评论级别 | 评论内容 | 评论者昵称 | 评论者ID |
-    评论时间 | IP属地 | 点赞数 | 二级评论数 | 父评论ID | 评论图片
+    将爬取的评论数据映射为飞书多维表格记录。
+    field_names 来自 config.feishu.field_names.comment。
     """
+    n = lambda k, d: _field_name(field_names, k, d)
     parent_id = comment_data.get("parent_comment_id", 0)
     is_sub = parent_id and parent_id != 0 and str(parent_id) != "0"
     level = "二级评论" if is_sub else "一级评论"
@@ -794,21 +817,20 @@ def map_comment_to_feishu_record(comment_data: Dict[str, Any]) -> Dict[str, Any]
             return 0
 
     fields: Dict[str, Any] = {
-        "序号": "",
-        "笔记ID": str(comment_data.get("note_id", "")),
-        "笔记标题": str(comment_data.get("note_title", "")),
-        "评论级别": level,
-        "评论内容": str(comment_data.get("content", "")),
-        "评论者昵称": str(comment_data.get("nickname", "")),
-        "评论者ID": str(comment_data.get("user_id", "")),
-        "评论时间": time_ms if time_ms else "",
-        "IP属地": str(comment_data.get("ip_location", "")),
-        "点赞数": str(_safe_int(comment_data.get("like_count", 0))),
-        "二级评论数": str(_safe_int(comment_data.get("sub_comment_count", 0))),
-        "父评论ID": str(parent_id) if is_sub else "",
-        "评论图片": str(comment_data.get("pictures", "")),
+        n("seq", "序号"): "",
+        n("note_id", "笔记ID"): str(comment_data.get("note_id", "")),
+        n("note_title", "笔记标题"): str(comment_data.get("note_title", "")),
+        n("level", "评论级别"): level,
+        n("content", "评论内容"): str(comment_data.get("content", "")),
+        n("nickname", "评论者昵称"): str(comment_data.get("nickname", "")),
+        n("user_id", "评论者ID"): str(comment_data.get("user_id", "")),
+        n("time", "评论时间"): time_ms if time_ms else "",
+        n("ip_location", "IP属地"): str(comment_data.get("ip_location", "")),
+        n("like_count", "点赞数"): str(_safe_int(comment_data.get("like_count", 0))),
+        n("sub_comment_count", "二级评论数"): str(_safe_int(comment_data.get("sub_comment_count", 0))),
+        n("parent_comment_id", "父评论ID"): str(parent_id) if is_sub else "",
+        n("pictures", "评论图片"): str(comment_data.get("pictures", "")),
     }
-
     return {"fields": fields}
 
 

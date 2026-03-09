@@ -1,0 +1,17 @@
+{
+  "name": "B部门-关键词搜索",
+  "platform": "xhs",
+  "crawler_type": "search",
+  "keywords": "#小学数学,#小学计算,#数学网课,#陪读经验,#提前学,#数学超前学",
+  "creator_urls": [],
+  "max_notes_per_keyword": 80,
+  "enable_comments": true,
+  "max_comments": 50,
+  "enable_sub_comments": true,
+  "max_sub_comments": 30,
+  "max_sub_comments_per_comment": 30,
+  "save_data_option": "json",
+  "cookies": "",
+  "headless": true,
+  "notes": "关键词爬取：每词最多80条笔记，一级评论50条/笔记，二级评论30条/条。导入后可在网页任务列表点击「启动」运行。"
+}

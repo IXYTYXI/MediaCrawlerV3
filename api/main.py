@@ -18,8 +18,8 @@
 
 """
 MediaCrawler WebUI API Server
-Start command: uvicorn api.main:app --port 8080 --reload
-Or: python -m api.main
+Start command: python -m api.main  (默认端口 9001)
+Or: uvicorn api.main:app --host 0.0.0.0 --port 9001 --reload
 """
 import asyncio
 import hashlib
@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
-from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router, terminal_router, shell_router, feishu_event_router
+from .routers import crawler_router, data_router, websocket_router, dashboard_router, login_router, control_router, terminal_router, shell_router, feishu_event_router, task_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -178,6 +178,7 @@ app.include_router(control_router, prefix="/api")
 app.include_router(terminal_router, prefix="/api")
 app.include_router(shell_router, prefix="/api")
 app.include_router(feishu_event_router, prefix="/api")
+app.include_router(task_router, prefix="/api")
 
 
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}

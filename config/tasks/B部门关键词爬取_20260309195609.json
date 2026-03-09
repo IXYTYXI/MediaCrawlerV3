@@ -1,0 +1,22 @@
+{
+  "task_id": "B部门关键词爬取_20260309195609",
+  "name": "B部门关键词爬取",
+  "platform": "xhs",
+  "crawler_type": "search",
+  "keywords": "#小学数学   #小学计算 #数学网课 #陪读经验   #提前学 #数学超前学",
+  "creator_urls": [],
+  "max_notes_per_keyword": 80,
+  "enable_comments": true,
+  "max_comments": 50,
+  "enable_sub_comments": true,
+  "max_sub_comments": 30,
+  "max_sub_comments_per_comment": 30,
+  "save_data_option": "json",
+  "cookies": "040069b8083b3cc3b8d6b3e99b3b4b78bdc37e",
+  "headless": true,
+  "notes": "新媒体",
+  "created_at": "2026-03-09 19:56:09",
+  "updated_at": "2026-03-09 20:04:05",
+  "status": "running",
+  "last_run_at": "2026-03-09 20:04:05"
+}

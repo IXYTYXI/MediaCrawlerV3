@@ -19,6 +19,9 @@ from tools.feishu_bitable import (
     map_search_note_to_feishu_record,
     map_comment_to_feishu_record,
     build_comment_summary,
+    DEFAULT_FIELD_NAMES_NOTE,
+    DEFAULT_FIELD_NAMES_SEARCH_NOTE,
+    DEFAULT_FIELD_NAMES_COMMENT,
     FIELD_TYPE_TEXT,
     FIELD_TYPE_NUMBER,
     FIELD_TYPE_DATE,
@@ -66,6 +69,12 @@ class PipelineFeishuWriter:
         except Exception:
             pass
 
+        # 飞书字段名配置（config.feishu.field_names），不同任务可改配置无需改代码
+        _raw = self._feishu_cfg.get("field_names", {}) or {}
+        self._fn_note = {**DEFAULT_FIELD_NAMES_NOTE, **(_raw.get("note") or {})}
+        self._fn_search_note = {**DEFAULT_FIELD_NAMES_SEARCH_NOTE, **(_raw.get("search_note") or {})}
+        self._fn_comment = {**DEFAULT_FIELD_NAMES_COMMENT, **(_raw.get("comment") or {})}
+
         self.is_image_mode = self._feishu_cfg.get("image_mode", "link") == "image"
         self._image_threads = self._feishu_cfg.get("image_threads", 2)
 
@@ -86,8 +95,8 @@ class PipelineFeishuWriter:
         self._ordered_fields: List[str] = []
         self._all_table_fields: List[Dict] = []
         self._attachment_fields: Set[str] = set()
-        self._url_fields = {"链接"}
-        self._date_fields = {"发布时间"}
+        self._url_fields = {self._fn_note.get("link", "链接")}
+        self._date_fields = {self._fn_note.get("time", "发布时间")}
 
         self._pending_videos: List[Dict] = []
         self._extraction_futures: list = []
@@ -160,11 +169,13 @@ class PipelineFeishuWriter:
         return 1
 
     def _rebuild_field_defs(self):
-        ordered = [
-            "账号名称", "内容类型", "标题", "正文", "标签", "链接",
-            "发布时间", "点赞数", "收藏数", "评论数", "互动量", "热门",
-            "视频附件", "视频脚本",
+        # 顺序来自配置 field_names.note（固定逻辑键顺序）
+        logical_order = [
+            "creator_name", "content_type", "title", "desc", "tag_list", "link",
+            "time", "liked_count", "collected_count", "comment_count", "interaction", "hot",
+            "video_attachment", "video_script", "seq",
         ]
+        ordered = [self._fn_note.get(k, DEFAULT_FIELD_NAMES_NOTE.get(k, k)) for k in logical_order]
         img_fields = sorted(
             [f for f in self._all_field_names if f.startswith("图片")],
             key=lambda x: int(x.replace("图片", "") or "0"),
@@ -174,7 +185,7 @@ class PipelineFeishuWriter:
             if f not in ordered:
                 ordered.append(f)
 
-        self._attachment_fields = {"视频附件"}
+        self._attachment_fields = {self._fn_note.get("video_attachment", "视频附件")}
         if self.is_image_mode:
             self._attachment_fields.update(img_fields)
 
@@ -219,9 +230,10 @@ class PipelineFeishuWriter:
         try:
             records = self.client.list_all_records(self.app_token, table_id)
             note_map: Dict[str, str] = {}
+            link_field = self._fn_note.get("link", "链接")
             for rec in records:
                 record_id = rec.get("record_id", "")
-                link = rec.get("fields", {}).get("链接", "")
+                link = rec.get("fields", {}).get(link_field, "")
                 url = ""
                 if isinstance(link, dict):
                     url = link.get("link", "") or link.get("text", "")
@@ -343,7 +355,7 @@ class PipelineFeishuWriter:
 
         records: List[Dict] = []
         for note in notes:
-            record = map_note_to_feishu_record(creator_name, note)
+            record = map_note_to_feishu_record(creator_name, note, field_names=self._fn_note)
             records.append(record)
             self._all_field_names.update(record.get("fields", {}).keys())
 
@@ -352,12 +364,13 @@ class PipelineFeishuWriter:
             self._upload_videos_for_records(notes, records)
 
         self._rebuild_field_defs()
-        ordered_with_serial = set(self._ordered_fields) | {"序号"}
+        note_seq = self._fn_note.get("seq", "序号")
+        ordered_with_serial = set(self._ordered_fields) | {note_seq}
 
         if existing_table_id:
             table_id = existing_table_id
             for fn in self._ordered_fields:
-                if fn == "序号":
+                if fn == note_seq:
                     continue
                 try:
                     self.client.add_field(
@@ -377,7 +390,7 @@ class PipelineFeishuWriter:
                 except Exception:
                     pass
                 for fn in self._ordered_fields:
-                    if fn == "序号":
+                    if fn == note_seq:
                         continue
                     try:
                         self.client.add_field(
@@ -407,7 +420,7 @@ class PipelineFeishuWriter:
         self._table_name_to_id[safe_name] = table_id
 
         for i, rec in enumerate(records, seq_offset + 1):
-            rec["fields"]["序号"] = str(i)
+            rec["fields"][note_seq] = str(i)
 
         inserted = self.client.batch_insert_records(
             self.app_token, table_id, records
@@ -434,16 +447,19 @@ class PipelineFeishuWriter:
             except Exception:
                 pass
 
+        ct_name = self._fn_note.get("content_type", "内容类型")
+        va_name = self._fn_note.get("video_attachment", "视频附件")
+        creator_fname = self._fn_note.get("creator_name", "账号名称")
         video_records = []
         for rec in records:
             fields = rec.get("fields", {})
             has_video = (
-                fields.get("内容类型") == "视频"
-                or fields.get("视频附件")
+                fields.get(ct_name) == "视频"
+                or fields.get(va_name)
             )
             if has_video:
                 vr = {"fields": dict(fields)}
-                vr["fields"]["账号名称"] = creator_name
+                vr["fields"][creator_fname] = creator_name
                 video_records.append(vr)
 
         if video_records:
@@ -488,38 +504,41 @@ class PipelineFeishuWriter:
 
     # ==================== 搜索模式写入（笔记 + 评论两张表） ====================
 
-    _SEARCH_NOTE_FIELDS = [
-        {"field_name": "搜索关键词", "type": FIELD_TYPE_TEXT},
-        {"field_name": "标题", "type": FIELD_TYPE_TEXT},
-        {"field_name": "正文", "type": FIELD_TYPE_TEXT},
-        {"field_name": "内容类型", "type": FIELD_TYPE_SELECT},
-        {"field_name": "作者昵称", "type": FIELD_TYPE_TEXT},
-        {"field_name": "作者ID", "type": FIELD_TYPE_TEXT},
-        {"field_name": "发布时间", "type": FIELD_TYPE_DATE},
-        {"field_name": "点赞数", "type": FIELD_TYPE_NUMBER},
-        {"field_name": "收藏数", "type": FIELD_TYPE_NUMBER},
-        {"field_name": "评论数", "type": FIELD_TYPE_NUMBER},
-        {"field_name": "分享数", "type": FIELD_TYPE_NUMBER},
-        {"field_name": "标签", "type": FIELD_TYPE_TEXT},
-        {"field_name": "IP属地", "type": FIELD_TYPE_TEXT},
-        {"field_name": "链接", "type": FIELD_TYPE_URL},
-        {"field_name": "评论摘要", "type": FIELD_TYPE_TEXT},
+    _SEARCH_NOTE_TYPES = [
+        FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_SELECT,
+        FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_DATE, FIELD_TYPE_NUMBER,
+        FIELD_TYPE_NUMBER, FIELD_TYPE_NUMBER, FIELD_TYPE_NUMBER, FIELD_TYPE_TEXT,
+        FIELD_TYPE_TEXT, FIELD_TYPE_URL, FIELD_TYPE_TEXT,
+    ]
+    _COMMENT_TYPES = [
+        FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_SELECT, FIELD_TYPE_TEXT,
+        FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_DATE, FIELD_TYPE_TEXT,
+        FIELD_TYPE_NUMBER, FIELD_TYPE_NUMBER, FIELD_TYPE_TEXT, FIELD_TYPE_TEXT,
     ]
 
-    _COMMENT_FIELDS = [
-        {"field_name": "笔记ID", "type": FIELD_TYPE_TEXT},
-        {"field_name": "笔记标题", "type": FIELD_TYPE_TEXT},
-        {"field_name": "评论级别", "type": FIELD_TYPE_SELECT},
-        {"field_name": "评论内容", "type": FIELD_TYPE_TEXT},
-        {"field_name": "评论者昵称", "type": FIELD_TYPE_TEXT},
-        {"field_name": "评论者ID", "type": FIELD_TYPE_TEXT},
-        {"field_name": "评论时间", "type": FIELD_TYPE_DATE},
-        {"field_name": "IP属地", "type": FIELD_TYPE_TEXT},
-        {"field_name": "点赞数", "type": FIELD_TYPE_NUMBER},
-        {"field_name": "二级评论数", "type": FIELD_TYPE_NUMBER},
-        {"field_name": "父评论ID", "type": FIELD_TYPE_TEXT},
-        {"field_name": "评论图片", "type": FIELD_TYPE_TEXT},
+    _SEARCH_NOTE_KEY_ORDER = [
+        "keyword", "title", "desc", "content_type", "nickname", "user_id", "time",
+        "liked_count", "collected_count", "comment_count", "share_count", "tag_list",
+        "ip_location", "link", "comment_summary",
     ]
+    _COMMENT_KEY_ORDER = [
+        "note_id", "note_title", "level", "content", "nickname", "user_id", "time",
+        "ip_location", "like_count", "sub_comment_count", "parent_comment_id", "pictures",
+    ]
+
+    def _get_search_note_fields(self):
+        """从 config.feishu.field_names.search_note 构建笔记表字段列表"""
+        return [
+            {"field_name": self._fn_search_note.get(k, DEFAULT_FIELD_NAMES_SEARCH_NOTE.get(k, k)), "type": self._SEARCH_NOTE_TYPES[i]}
+            for i, k in enumerate(self._SEARCH_NOTE_KEY_ORDER) if i < len(self._SEARCH_NOTE_TYPES)
+        ]
+
+    def _get_comment_fields(self):
+        """从 config.feishu.field_names.comment 构建评论表字段列表"""
+        return [
+            {"field_name": self._fn_comment.get(k, DEFAULT_FIELD_NAMES_COMMENT.get(k, k)), "type": self._COMMENT_TYPES[i]}
+            for i, k in enumerate(self._COMMENT_KEY_ORDER) if i < len(self._COMMENT_TYPES)
+        ]
 
     def write_search_results(
         self,
@@ -544,19 +563,23 @@ class PipelineFeishuWriter:
         self._ensure_bitable()
 
         # --- 构建笔记记录（含评论摘要）---
+        search_note_fields = self._get_search_note_fields()
+        note_seq_name = self._fn_search_note.get("seq", "序号")
         note_records: List[Dict] = []
         for note in notes:
             note_id = note.get("note_id", "")
             note_comments = comments_by_note.get(note_id, [])
             summary = build_comment_summary(note_comments, top_n=5)
-            record = map_search_note_to_feishu_record(note, summary)
+            record = map_search_note_to_feishu_record(note, summary, field_names=self._fn_search_note)
             note_records.append(record)
 
         # --- 构建评论记录 ---
+        comment_fields = self._get_comment_fields()
+        comment_seq_name = self._fn_comment.get("seq", "序号")
         comment_records: List[Dict] = []
         for note_id, clist in comments_by_note.items():
             for c in clist:
-                comment_records.append(map_comment_to_feishu_record(c))
+                comment_records.append(map_comment_to_feishu_record(c, field_names=self._fn_comment))
 
         # --- 创建/复用笔记表 ---
         note_table_id = self._table_name_to_id.get(note_table_name)
@@ -574,7 +597,7 @@ class PipelineFeishuWriter:
                     )
                 except Exception:
                     pass
-                for fd in self._SEARCH_NOTE_FIELDS:
+                for fd in search_note_fields:
                     try:
                         self.client.add_field(
                             self.app_token, note_table_id,
@@ -586,19 +609,17 @@ class PipelineFeishuWriter:
             else:
                 note_table_id = self.client.create_table(
                     self.app_token, note_table_name,
-                    self._SEARCH_NOTE_FIELDS,
+                    search_note_fields,
                 )
 
-            note_keep = {"序号"} | {
-                fd["field_name"] for fd in self._SEARCH_NOTE_FIELDS
-            }
+            note_keep = {note_seq_name} | {fd["field_name"] for fd in search_note_fields}
             self.client.cleanup_default_fields_and_records(
                 self.app_token, note_table_id, note_keep,
             )
             self._table_name_to_id[note_table_name] = note_table_id
 
         for i, rec in enumerate(note_records, 1):
-            rec["fields"]["序号"] = str(i)
+            rec["fields"][note_seq_name] = str(i)
 
         note_inserted = self.client.batch_insert_records(
             self.app_token, note_table_id, note_records,
@@ -620,18 +641,16 @@ class PipelineFeishuWriter:
             else:
                 comment_table_id = self.client.create_table(
                     self.app_token, comment_table_name,
-                    self._COMMENT_FIELDS,
+                    comment_fields,
                 )
-                comment_keep = {"序号"} | {
-                    fd["field_name"] for fd in self._COMMENT_FIELDS
-                }
+                comment_keep = {comment_seq_name} | {fd["field_name"] for fd in comment_fields}
                 self.client.cleanup_default_fields_and_records(
                     self.app_token, comment_table_id, comment_keep,
                 )
                 self._table_name_to_id[comment_table_name] = comment_table_id
 
             for i, rec in enumerate(comment_records, 1):
-                rec["fields"]["序号"] = str(i)
+                rec["fields"][comment_seq_name] = str(i)
 
             comment_inserted = self.client.batch_insert_records(
                 self.app_token, comment_table_id, comment_records,
@@ -717,7 +736,8 @@ class PipelineFeishuWriter:
             self.summary_table_id = self.client.create_table(
                 self.app_token, "视频汇总", self._all_table_fields
             )
-            ordered_with_serial = set(self._ordered_fields) | {"序号"}
+            note_seq = self._fn_note.get("seq", "序号")
+            ordered_with_serial = set(self._ordered_fields) | {note_seq}
             self.client.cleanup_default_fields_and_records(
                 self.app_token, self.summary_table_id, ordered_with_serial
             )
@@ -728,9 +748,10 @@ class PipelineFeishuWriter:
             except Exception:
                 pass
 
+        note_seq = self._fn_note.get("seq", "序号")
         for vr in video_records:
             self._video_serial += 1
-            vr["fields"]["序号"] = str(self._video_serial)
+            vr["fields"][note_seq] = str(self._video_serial)
 
         inserted = self.client.batch_insert_records_full(
             self.app_token, self.summary_table_id, video_records
@@ -741,7 +762,7 @@ class PipelineFeishuWriter:
         for rec in inserted:
             record_id = rec.get("record_id", "")
             fields = rec.get("fields", {})
-            video_attach = fields.get("视频附件")
+            video_attach = fields.get(self._fn_note.get("video_attachment", "视频附件"))
             if not video_attach or not isinstance(video_attach, list):
                 continue
             ft = video_attach[0].get("file_token", "")
@@ -750,7 +771,7 @@ class PipelineFeishuWriter:
 
             # 根据配置决定是否只对热门视频提取脚本
             if self._script_hot_only:
-                hot_raw = fields.get("热门", "")
+                hot_raw = fields.get(self._fn_note.get("hot", "热门"), "")
                 if isinstance(hot_raw, list):
                     hot_val = "".join(
                         seg.get("text", "") if isinstance(seg, dict)
@@ -762,7 +783,7 @@ class PipelineFeishuWriter:
                     skip_count += 1
                     continue
 
-            title_raw = fields.get("标题", "")
+            title_raw = fields.get(self._fn_note.get("title", "标题"), "")
             if isinstance(title_raw, list):
                 title = "".join(
                     seg.get("text", "") if isinstance(seg, dict)
@@ -772,7 +793,7 @@ class PipelineFeishuWriter:
             else:
                 title = str(title_raw) if title_raw else ""
 
-            account_raw = fields.get("账号名称", "")
+            account_raw = fields.get(self._fn_note.get("creator_name", "账号名称"), "")
             account = str(account_raw) if account_raw else ""
 
             self._pending_videos.append({

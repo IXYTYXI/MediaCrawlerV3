@@ -1,0 +1,24 @@
+[
+  {
+    "web_session": "040069b8083b3cc3b8d6cad4923b4b5eb876b0",
+    "a1": "",
+    "webId": "",
+    "gid": "",
+    "timestamp": "2026-02-26 10:25:57",
+    "epoch": 1772079957,
+    "session_hex_len": 38,
+    "session_bytes": 19,
+    "note": "首次记录（从git历史恢复）"
+  },
+  {
+    "web_session": "040069b8083b3cc3b8d6f9a39d3b4bb0346068",
+    "a1": "19c4c1abb9a5ilwe2vpl9c4hlkocs5gn5drfwljn730000421553",
+    "webId": "7663a979bf6a1e64732528c9fced89a6",
+    "gid": "yjS4Sy0S0i2qyjS4Sy0DDf1Vj0231EdJhU1jFIWS4x1Tliq8SM2kIE8884Jy22q80yDqyJ2K",
+    "timestamp": "2026-03-05 10:33:52",
+    "epoch": 1772869232,
+    "session_hex_len": 38,
+    "session_bytes": 19,
+    "note": "浏览器验证时自动刷新"
+  }
+]
