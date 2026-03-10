@@ -349,6 +349,9 @@ async def start_task(task_id: str):
             raise HTTPException(status_code=400, detail="任务已在运行中")
 
         cmd = _build_cmd(data)
+        # 每个任务使用独立浏览器数据目录，避免多任务并行时 Playwright 锁冲突
+        task_env = os.environ.copy()
+        task_env["MC_INSTANCE_ID"] = task_id
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -357,6 +360,7 @@ async def start_task(task_id: str):
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                env=task_env,
                 cwd=str(Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
             )
         except Exception as e:
