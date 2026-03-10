@@ -120,7 +120,11 @@ def _push_search_results_to_feishu() -> None:
 
     app_id = feishu_cfg.get("app_id", "")
     app_secret = feishu_cfg.get("app_secret", "")
-    folder_token = feishu_cfg.get("folder_token", "")
+    folder_token = (
+        getattr(config, "FEISHU_FOLDER_TOKEN_OVERRIDE", "")
+        or feishu_cfg.get("search_folder_token")
+        or feishu_cfg.get("folder_token", "")
+    )
     if not app_id or not app_secret:
         print("[Main] 飞书 app_id/app_secret 未配置，跳过写入")
         return
@@ -128,8 +132,10 @@ def _push_search_results_to_feishu() -> None:
     from tools.async_file_writer import AsyncFileWriter
     session_ts = AsyncFileWriter.get_session_timestamp()
     json_dir = f"data/{config.PLATFORM}/json"
-    notes_file = os.path.join(json_dir, f"search_contents_{session_ts}.json")
-    comments_file = os.path.join(json_dir, f"search_comments_{session_ts}.json")
+    prefix = "search_top_contents" if config.CRAWLER_TYPE == "search_top" else "search_contents"
+    comments_prefix = "search_top_comments" if config.CRAWLER_TYPE == "search_top" else "search_comments"
+    notes_file = os.path.join(json_dir, f"{prefix}_{session_ts}.json")
+    comments_file = os.path.join(json_dir, f"{comments_prefix}_{session_ts}.json")
 
     notes = []
     if os.path.exists(notes_file):
@@ -182,7 +188,7 @@ async def main() -> None:
         return
 
     # 搜索模式：若未传关键词（为空或仍是 base 默认），则从关键词池加载
-    if config.CRAWLER_TYPE == "search":
+    if config.CRAWLER_TYPE in ("search", "search_top"):
         from tools.search_keyword_pool import load_search_keyword_pool
         pool_keywords = load_search_keyword_pool()
         if pool_keywords:
@@ -229,7 +235,7 @@ async def main() -> None:
     await _generate_wordcloud_if_needed()
 
     # 搜索模式爬完后自动写入飞书（如果飞书已配置）
-    if config.CRAWLER_TYPE == "search" and config.SAVE_DATA_OPTION == "json":
+    if config.CRAWLER_TYPE in ("search", "search_top") and config.SAVE_DATA_OPTION == "json":
         _push_search_results_to_feishu()
 
     # 生成并保存爬取统计摘要

@@ -181,7 +181,11 @@ app.include_router(feishu_event_router, prefix="/api")
 app.include_router(task_router, prefix="/api")
 
 
-_NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 
 DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard")
@@ -331,6 +335,7 @@ async def get_config_options():
         ],
         "crawler_types": [
             {"value": "search", "label": "Search Mode"},
+            {"value": "search_top", "label": "Top Liked Search"},
             {"value": "detail", "label": "Detail Mode"},
             {"value": "creator", "label": "Creator Mode"},
         ],

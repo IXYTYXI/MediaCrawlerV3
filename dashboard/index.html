@@ -74,8 +74,15 @@
   </script>
 </head>
 <body class="bg-mesh text-gray-200 min-h-screen">
-
+<script>
+window.onerror = function(msg, url, line, col, err) {
+  var el = document.getElementById('app');
+  if (el) el.innerHTML = '<div class="p-6 text-red-400 font-mono text-sm">' + (msg || '') + '<br>行 ' + (line || '') + '</div>';
+  return false;
+};
+</script>
 <div id="app" v-cloak>
+  <!-- dashboard rev:20260310-fix-if -->
 
   <!-- 登录遮罩 -->
   <div v-if="!authenticated" class="fixed inset-0 z-[999] bg-mesh flex items-center justify-center">
@@ -414,7 +421,7 @@
           <div class="card rounded-xl p-4">
             <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">爬取类型</label>
             <select v-model="config.crawl_settings.crawler_type" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
-              <option value="search">🔎 关键词搜索</option><option value="creator">👤 作者主页</option><option value="detail">📄 指定帖子</option>
+              <option value="search">🔎 关键词搜索</option><option value="search_top">🔥 关键词高赞搜索</option><option value="creator">👤 作者主页</option><option value="detail">📄 指定帖子</option>
             </select>
           </div>
           <div class="card rounded-xl p-4">
@@ -732,7 +739,7 @@
             <div>
               <label class="text-[11px] text-gray-500 uppercase tracking-wider">爬取模式</label>
               <select v-model="taskForm.crawler_type" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
-                <option value="search">关键词搜索</option><option value="creator">创作者主页</option><option value="detail">帖子详情</option>
+                <option value="search">关键词搜索</option><option value="search_top">🔥 关键词高赞搜索</option><option value="creator">创作者主页</option><option value="detail">帖子详情</option>
               </select>
             </div>
             <div>
@@ -748,6 +755,37 @@
             <label class="text-[11px] text-gray-500 uppercase tracking-wider">搜索关键词</label>
             <textarea v-model="taskForm.keywords" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="多个关键词用逗号分隔，如: 小学数学,数学网课,陪读经验"></textarea>
             <p class="text-[10px] text-gray-600 mt-1">每个关键词最多爬取 <input v-model.number="taskForm.max_notes_per_keyword" type="number" class="w-14 px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-center text-white inline-block mx-0.5 text-[11px]"> 条笔记</p>
+          </div>
+
+          <!-- 关键词高赞搜索模式 -->
+          <div v-if="taskForm.crawler_type === 'search_top'" class="space-y-3">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">搜索关键词</label>
+              <textarea v-model="taskForm.keywords" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="如: #数学超前学,奥数培训"></textarea>
+              <p class="text-[10px] text-gray-600 mt-1">按热度搜索，自动按点赞量排序取 Top N</p>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="card rounded-lg p-3">
+                <label class="text-[10px] text-gray-500 uppercase">搜索笔记数</label>
+                <input v-model.number="taskForm.top_notes_count" type="number" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white" placeholder="100">
+                <p class="text-[9px] text-gray-600 mt-0.5">搜多少条 (每页≈20, 如60=3页)</p>
+              </div>
+              <div class="card rounded-lg p-3">
+                <label class="text-[10px] text-gray-500 uppercase">爬评论 Top M</label>
+                <input v-model.number="taskForm.top_comment_notes_count" type="number" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white" placeholder="20">
+                <p class="text-[9px] text-gray-600 mt-0.5">按赞排序后, 前 M 篇爬评论</p>
+              </div>
+              <div class="card rounded-lg p-3">
+                <label class="text-[10px] text-gray-500 uppercase">评论页数</label>
+                <input v-model.number="taskForm.comment_page_count" type="number" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white" placeholder="2">
+                <p class="text-[9px] text-gray-600 mt-0.5">每篇笔记爬几页评论 (每页≈20条)</p>
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="text-[10px] text-gray-500 uppercase">飞书目标文件夹 Token <span class="text-gray-600">(可选)</span></label>
+              <input v-model="taskForm.feishu_folder_token" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white" placeholder="留空则使用全局配置">
+              <p class="text-[9px] text-gray-600 mt-0.5">爬完后多维表格创建到此文件夹，不同任务可指定不同位置</p>
+            </div>
           </div>
 
           <!-- 创作者模式 -->
@@ -809,7 +847,7 @@
                 <h4 class="text-sm font-semibold text-white">{{ t.name || t.task_id }}</h4>
                 <div class="flex items-center gap-3 mt-0.5">
                   <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">{{ t.platform }}</span>
-                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">{{ t.crawler_type === 'search' ? '搜索' : t.crawler_type === 'creator' ? '创作者' : '详情' }}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">{{ t.crawler_type === 'search' ? '搜索' : t.crawler_type === 'search_top' ? '高赞搜索' : t.crawler_type === 'creator' ? '创作者' : '详情' }}</span>
                   <span v-if="t.enable_comments" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">含评论</span>
                   <span class="text-[10px] text-gray-600">{{ t.status === 'running' ? '运行中' : t.status === 'completed' ? '已完成' : t.status === 'error' ? '出错' : '空闲' }}</span>
                 </div>
@@ -871,8 +909,26 @@
             <input type="text" v-model="config.feishu.app_id" placeholder="cli_xxxxxxxx" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
           <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">App Secret</label>
             <input type="password" v-model="config.feishu.app_secret" placeholder="••••••••" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
-          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">文件夹 Token <span class="text-gray-600">(可选)</span></label>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">文件夹 Token <span class="text-gray-600">(可选，表格创建位置)</span></label>
             <input type="text" v-model="config.feishu.folder_token" placeholder="留空则创建在根目录" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">协作者 Open ID <span class="text-gray-600">(每行一个，创建表格后自动加为可编辑)</span></label>
+            <textarea v-model="config.feishu.collaborator_open_ids_text" placeholder="如冯杨的 open_id：ou_xxxxxxxx&#10;每行一个，新建多维表格后会自动添加为协作者"
+              rows="3" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-y"></textarea>
+            <p class="text-[10px] text-gray-600 mt-1.5">在飞书管理后台「成员与部门」可查看 open_id；建议把冯杨等同事加在此处</p>
+          </div>
+        </div>
+
+        <!-- 通知/群聊（可变配置） -->
+        <div class="card rounded-xl p-5 space-y-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-base">🔔</span>
+            <div><label class="text-sm text-gray-300 font-medium">任务完成通知</label><p class="text-[11px] text-gray-600 mt-0.5">群聊、Webhook 等可能随环境变化，在此修改</p></div>
+          </div>
+          <div class="flex items-center justify-between"><label class="text-sm text-gray-400">启用通知</label><div class="toggle" :class="{ active: config.notification && config.notification.enabled }" @click="config.notification && (config.notification.enabled = !config.notification.enabled)"></div></div>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">群聊 Chat ID</label>
+            <input type="text" v-model="config.notification.chat_id" placeholder="oc_xxxx（应用发群消息时用）" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">Webhook URL</label>
+            <input type="text" v-model="config.notification.webhook_url" placeholder="自定义机器人 Webhook（可选）" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
         </div>
 
         <!-- 视频链接管理 -->
@@ -1132,7 +1188,7 @@
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue
 
-createApp({
+window._mcApp = createApp({
   setup() {
     const basePath = (() => { const p = window.location.pathname; const segs = ['control','dashboard','login','shell','terminal','notuse','api']; for (const s of segs) { const i = p.indexOf('/' + s); if (i >= 0) return p.substring(0, i); } return p.replace(/\/+$/, ''); })();
     const API = basePath + '/api/dashboard'
@@ -1160,7 +1216,8 @@ createApp({
       '浏览器控制': { auto_close_browser: false, remove_webdriver_flag: true, spoof_canvas_fingerprint: true, spoof_webgl_fingerprint: true },
       '断点续爬': { enabled: true, auto_save_interval: 10, retry_failed: true, use_sqlite: false },
       batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '' },
-      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '' },
+      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '', collaborator_open_ids: [], collaborator_open_ids_text: '' },
+      notification: { enabled: false, webhook_url: '', chat_id: '', app_id: '', app_secret: '', at_user_ids: ['all'] },
     }
 
     const config = reactive(JSON.parse(JSON.stringify(defaultConfig)))
@@ -1199,7 +1256,7 @@ createApp({
     const spVerifying = ref(false)
 
     async function loadSessions() {
-      const res = await api('/sessions')
+      const res = await api('/sessions');
       if (res?.success) {
         spList.value = (res.sessions || []).map(s => ({ ...s, _v: false }))
         Object.assign(spStats, res.stats || {})
@@ -1208,14 +1265,14 @@ createApp({
 
     async function addSessionEntry() {
       if (!spNewWs.value.trim()) return
-      const res = await api('/sessions', { method: 'POST', body: JSON.stringify({ web_session: spNewWs.value, label: spNewLabel.value }) })
+      const res = await api('/sessions', { method: 'POST', body: JSON.stringify({ web_session: spNewWs.value, label: spNewLabel.value }) });
       if (res?.success) { showToast(res.message || '已添加', 'success'); spNewWs.value = ''; spNewLabel.value = ''; loadSessions() }
       else showToast(res?.detail || res?.error || '添加失败', 'error')
     }
 
     async function deleteSessionEntry(id, label) {
       if (!confirm(`确认删除 session "${label || id}" ？`)) return
-      const res = await api('/sessions/' + id, { method: 'DELETE' })
+      const res = await api('/sessions/' + id, { method: 'DELETE' });
       if (res?.success) { showToast('已删除', 'success'); loadSessions() }
       else showToast(res?.detail || '删除失败', 'error')
     }
@@ -1224,7 +1281,7 @@ createApp({
       const s = spList.value.find(x => x.id === id)
       if (s) s._v = true
       try {
-        const res = await api('/sessions/' + id + '/verify', { method: 'POST' })
+        const res = await api('/sessions/' + id + '/verify', { method: 'POST' });
         if (res?.success) { showToast(res.message + ': ' + res.status, res.status === 'active' ? 'success' : 'error'); loadSessions() }
         else showToast(res?.detail || '验证失败', 'error')
       } catch (e) { showToast('请求失败', 'error') }
@@ -1234,7 +1291,7 @@ createApp({
     async function verifyAllSessions() {
       spVerifying.value = true
       try {
-        const res = await api('/sessions/verify-all', { method: 'POST' })
+        const res = await api('/sessions/verify-all', { method: 'POST' });
         if (res?.success) { showToast(`验证完成: ${res.results.active} 可用, ${res.results.expired} 过期`, 'success'); loadSessions() }
         else showToast('验证失败', 'error')
       } catch (e) { showToast('请求失败', 'error') }
@@ -1313,6 +1370,8 @@ createApp({
       max_notes_per_keyword: 80, enable_comments: false, max_comments: 50,
       enable_sub_comments: false, max_sub_comments: 30, save_data_option: 'json',
       cookies: '', headless: true, notes: '',
+      top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
+      feishu_folder_token: '',
     })
     const taskLogView = reactive({ visible: false, task_id: '', status: '', logs: [] })
     const taskLogContainer = ref(null)
@@ -1331,12 +1390,14 @@ createApp({
         max_notes_per_keyword: 80, enable_comments: false, max_comments: 50,
         enable_sub_comments: false, max_sub_comments: 30, save_data_option: 'json',
         cookies: '', headless: true, notes: '',
+        top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
+        feishu_folder_token: '',
       })
     }
 
     async function loadTasks() {
       try {
-        const r = await fetch(TASK_API, { headers: getAuthHeaders() })
+        const r = await fetch(TASK_API, { headers: getAuthHeaders() });
         if (r.status === 401) { authenticated.value = false; return }
         const data = await r.json()
         if (data?.success) taskList.value = data.tasks || []
@@ -1371,6 +1432,10 @@ createApp({
         enable_sub_comments: !!t.enable_sub_comments, max_sub_comments: t.max_sub_comments || 30,
         save_data_option: t.save_data_option || 'json', cookies: t.cookies || '',
         headless: t.headless !== false, notes: t.notes || '',
+        top_notes_count: t.top_notes_count || 100,
+        top_comment_notes_count: t.top_comment_notes_count || 20,
+        comment_page_count: t.comment_page_count || 2,
+        feishu_folder_token: t.feishu_folder_token || '',
       })
       taskShowForm.value = true
     }
@@ -1544,30 +1609,40 @@ createApp({
     }
 
     async function loadConfig() {
-      const res = await api('/config')
+      const res = await api('/config');
       if (res?.success) {
         function merge(t, s) { for (const k in s) { if (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k]) && k in t) merge(t[k], s[k]); else t[k] = s[k] } }
-        merge(config, res.data)
-        configOriginal.value = JSON.stringify(config)
+        merge(config, res.data);
+        if (config.feishu && Array.isArray(config.feishu.collaborator_open_ids)) {
+          config.feishu.collaborator_open_ids_text = config.feishu.collaborator_open_ids.join('\n')
+        } else if (config.feishu) {
+          config.feishu.collaborator_open_ids_text = ''
+        }
+        configOriginal.value = JSON.stringify(config);
       }
     }
 
     async function saveConfig() {
       saving.value = true
-      const res = await api('/config', { method: 'PUT', body: JSON.stringify(config) })
-      setTimeout(() => { saving.value = false }, 500)
+      const toSave = JSON.parse(JSON.stringify(config))
+      if (toSave.feishu && typeof toSave.feishu.collaborator_open_ids_text === 'string') {
+        toSave.feishu.collaborator_open_ids = toSave.feishu.collaborator_open_ids_text.split(/\n/).map(s => s.trim()).filter(Boolean)
+        delete toSave.feishu.collaborator_open_ids_text
+      }
+      const res = await api('/config', { method: 'PUT', body: JSON.stringify(toSave) });
+      setTimeout(() => { saving.value = false }, 500);
       if (res?.success) { configOriginal.value = JSON.stringify(config); showToast('配置已保存', 'success') }
     }
 
     async function loadCreators() {
-      const res = await api('/creators')
-      if (res?.success) creators.value = res.data.creators || []
-      editingIdx.value = -1
+      const res = await api('/creators');
+      if (res?.success) creators.value = res.data.creators || [];
+      editingIdx.value = -1;
     }
 
     async function addCreator() {
-      if (!newCreator.url.trim()) return
-      const res = await api('/creators', { method: 'POST', body: JSON.stringify({ name: newCreator.name, id: newCreator.id, url: newCreator.url }) })
+      if (!newCreator.url.trim()) return;
+      const res = await api('/creators', { method: 'POST', body: JSON.stringify({ name: newCreator.name, id: newCreator.id, url: newCreator.url }) });
       if (res?.success) {
         showToast(res.message || '已添加', 'success')
         newCreator.name = ''; newCreator.id = ''; newCreator.url = ''
@@ -1582,7 +1657,7 @@ createApp({
     }
 
     async function saveEditCreator(idx) {
-      const res = await api('/creators/' + idx, { method: 'PUT', body: JSON.stringify({ name: editForm.name, id: editForm.id, url: editForm.url }) })
+      const res = await api('/creators/' + idx, { method: 'PUT', body: JSON.stringify({ name: editForm.name, id: editForm.id, url: editForm.url }) });
       if (res?.success) { showToast('已更新', 'success'); editingIdx.value = -1; loadCreators() }
       else showToast(res?.detail || '更新失败', 'error')
     }
@@ -1590,45 +1665,45 @@ createApp({
     async function deleteCreator(idx) {
       const c = creators.value[idx]
       if (!confirm(`确认删除 "${c.name || c.url}" ？`)) return
-      const res = await api('/creators/' + idx, { method: 'DELETE' })
+      const res = await api('/creators/' + idx, { method: 'DELETE' });
       if (res?.success) { showToast(res.message || '已删除', 'success'); loadCreators() }
       else showToast(res?.detail || '删除失败', 'error')
     }
 
     async function startBatch() {
       await saveConfig()
-      const res = await api('/batch/start', { method: 'POST', body: JSON.stringify(batchForm) })
+      const res = await api('/batch/start', { method: 'POST', body: JSON.stringify(batchForm) });
       if (res?.success) { showToast('批量爬取已启动', 'success'); pollStatus() }
       else showToast(res?.detail || '启动失败', 'error')
     }
 
     async function stopBatch() {
-      const res = await api('/batch/stop', { method: 'POST' })
-      if (res?.success) showToast('已停止', 'info')
+      const res = await api('/batch/stop', { method: 'POST' });
+      if (res?.success) showToast('已停止', 'info');
     }
 
     async function pollStatus() {
       const poll = async () => {
-        const res = await api('/batch/status')
+        const res = await api('/batch/status');
         if (res?.success) { Object.assign(batchStatus, res.data); if (batchStatus.status === 'running') setTimeout(poll, 3000) }
       }; poll()
     }
 
     async function refreshLogs() {
-      const res = await api('/batch/logs?limit=500')
+      const res = await api('/batch/logs?limit=500');
       if (res?.success) { batchLogs.value = res.data; nextTick(() => { if (logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight }) }
     }
 
     async function triggerExport() {
       showToast('正在导出...', 'info')
-      const res = await api(`/export?min_interaction=${batchForm.min_interaction}`, { method: 'POST' })
+      const res = await api(`/export?min_interaction=${batchForm.min_interaction}`, { method: 'POST' });
       if (res?.success) { showToast('导出完成', 'success'); loadFiles() } else showToast('导出失败', 'error')
     }
 
     async function resetProgress() {
       if (!confirm('确定重置进度？下次将从头开始爬取。')) return
-      const res = await api('/batch/progress', { method: 'DELETE' })
-      if (res?.success) showToast('进度已重置', 'success')
+      const res = await api('/batch/progress', { method: 'DELETE' });
+      if (res?.success) showToast('进度已重置', 'success');
     }
 
     async function loadFiles() { const res = await api('/files'); if (res?.success) files.value = res.data }
@@ -1648,8 +1723,8 @@ createApp({
       fileView.error = ''
       try {
         const url = `/files/view?path=${encodeURIComponent(fileView.path)}&offset=${fileView.offset}&limit=${fileView.limit}`
-        const res = await api(url)
-        if (res?.success) fileView.data = res.data
+        const res = await api(url);
+        if (res?.success) fileView.data = res.data;
         else fileView.error = res?.detail || '加载失败'
       } catch (e) { fileView.error = e.message }
       finally { fileView.loading = false }
@@ -1672,8 +1747,8 @@ createApp({
     async function loadSessionStatus() {
       sessionChecking.value = true
       try {
-        const res = await api('/session/status')
-        if (res?.success) Object.assign(sessionStatus, res.data)
+        const res = await api('/session/status');
+        if (res?.success) Object.assign(sessionStatus, res.data);
       } finally { sessionChecking.value = false }
     }
 
@@ -1755,7 +1830,7 @@ createApp({
     async function pollScriptStatus() {
       const poll = async () => {
         try {
-          const res = await api('/feishu/extract-scripts/status')
+          const res = await api('/feishu/extract-scripts/status');
           if (res?.success) {
             const d = res.data
             scriptExtract.status = d.status
@@ -1864,8 +1939,8 @@ createApp({
       }
       setInterval(async () => {
         if (!authenticated.value) return
-        const res = await api('/batch/status')
-        if (res?.success) Object.assign(batchStatus, res.data)
+        const res = await api('/batch/status');
+        if (res?.success) Object.assign(batchStatus, res.data);
         if (batchStatus.status === 'running' || activeTab.value === 'logs') refreshLogs()
       }, 5000)
       setInterval(() => { if (authenticated.value) loadSessionStatus() }, 30000)
@@ -1874,7 +1949,10 @@ createApp({
 
     return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, fullConfigImportInput, exportConfigOnly, exportFullConfig, openFullConfigImport, onFullConfigImportFile, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions, taskList, taskShowForm, taskEditId, taskForm, taskLogView, taskLogContainer, taskImportFileInput, taskCreatorUrlsText, loadTasks, saveTask, editTask, deleteTask, exportTask, openTaskImportDialog, onTaskImportFile, startTaskRun, stopTaskRun, viewTaskLogs, refreshTaskLogs }
   }
-}).mount('#app')
+});
+try { window._mcApp.mount('#app'); } catch (e) {
+  document.body.insertAdjacentHTML('beforeend', '<div class="fixed inset-0 z-[9999] bg-mesh flex items-center justify-center p-6"><pre class="text-red-400 text-sm whitespace-pre-wrap">' + (e.message || e) + '\n\n' + (e.stack || '') + '</pre></div>')
+}
 </script>
 </body>
 </html>

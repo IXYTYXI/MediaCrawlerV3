@@ -157,9 +157,11 @@
     "app_id": "cli_a9006c0b96395bd3",
     "app_secret": "tul9PNh3aSjIbcqcoB25vh8HLYP2HmPx",
     "folder_token": "LLTwf1fRUl3tH9dxr2PcMqplnAh",
+    "search_folder_token": "Y4hZfRwBZlHpO7dZL28cqIKYnTb",
+    "_search_folder_token_desc": "关键词/搜索爬取任务的多维表格创建到此文件夹（为空则使用 folder_token）",
     "image_mode": "image",
     "_image_mode_desc": "图片写入模式: link=写入链接文本, image=下载图片上传为附件显示缩略图",
-    "image_threads": 2,
+    "image_threads": 3,
     "_image_threads_desc": "图片上传并发线程数(仅image模式)",
     "video_script_enabled": true,
     "video_script_gateway_url": "https://ops-ai-gateway.yc345.tv/v1",
@@ -178,11 +180,15 @@
     "reuse_bitable": true,
     "_reuse_bitable_desc": "增量爬取时复用已有多维表格，仅追加新内容（避免重复上传媒体）",
     "last_bitable": {
-      "app_token": "",
-      "url": "",
-      "tables": {},
+      "app_token": "MhkXbAZf1a89DFsz2Fqcq4aXnzd",
+      "url": "https://guanghe.feishu.cn/base/MhkXbAZf1a89DFsz2Fqcq4aXnzd",
+      "tables": {
+        "笔记数据": "tblz1Sh4ZjKEeXSX",
+        "评论数据": "tblxvX1NYIvkaTDq",
+        "数据概览": "tbl4f3yTL1Vrvtwj"
+      },
       "summary_table_id": "",
-      "updated_at": ""
+      "updated_at": "2026-03-10 17:21:28"
     },
     "_last_bitable_desc": "上次写入的多维表格信息，用于增量复用（自动维护，请勿手动修改）",
     "cleanup_local_media": false,
@@ -191,6 +197,12 @@
     "_app_id_desc": "飞书开放平台 App ID",
     "_app_secret_desc": "飞书开放平台 App Secret",
     "_folder_token_desc": "飞书文件夹 token（可选，为空则创建在根目录）",
+    "collaborator_open_ids": [],
+    "_collaborator_open_ids_desc": "创建多维表格后自动添加为可编辑协作者的 open_id 列表（ou_ 开头）",
+    "collaborator_user_ids": [
+      "ac9fe8ag"
+    ],
+    "_collaborator_user_ids_desc": "创建多维表格后自动添加为可编辑协作者的 user_id 列表（如冯杨: ac9fe8ag）",
     "field_names": {
       "_desc": "飞书多维表格字段名，不同任务可改这里无需改代码。note=创作者模式笔记表，search_note=搜索模式笔记表，comment=评论表",
       "note": {

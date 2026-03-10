@@ -360,28 +360,70 @@ class FeishuBitableClient:
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}"
         self._request("PATCH", url, json={"name": new_name})
 
+    def add_permission_member(
+        self,
+        token: str,
+        member_type: str = "openid",
+        member_id: str = "",
+        perm: str = "edit",
+        node_type: str = "bitable",
+    ) -> bool:
+        """
+        为云文档（多维表格）添加协作者权限。
+        文档: https://open.feishu.cn/document/server-docs/docs/drive-v1/permission-member/create
+
+        Args:
+            token: 多维表格 app_token（即 node_token）
+            member_type: 协作者类型 openid / userid / email 等
+            member_id: 协作者 ID（如 open_id）
+            perm: view=可阅读, edit=可编辑, full_access=可管理
+            node_type: 文档类型 bitable / doc / sheet 等
+
+        Returns:
+            是否成功
+        """
+        if not member_id or not member_id.strip():
+            return False
+        url = f"{self.BASE_URL}/drive/v1/permissions/{token}/members"
+        params = {"type": node_type}
+        body = {
+            "member_type": member_type,
+            "member_id": member_id.strip(),
+            "perm": perm,
+        }
+        try:
+            self._request("POST", url, params=params, json=body)
+            utils.logger.info(
+                f"[FeishuBitable] 已添加协作者: {member_id[:12]}... (perm={perm})"
+            )
+            return True
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 添加协作者失败: {e}")
+            return False
+
     # ==================== 媒体上传 ====================
+
+    _UPLOAD_ALL_MAX = 20 * 1024 * 1024  # upload_all 接口上限 20MB
 
     def upload_media(self, app_token: str, file_path: str,
                      file_name: str = "", parent_type: str = "bitable_file",
                      ) -> str:
         """
-        上传文件到飞书，获取 file_token
-        
-        Args:
-            app_token: 多维表格 token（作为 parent_node）
-            file_path: 本地文件路径
-            file_name: 文件名（为空则从路径提取）
-            parent_type: 父节点类型
-            
-        Returns:
-            file_token
+        上传文件到飞书，获取 file_token。
+        <=20MB 使用 upload_all 一次性上传，>20MB 自动走分片上传。
         """
         import os
         if not file_name:
             file_name = os.path.basename(file_path)
 
         file_size = os.path.getsize(file_path)
+        if file_size <= self._UPLOAD_ALL_MAX:
+            return self._upload_all(app_token, file_path, file_name, file_size, parent_type)
+        return self._upload_multipart(app_token, file_path, file_name, file_size, parent_type)
+
+    def _upload_all(self, app_token: str, file_path: str, file_name: str,
+                    file_size: int, parent_type: str) -> str:
+        """一次性上传（<=20MB）"""
         url = f"{self.BASE_URL}/drive/v1/medias/upload_all"
         headers = {"Authorization": f"Bearer {self._get_tenant_access_token()}"}
 
@@ -398,8 +440,81 @@ class FeishuBitableClient:
         data = resp.json()
         if data.get("code") != 0:
             raise Exception(f"上传文件失败: {data.get('msg')}")
+        return data.get("data", {}).get("file_token", "")
 
-        file_token = data.get("data", {}).get("file_token", "")
+    def _upload_multipart(self, app_token: str, file_path: str, file_name: str,
+                          file_size: int, parent_type: str, max_retries: int = 3) -> str:
+        """分片上传（>20MB），使用 upload_prepare → upload_part → upload_finish"""
+        import zlib
+
+        token = self._get_tenant_access_token()
+        headers_json = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json; charset=utf-8",
+        }
+
+        # 1) upload_prepare
+        prepare_url = f"{self.BASE_URL}/drive/v1/medias/upload_prepare"
+        prepare_body = {
+            "file_name": file_name[:250],
+            "parent_type": parent_type,
+            "parent_node": app_token,
+            "size": file_size,
+        }
+        resp = self._client.post(prepare_url, headers=headers_json, json=prepare_body)
+        rj = resp.json()
+        if rj.get("code") != 0:
+            raise Exception(f"分片预上传失败: {rj.get('msg')}")
+
+        upload_id = rj["data"]["upload_id"]
+        block_size = rj["data"]["block_size"]
+        block_num = rj["data"]["block_num"]
+        utils.logger.info(
+            f"[FeishuBitable] 分片上传: {file_name} "
+            f"({file_size / 1024 / 1024:.1f}MB, {block_num} 分片, 每片 {block_size / 1024 / 1024:.0f}MB)"
+        )
+
+        # 2) upload_part
+        part_url = f"{self.BASE_URL}/drive/v1/medias/upload_part"
+        with open(file_path, "rb") as f:
+            for seq in range(block_num):
+                block_data = f.read(block_size)
+                checksum = str(zlib.adler32(block_data) & 0xFFFFFFFF)
+
+                for retry in range(max_retries):
+                    try:
+                        part_headers = {"Authorization": f"Bearer {token}"}
+                        part_files = {
+                            "upload_id": (None, upload_id),
+                            "seq": (None, str(seq)),
+                            "size": (None, str(len(block_data))),
+                            "checksum": (None, checksum),
+                            "file": ("blob", block_data, "application/octet-stream"),
+                        }
+                        part_resp = self._client.post(
+                            part_url, headers=part_headers, files=part_files,
+                            timeout=120.0,
+                        )
+                        part_rj = part_resp.json()
+                        if part_rj.get("code") != 0:
+                            raise Exception(part_rj.get("msg"))
+                        break
+                    except Exception as e:
+                        if retry >= max_retries - 1:
+                            raise Exception(f"分片 {seq} 上传失败: {e}")
+                        import time as _time
+                        _time.sleep(1.5 ** retry)
+
+        # 3) upload_finish
+        finish_url = f"{self.BASE_URL}/drive/v1/medias/upload_finish"
+        finish_body = {"upload_id": upload_id, "block_num": block_num}
+        resp = self._client.post(finish_url, headers=headers_json, json=finish_body)
+        rj = resp.json()
+        if rj.get("code") != 0:
+            raise Exception(f"分片合并失败: {rj.get('msg')}")
+
+        file_token = rj.get("data", {}).get("file_token", "")
+        utils.logger.info(f"[FeishuBitable] 分片上传完成: {file_name} → {file_token}")
         return file_token
 
     def upload_image_from_url(self, app_token: str, image_url: str,
@@ -719,10 +834,10 @@ def map_note_to_feishu_record(
         n("tag_list", "标签"): note_data.get("tag_list", ""),
         n("link", "链接"): {"link": note_url, "text": note_url} if note_url else "",
         n("time", "发布时间"): time_ms if time_ms else "",
-        n("liked_count", "点赞数"): str(liked),
-        n("collected_count", "收藏数"): str(collected),
-        n("comment_count", "评论数"): str(comment),
-        n("interaction", "互动量"): str(interaction),
+        n("liked_count", "点赞数"): liked,
+        n("collected_count", "收藏数"): collected,
+        n("comment_count", "评论数"): comment,
+        n("interaction", "互动量"): interaction,
         n("hot", "热门"): is_hot,
         n("video_script", "视频脚本"): "",
     }
@@ -776,16 +891,81 @@ def map_search_note_to_feishu_record(
         n("nickname", "作者昵称"): str(note_data.get("nickname", "")),
         n("user_id", "作者ID"): str(note_data.get("user_id", "")),
         n("time", "发布时间"): time_ms if time_ms else "",
-        n("liked_count", "点赞数"): str(liked),
-        n("collected_count", "收藏数"): str(collected),
-        n("comment_count", "评论数"): str(comment_count),
-        n("share_count", "分享数"): str(share_count),
+        n("liked_count", "点赞数"): liked,
+        n("collected_count", "收藏数"): collected,
+        n("comment_count", "评论数"): comment_count,
+        n("share_count", "分享数"): share_count,
         n("tag_list", "标签"): str(note_data.get("tag_list", "")),
         n("ip_location", "IP属地"): str(note_data.get("ip_location", "")),
         n("link", "链接"): {"link": note_url, "text": note_url} if note_url else "",
         n("comment_summary", "评论摘要"): comment_summary,
     }
     return {"fields": fields}
+
+
+# ==================== 评论层级排序（DFS 树形遍历） ====================
+
+def _is_root_comment(c: Dict) -> bool:
+    pid = c.get("parent_comment_id")
+    return pid is None or pid == 0 or pid == "0" or str(pid).strip() == ""
+
+
+def _comment_id(c: Dict) -> str:
+    return str(c.get("id") or c.get("comment_id") or "")
+
+
+def sort_comments_first_level_then_replies(comments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    将评论列表按树形层级排序（DFS）：
+
+        一级评论 A          (_level=1)
+          二级评论 A-1      (_level=2)
+            三级评论 A-1-a  (_level=3)
+            三级评论 A-1-b  (_level=3)
+          二级评论 A-2      (_level=2)
+        一级评论 B          (_level=1)
+          ...
+
+    每条评论会被注入 ``_level`` 字段（int，从 1 开始）。
+    """
+    if not comments:
+        return []
+
+    id_to_comment = {_comment_id(c): c for c in comments if _comment_id(c)}
+
+    children_map: Dict[str, List[Dict[str, Any]]] = {}
+    roots: List[Dict[str, Any]] = []
+    for c in comments:
+        if _is_root_comment(c):
+            roots.append(c)
+        else:
+            pid = str(c.get("parent_comment_id", "")).strip()
+            children_map.setdefault(pid, []).append(c)
+
+    ordered: List[Dict[str, Any]] = []
+    visited: set = set()
+
+    def dfs(node: Dict, level: int):
+        nid = _comment_id(node)
+        if nid in visited:
+            return
+        visited.add(nid)
+        node["_level"] = level
+        ordered.append(node)
+        for child in children_map.get(nid, []):
+            dfs(child, level + 1)
+
+    for r in roots:
+        dfs(r, 1)
+
+    for c in comments:
+        cid = _comment_id(c)
+        if cid not in visited:
+            c["_level"] = c.get("_level", 2)
+            ordered.append(c)
+            visited.add(cid)
+
+    return ordered
 
 
 # ==================== 评论数据映射 ====================
@@ -801,7 +981,9 @@ def map_comment_to_feishu_record(
     n = lambda k, d: _field_name(field_names, k, d)
     parent_id = comment_data.get("parent_comment_id", 0)
     is_sub = parent_id and parent_id != 0 and str(parent_id) != "0"
-    level = "二级评论" if is_sub else "一级评论"
+    level_num = comment_data.get("_level", 2 if is_sub else 1)
+    level_labels = {1: "一级评论", 2: "二级评论", 3: "三级评论"}
+    level = level_labels.get(level_num, f"{level_num}级评论")
 
     time_raw = comment_data.get("create_time", "")
     time_ms = None
@@ -816,18 +998,22 @@ def map_comment_to_feishu_record(
         except (ValueError, TypeError):
             return 0
 
+    indent = "　" * (level_num - 1) + ("└ " if level_num > 1 else "")
+    content = str(comment_data.get("content", ""))
+    display_content = f"{indent}{content}" if level_num > 1 else content
+
     fields: Dict[str, Any] = {
         n("seq", "序号"): "",
         n("note_id", "笔记ID"): str(comment_data.get("note_id", "")),
         n("note_title", "笔记标题"): str(comment_data.get("note_title", "")),
         n("level", "评论级别"): level,
-        n("content", "评论内容"): str(comment_data.get("content", "")),
+        n("content", "评论内容"): display_content,
         n("nickname", "评论者昵称"): str(comment_data.get("nickname", "")),
         n("user_id", "评论者ID"): str(comment_data.get("user_id", "")),
         n("time", "评论时间"): time_ms if time_ms else "",
         n("ip_location", "IP属地"): str(comment_data.get("ip_location", "")),
-        n("like_count", "点赞数"): str(_safe_int(comment_data.get("like_count", 0))),
-        n("sub_comment_count", "二级评论数"): str(_safe_int(comment_data.get("sub_comment_count", 0))),
+        n("like_count", "点赞数"): _safe_int(comment_data.get("like_count", 0)),
+        n("sub_comment_count", "二级评论数"): _safe_int(comment_data.get("sub_comment_count", 0)),
         n("parent_comment_id", "父评论ID"): str(parent_id) if is_sub else "",
         n("pictures", "评论图片"): str(comment_data.get("pictures", "")),
     }

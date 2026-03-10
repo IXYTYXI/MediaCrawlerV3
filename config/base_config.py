@@ -17,7 +17,7 @@ _IS_LINUX = _platform.system() == "Linux"
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = "web_session=040069b8083b3cc3b8d6b3e99b3b4b78bdc37e"
+COOKIES = "web_session=040069b4094aa323f92357dc9a3b4b776edad2"
 
 # ==================== 手动 Session 回退 ====================
 # 当扫码登录失败、shared cookie 过期、浏览器 session 过期时，
@@ -122,6 +122,14 @@ ENABLE_GET_SUB_COMMENTS = False
 
 # 每条一级评论下最多爬取的二级评论数量（0表示无限制）
 CRAWLER_MAX_SUB_COMMENTS_PER_COMMENT = 30
+
+# ==================== 关键词高赞搜索 (search_top) ====================
+# 保留点赞排名前 N 的笔记
+SEARCH_TOP_NOTES_COUNT = 100
+# 对排名前 M 的笔记爬取评论
+SEARCH_TOP_COMMENT_NOTES_COUNT = 20
+# 每篇笔记爬取评论页数（每页约 20 条一级评论）
+SEARCH_TOP_COMMENT_PAGE_COUNT = 2
 
 # 词云相关
 # 是否开启生成评论词云图

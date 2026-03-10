@@ -1032,9 +1032,9 @@ def _upload_note_video_to_feishu(
     if local_path:
         try:
             file_size_mb = os.path.getsize(local_path) / 1024 / 1024
-            if file_size_mb > 25:
+            if file_size_mb > 2048:  # 飞书单附件上限 2GB
                 utils.logger.warning(
-                    f"[视频上传] {note_id}: 视频 {file_size_mb:.1f}MB 超过 25MB 限制，跳过"
+                    f"[视频上传] {note_id}: 视频 {file_size_mb:.1f}MB 超过 2GB 限制，跳过"
                 )
                 return None
             file_token = client.upload_media(app_token, local_path)
@@ -1059,9 +1059,9 @@ def _upload_note_video_to_feishu(
                 utils.logger.warning(f"[视频上传] {note_id} URL下载失败 HTTP {resp.status_code}")
                 return None
 
-            # 检查大小
-            if len(resp.content) > 25 * 1024 * 1024:
-                utils.logger.warning(f"[视频上传] {note_id}: URL视频超过 25MB 限制，跳过")
+            # 检查大小（飞书单附件上限 2GB）
+            if len(resp.content) > 2048 * 1024 * 1024:
+                utils.logger.warning(f"[视频上传] {note_id}: URL视频超过 2GB 限制，跳过")
                 return None
 
             url_hash = hashlib.md5(video_url.encode()).hexdigest()[:12]
@@ -1722,6 +1722,14 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             app_token = result["app_token"]
             bitable_url = result["url"]
             utils.logger.info(f"[BatchCrawler] 创建多维表格: {bitable_name}")
+
+            # 1.1 添加协作者
+            for oid in (feishu_cfg.get("collaborator_open_ids") or []):
+                if oid and str(oid).strip():
+                    client.add_permission_member(token=app_token, member_type="openid", member_id=str(oid).strip(), perm="edit", node_type="bitable")
+            for uid in (feishu_cfg.get("collaborator_user_ids") or []):
+                if uid and str(uid).strip():
+                    client.add_permission_member(token=app_token, member_type="userid", member_id=str(uid).strip(), perm="edit", node_type="bitable")
 
             # 2. 按作者分组（保留原始note数据用于提取note_id）
             from collections import OrderedDict
@@ -2814,6 +2822,12 @@ async def run_batch_crawl(
     config.CRAWLER_TYPE = "creator"
     config.CRAWLER_MAX_NOTES_COUNT = max_notes_per_creator
     config.ENABLE_GET_COMMENTS = enable_comments
+
+    # 批量爬使用独立 browser_data，与 Web 任务（main.py / 仪表盘）隔离，可同时跑
+    config.USER_DATA_DIR = "%s_batch_user_data_dir"
+    utils.logger.info(
+        "[BatchCrawler] 使用独立浏览器目录 browser_data/xhs_batch_user_data_dir，可与 Web 任务同时运行"
+    )
 
     # force_recrawl 模式：强制启用图片下载，无论飞书配置
     if force_recrawl:

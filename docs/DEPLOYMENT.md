@@ -260,7 +260,33 @@ MC_DASHBOARD_PWD="你的密码" nohup conda run --no-capture-output -n uvenv \
 ps aux | grep uvicorn
 ```
 
-### 5.4 命令行直接爬取（不经过 Dashboard）
+### 5.4 更新 Dashboard 前端（修复白屏 / 仅改 index.html 时）
+
+Dashboard 页面由 **API 进程** 直接读 `dashboard/index.html` 提供（`FileResponse`），**无构建步骤**。修改前端后按下面方式之一部署即可。
+
+**方式一：API 与代码在同一台机（推荐）**
+
+1. 确保本机（或部署机）上的 `dashboard/index.html` 已是新版本（git pull / 手动替换）。
+2. 可选：重启 API 以排除缓存或异常进程：
+   ```bash
+   kill $(pgrep -f "uvicorn api.main") 2>/dev/null
+   sleep 2
+   MC_DASHBOARD_PWD="你的密码" nohup conda run --no-capture-output -n uvenv \
+     python -m uvicorn api.main:app --host 0.0.0.0 --port 9001 \
+     > api.log 2>&1 &
+   ```
+3. 浏览器**强刷**（Ctrl+Shift+R 或 Cmd+Shift+R），必要时勾选「Disable cache」再刷新。
+
+**方式二：域名通过 Nginx 反代（如 ai.lab.yc345.tv）**
+
+- 若 Nginx 把 `https://ai.lab.yc345.tv/crawler` 反代到本机 API 的 `/` 或 `/dashboard`，则**前端文件来源仍是跑 API 的那台机器**上的 `dashboard/index.html`。
+- 在那台机器上更新 `dashboard/index.html`（git pull 或 scp 上传），然后按方式一重启 API（可选）并强刷浏览器即可。
+
+**方式三：前端单独静态托管（极少见）**
+
+- 若 Dashboard 是单独部署的静态站（不经过本项目 API），则需把最新的 `dashboard/index.html` 上传到该静态站对应路径（如 `/crawler` 或根路径），并确保该页面里请求的 API 地址（如 `basePath + '/api/dashboard'`）指向当前在线的 API 服务。
+
+### 5.5 命令行直接爬取（不经过 Dashboard）
 
 ```bash
 conda activate uvenv

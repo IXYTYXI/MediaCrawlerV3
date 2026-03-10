@@ -62,6 +62,7 @@ class CrawlerTypeEnum(str, Enum):
     SEARCH = "search"
     DETAIL = "detail"
     CREATOR = "creator"
+    SEARCH_TOP = "search_top"
 
 
 class SaveDataOptionEnum(str, Enum):
@@ -275,6 +276,38 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Comment Configuration",
             ),
         ] = config.CRAWLER_MAX_SUB_COMMENTS_PER_COMMENT,
+        top_notes_count: Annotated[
+            int,
+            typer.Option(
+                "--top_notes_count",
+                help="[search_top] Number of top-liked notes to keep",
+                rich_help_panel="Search Top Configuration",
+            ),
+        ] = getattr(config, "SEARCH_TOP_NOTES_COUNT", 100),
+        top_comment_notes_count: Annotated[
+            int,
+            typer.Option(
+                "--top_comment_notes_count",
+                help="[search_top] Number of top-liked notes to crawl comments for",
+                rich_help_panel="Search Top Configuration",
+            ),
+        ] = getattr(config, "SEARCH_TOP_COMMENT_NOTES_COUNT", 20),
+        comment_page_count: Annotated[
+            int,
+            typer.Option(
+                "--comment_page_count",
+                help="[search_top] Number of comment pages to crawl per note",
+                rich_help_panel="Search Top Configuration",
+            ),
+        ] = getattr(config, "SEARCH_TOP_COMMENT_PAGE_COUNT", 2),
+        feishu_folder: Annotated[
+            str,
+            typer.Option(
+                "--feishu_folder",
+                help="飞书文件夹 token，覆盖配置文件中的默认值（为空则使用配置文件）",
+                rich_help_panel="Feishu Configuration",
+            ),
+        ] = "",
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
@@ -303,6 +336,11 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.COOKIES = cookies
         config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = max_comments_count_singlenotes
         config.CRAWLER_MAX_SUB_COMMENTS_PER_COMMENT = max_sub_comments_per_comment
+        config.SEARCH_TOP_NOTES_COUNT = top_notes_count
+        config.SEARCH_TOP_COMMENT_NOTES_COUNT = top_comment_notes_count
+        config.SEARCH_TOP_COMMENT_PAGE_COUNT = comment_page_count
+        if feishu_folder:
+            config.FEISHU_FOLDER_TOKEN_OVERRIDE = feishu_folder
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:

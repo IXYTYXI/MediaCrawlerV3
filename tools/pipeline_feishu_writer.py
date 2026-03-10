@@ -19,6 +19,7 @@ from tools.feishu_bitable import (
     map_search_note_to_feishu_record,
     map_comment_to_feishu_record,
     build_comment_summary,
+    sort_comments_first_level_then_replies,
     DEFAULT_FIELD_NAMES_NOTE,
     DEFAULT_FIELD_NAMES_SEARCH_NOTE,
     DEFAULT_FIELD_NAMES_COMMENT,
@@ -27,6 +28,7 @@ from tools.feishu_bitable import (
     FIELD_TYPE_DATE,
     FIELD_TYPE_SELECT,
     FIELD_TYPE_URL,
+    FIELD_TYPE_ATTACHMENT,
 )
 
 CONFIG_PATH = os.path.join("config", "anti_crawl_config.json")
@@ -158,6 +160,36 @@ class PipelineFeishuWriter:
         self.app_token = result["app_token"]
         self.bitable_url = result["url"]
         utils.logger.info(f"[Pipeline] 创建多维表格: {self.bitable_name}")
+        self._add_bitable_collaborators(self.app_token)
+
+    def _add_bitable_collaborators(self, app_token: str) -> None:
+        """创建表格后，将配置中的协作者加入多维表格，便于查看/编辑"""
+        open_ids = self._feishu_cfg.get("collaborator_open_ids") or []
+        if not isinstance(open_ids, list):
+            open_ids = [open_ids] if open_ids else []
+        for open_id in open_ids:
+            if not open_id or not str(open_id).strip():
+                continue
+            self.client.add_permission_member(
+                token=app_token,
+                member_type="openid",
+                member_id=str(open_id).strip(),
+                perm="edit",
+                node_type="bitable",
+            )
+        user_ids = self._feishu_cfg.get("collaborator_user_ids") or []
+        if not isinstance(user_ids, list):
+            user_ids = [user_ids] if user_ids else []
+        for uid in user_ids:
+            if not uid or not str(uid).strip():
+                continue
+            self.client.add_permission_member(
+                token=app_token,
+                member_type="userid",
+                member_id=str(uid).strip(),
+                perm="edit",
+                node_type="bitable",
+            )
 
     def _resolve_field_type(self, name: str) -> int:
         if name in self._url_fields:
@@ -290,10 +322,10 @@ class PipelineFeishuWriter:
             update_records.append({
                 "record_id": record_id,
                 "fields": {
-                    "点赞数": str(liked),
-                    "收藏数": str(collected),
-                    "评论数": str(comment),
-                    "互动量": str(interaction),
+                    "点赞数": liked,
+                    "收藏数": collected,
+                    "评论数": comment,
+                    "互动量": interaction,
                     "热门": is_hot,
                 },
             })
@@ -511,6 +543,7 @@ class PipelineFeishuWriter:
         FIELD_TYPE_TEXT, FIELD_TYPE_URL, FIELD_TYPE_TEXT,
     ]
     _COMMENT_TYPES = [
+        FIELD_TYPE_TEXT,  # 序号
         FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_SELECT, FIELD_TYPE_TEXT,
         FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_DATE, FIELD_TYPE_TEXT,
         FIELD_TYPE_NUMBER, FIELD_TYPE_NUMBER, FIELD_TYPE_TEXT, FIELD_TYPE_TEXT,
@@ -522,6 +555,7 @@ class PipelineFeishuWriter:
         "ip_location", "link", "comment_summary",
     ]
     _COMMENT_KEY_ORDER = [
+        "seq",  # 序号，建表时必须有该列，插入时才会存在
         "note_id", "note_title", "level", "content", "nickname", "user_id", "time",
         "ip_location", "like_count", "sub_comment_count", "parent_comment_id", "pictures",
     ]
@@ -546,15 +580,17 @@ class PipelineFeishuWriter:
         comments_by_note: Dict[str, List[Dict]],
         note_table_name: str = "笔记数据",
         comment_table_name: str = "评论数据",
+        overview_table_name: str = "数据概览",
     ):
         """
-        搜索模式写入：笔记表 + 评论表
+        搜索模式写入：笔记表 + 评论表 + 数据概览表
 
         Args:
             notes: 笔记数据列表
             comments_by_note: {note_id: [comment_dict, ...]} 评论按笔记分组
             note_table_name: 笔记数据表名称
             comment_table_name: 评论数据表名称
+            overview_table_name: 数据概览表名称
         """
         if not notes:
             utils.logger.info("[Pipeline] 无笔记数据，跳过写入")
@@ -565,6 +601,22 @@ class PipelineFeishuWriter:
         # --- 构建笔记记录（含评论摘要）---
         search_note_fields = self._get_search_note_fields()
         note_seq_name = self._fn_search_note.get("seq", "序号")
+
+        # 附加图片字段（上传模式下）
+        max_images = 0
+        if self.is_image_mode:
+            from tools.batch_crawler import _parse_image_urls
+            for note in notes:
+                cnt = len(_parse_image_urls(note.get("image_list", "")))
+                if cnt > max_images:
+                    max_images = cnt
+        search_image_fields = []
+        if self.is_image_mode and max_images > 0:
+            search_image_fields = [
+                {"field_name": f"图片{i}", "type": FIELD_TYPE_ATTACHMENT}
+                for i in range(1, max_images + 1)
+            ]
+
         note_records: List[Dict] = []
         for note in notes:
             note_id = note.get("note_id", "")
@@ -573,15 +625,30 @@ class PipelineFeishuWriter:
             record = map_search_note_to_feishu_record(note, summary, field_names=self._fn_search_note)
             note_records.append(record)
 
-        # --- 构建评论记录 ---
+        # 上传图片/视频到飞书附件
+        if self.is_image_mode and notes:
+            self._upload_search_images(notes, note_records)
+            self._upload_search_videos(notes, note_records, search_note_fields)
+
+        # --- 构建评论记录（按 note_id 注入笔记标题，便于区分被评论的作品）---
+        note_id_to_title = {
+            n.get("note_id", ""): (n.get("title") or n.get("desc") or "")[:200]
+            for n in notes
+        }
         comment_fields = self._get_comment_fields()
         comment_seq_name = self._fn_comment.get("seq", "序号")
         comment_records: List[Dict] = []
         for note_id, clist in comments_by_note.items():
-            for c in clist:
-                comment_records.append(map_comment_to_feishu_record(c, field_names=self._fn_comment))
+            note_title = note_id_to_title.get(note_id, "")
+            ordered = sort_comments_first_level_then_replies(clist)
+            for c in ordered:
+                comment_with_title = {**c, "note_title": c.get("note_title") or note_title}
+                comment_records.append(
+                    map_comment_to_feishu_record(comment_with_title, field_names=self._fn_comment)
+                )
 
         # --- 创建/复用笔记表 ---
+        all_note_fields = search_note_fields + search_image_fields
         note_table_id = self._table_name_to_id.get(note_table_name)
         if note_table_id:
             utils.logger.info(
@@ -597,7 +664,7 @@ class PipelineFeishuWriter:
                     )
                 except Exception:
                     pass
-                for fd in search_note_fields:
+                for fd in all_note_fields:
                     try:
                         self.client.add_field(
                             self.app_token, note_table_id,
@@ -609,10 +676,10 @@ class PipelineFeishuWriter:
             else:
                 note_table_id = self.client.create_table(
                     self.app_token, note_table_name,
-                    search_note_fields,
+                    all_note_fields,
                 )
 
-            note_keep = {note_seq_name} | {fd["field_name"] for fd in search_note_fields}
+            note_keep = {note_seq_name} | {fd["field_name"] for fd in all_note_fields}
             self.client.cleanup_default_fields_and_records(
                 self.app_token, note_table_id, note_keep,
             )
@@ -659,7 +726,205 @@ class PipelineFeishuWriter:
                 f"[Pipeline] 评论表写入: {comment_inserted}/{len(comment_records)} 条"
             )
 
+        # --- 数据概览表（按互动量排名） ---
+        self._write_search_overview(
+            notes, comments_by_note, overview_table_name,
+        )
+
         self._save_bitable_to_config()
+
+    # ==================== 搜索模式: 图片/视频上传 ====================
+
+    def _upload_search_images(
+        self, notes: List[Dict], records: List[Dict]
+    ):
+        """搜索模式: 上传笔记图片到飞书附件字段"""
+        from tools.batch_crawler import _parse_image_urls, _upload_note_images_to_feishu
+
+        total_uploaded = 0
+        total_failed = 0
+        for note, record in zip(notes, records):
+            note_id = note.get("note_id", "")
+            if not note_id:
+                continue
+            image_urls = _parse_image_urls(note.get("image_list", ""))
+            if not image_urls:
+                continue
+            image_tokens = _upload_note_images_to_feishu(
+                self.client, self.app_token, note_id,
+                image_urls, self._image_threads,
+            )
+            for fn, att in image_tokens.items():
+                record["fields"][fn] = att
+                total_uploaded += 1
+            expected = len(image_urls)
+            uploaded = len(image_tokens)
+            if uploaded < expected:
+                total_failed += expected - uploaded
+
+        # 清理未成功上传的纯文本 URL 占位（飞书附件字段不接受字符串）
+        for record in records:
+            for key in list(record.get("fields", {}).keys()):
+                if key.startswith("图片") and isinstance(record["fields"][key], str):
+                    del record["fields"][key]
+
+        if total_uploaded > 0 or total_failed > 0:
+            utils.logger.info(
+                f"[Pipeline] 搜索图片上传: {total_uploaded} 张成功, {total_failed} 张失败"
+            )
+
+    def _upload_search_videos(
+        self, notes: List[Dict], records: List[Dict],
+        search_note_fields: List[Dict],
+    ):
+        """搜索模式: 上传笔记视频到飞书附件字段"""
+        from tools.batch_crawler import _upload_note_video_to_feishu
+
+        has_video = any(
+            n.get("type") == "video" or n.get("video_url")
+            for n in notes
+        )
+        if not has_video:
+            return
+
+        video_field_name = "视频附件"
+        # 确保字段定义中包含视频附件
+        if not any(fd["field_name"] == video_field_name for fd in search_note_fields):
+            search_note_fields.append(
+                {"field_name": video_field_name, "type": FIELD_TYPE_ATTACHMENT}
+            )
+
+        total_uploaded = 0
+        total_skipped = 0
+        for note, record in zip(notes, records):
+            note_id = note.get("note_id", "")
+            video_url = note.get("video_url", "")
+            note_type = note.get("type", "")
+            if note_type != "video" and not video_url:
+                continue
+            if not note_id:
+                continue
+            attachment = _upload_note_video_to_feishu(
+                self.client, self.app_token, note_id, video_url
+            )
+            if attachment:
+                record["fields"][video_field_name] = attachment
+                total_uploaded += 1
+            else:
+                total_skipped += 1
+            time.sleep(0.15)  # 轻微节流，避免飞书 API 限流
+
+        # 清理未成功上传的纯文本占位
+        for record in records:
+            flds = record.get("fields", {})
+            if video_field_name in flds and isinstance(flds[video_field_name], str):
+                del flds[video_field_name]
+
+        if total_uploaded > 0 or total_skipped > 0:
+            utils.logger.info(
+                f"[Pipeline] 搜索视频上传: {total_uploaded} 个成功, {total_skipped} 个跳过"
+            )
+
+    # ==================== 搜索模式: 数据概览表 ====================
+
+    def _write_search_overview(
+        self,
+        notes: List[Dict],
+        comments_by_note: Dict[str, List[Dict]],
+        table_name: str,
+    ):
+        """按互动量排名生成数据概览表，含统计摘要行"""
+
+        def _safe_int(v):
+            if v is None or v == "":
+                return 0
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                return 0
+
+        # 计算互动量并排序
+        enriched = []
+        for n in notes:
+            liked = _safe_int(n.get("liked_count", 0))
+            collected = _safe_int(n.get("collected_count", 0))
+            comment_cnt = _safe_int(n.get("comment_count", 0))
+            share_cnt = _safe_int(n.get("share_count", 0))
+            interaction = liked + collected + comment_cnt + share_cnt
+            enriched.append({**n, "_interaction": interaction})
+        enriched.sort(key=lambda x: x["_interaction"], reverse=True)
+
+        # 统计摘要
+        total_notes = len(notes)
+        total_comments = sum(len(v) for v in comments_by_note.values())
+        all_interactions = [e["_interaction"] for e in enriched]
+        avg_interaction = sum(all_interactions) / total_notes if total_notes else 0
+        max_liked = max((_safe_int(n.get("liked_count", 0)) for n in notes), default=0)
+        max_collected = max((_safe_int(n.get("collected_count", 0)) for n in notes), default=0)
+
+        # 概览表字段
+        overview_fields = [
+            {"field_name": "排名", "type": FIELD_TYPE_NUMBER},
+            {"field_name": "标题", "type": FIELD_TYPE_TEXT},
+            {"field_name": "作者昵称", "type": FIELD_TYPE_TEXT},
+            {"field_name": "内容类型", "type": FIELD_TYPE_SELECT},
+            {"field_name": "点赞数", "type": FIELD_TYPE_NUMBER},
+            {"field_name": "收藏数", "type": FIELD_TYPE_NUMBER},
+            {"field_name": "评论数", "type": FIELD_TYPE_NUMBER},
+            {"field_name": "分享数", "type": FIELD_TYPE_NUMBER},
+            {"field_name": "互动总量", "type": FIELD_TYPE_NUMBER},
+            {"field_name": "链接", "type": FIELD_TYPE_URL},
+            {"field_name": "搜索关键词", "type": FIELD_TYPE_TEXT},
+        ]
+
+        overview_table_id = self.client.create_table(
+            self.app_token, table_name, overview_fields,
+        )
+        overview_keep = {"序号"} | {fd["field_name"] for fd in overview_fields}
+        self.client.cleanup_default_fields_and_records(
+            self.app_token, overview_table_id, overview_keep,
+        )
+        self._table_name_to_id[table_name] = overview_table_id
+
+        # 摘要行（排名=0 表示这是统计行）
+        summary_record = {"fields": {
+            "序号": "📊",
+            "排名": 0,
+            "标题": f"共 {total_notes} 篇笔记, {total_comments} 条评论",
+            "作者昵称": f"平均互动: {avg_interaction:.0f}",
+            "点赞数": max_liked,
+            "收藏数": max_collected,
+            "评论数": total_comments,
+            "互动总量": sum(all_interactions),
+            "搜索关键词": enriched[0].get("source_keyword", "") if enriched else "",
+        }}
+
+        # 排名行
+        ranking_records = [summary_record]
+        for rank, n in enumerate(enriched, 1):
+            note_url = n.get("note_url", "")
+            note_type = n.get("type", "")
+            ranking_records.append({"fields": {
+                "序号": str(rank),
+                "排名": rank,
+                "标题": str(n.get("title", "") or n.get("desc", ""))[:200],
+                "作者昵称": str(n.get("nickname", "")),
+                "内容类型": "视频" if note_type == "video" else "图片",
+                "点赞数": _safe_int(n.get("liked_count", 0)),
+                "收藏数": _safe_int(n.get("collected_count", 0)),
+                "评论数": _safe_int(n.get("comment_count", 0)),
+                "分享数": _safe_int(n.get("share_count", 0)),
+                "互动总量": n["_interaction"],
+                "链接": {"link": note_url, "text": note_url} if note_url else "",
+                "搜索关键词": str(n.get("source_keyword", "")),
+            }})
+
+        inserted = self.client.batch_insert_records(
+            self.app_token, overview_table_id, ranking_records,
+        )
+        utils.logger.info(
+            f"[Pipeline] 数据概览表写入: {inserted} 条 (含统计摘要 + {len(enriched)} 条排名)"
+        )
 
     # ==================== 图片/视频上传 ====================
 
@@ -722,7 +987,7 @@ class PipelineFeishuWriter:
                 if "视频附件" in record["fields"]:
                     del record["fields"]["视频附件"]
                 self.total_videos_skipped += 1
-            time.sleep(0.5)
+            time.sleep(0.15)  # 轻微节流，避免飞书 API 限流
 
         for record in records:
             flds = record.get("fields", {})

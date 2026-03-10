@@ -67,6 +67,10 @@ class TaskConfig(BaseModel):
     cookies: str = ""
     headless: bool = True
     notes: str = ""
+    top_notes_count: int = 100
+    top_comment_notes_count: int = 20
+    comment_page_count: int = 2
+    feishu_folder_token: str = ""
 
 
 class TaskConfigUpdate(BaseModel):
@@ -85,6 +89,10 @@ class TaskConfigUpdate(BaseModel):
     cookies: Optional[str] = None
     headless: Optional[bool] = None
     notes: Optional[str] = None
+    top_notes_count: Optional[int] = None
+    top_comment_notes_count: Optional[int] = None
+    comment_page_count: Optional[int] = None
+    feishu_folder_token: Optional[str] = None
 
 # ==================== 辅助函数 ====================
 
@@ -140,10 +148,18 @@ def _build_cmd(data: dict) -> List[str]:
 
     ct = data.get("crawler_type", "search")
     # 搜索模式：有关键词则传入，否则不传，由 main 从 config/search_keyword_pool.json 加载
-    if ct == "search" and data.get("keywords"):
+    if ct in ("search", "search_top") and data.get("keywords"):
         cmd.extend(["--keywords", data["keywords"]])
     elif ct == "creator" and data.get("creator_urls"):
         cmd.extend(["--creator_id", ",".join(data["creator_urls"])])
+
+    if ct == "search_top":
+        if data.get("top_notes_count"):
+            cmd.extend(["--top_notes_count", str(data["top_notes_count"])])
+        if data.get("top_comment_notes_count"):
+            cmd.extend(["--top_comment_notes_count", str(data["top_comment_notes_count"])])
+        if data.get("comment_page_count"):
+            cmd.extend(["--comment_page_count", str(data["comment_page_count"])])
 
     cmd.extend(["--get_comment", "true" if data.get("enable_comments") else "false"])
     cmd.extend(["--get_sub_comment", "true" if data.get("enable_sub_comments") else "false"])
@@ -159,6 +175,10 @@ def _build_cmd(data: dict) -> List[str]:
     #     cmd.extend(["--cookies", data["cookies"]])
 
     cmd.extend(["--headless", "true" if data.get("headless", True) else "false"])
+
+    if data.get("feishu_folder_token"):
+        cmd.extend(["--feishu_folder", data["feishu_folder_token"]])
+
     return cmd
 
 

@@ -333,6 +333,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
             if config.CRAWLER_TYPE == "search":
                 # Search for notes and retrieve their comment information.
                 await self.search()
+            elif config.CRAWLER_TYPE == "search_top":
+                await self.search_top()
             elif config.CRAWLER_TYPE == "detail":
                 # Get the information and comments of the specified post
                 await self.get_specified_notes()
@@ -406,6 +408,153 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 except DataFetchError:
                     utils.logger.error("[XiaoHongShuCrawler.search] Get note detail error")
                     break
+
+    # ==================== 关键词高赞搜索 ====================
+
+    async def search_top(self) -> None:
+        """
+        关键词高赞搜索：
+        1. 按热度搜索，收集 top_notes_count 条笔记详情（含赞数）
+        2. 全部保存，按点赞数降序排序
+        3. 对点赞前 top_comment_notes_count 篇爬取有限页评论
+        """
+        fetch_count = getattr(config, "SEARCH_TOP_NOTES_COUNT", 100)
+        comment_top = getattr(config, "SEARCH_TOP_COMMENT_NOTES_COUNT", 20)
+        comment_pages = getattr(config, "SEARCH_TOP_COMMENT_PAGE_COUNT", 2)
+        comment_max_count = comment_pages * 20
+        xhs_page_size = 20
+
+        est_pages = (fetch_count + xhs_page_size - 1) // xhs_page_size
+        utils.logger.info(
+            f"[search_top] 开始关键词高赞搜索 | "
+            f"搜索{fetch_count}条(约{est_pages}页) → 按赞排序 → "
+            f"前{comment_top}篇爬{comment_pages}页评论"
+        )
+
+        for keyword in config.KEYWORDS.split(","):
+            keyword = keyword.strip()
+            if not keyword:
+                continue
+            source_keyword_var.set(keyword)
+            utils.logger.info(f"[search_top] 关键词: {keyword}")
+
+            # ---- Phase 1: 按热度搜索，逐页收集笔记详情 ----
+            collected: List[Dict] = []
+            page = 1
+            search_id = get_search_id()
+
+            while len(collected) < fetch_count:
+                try:
+                    utils.logger.info(
+                        f"[search_top] 搜索第 {page} 页, 已收集 {len(collected)}/{fetch_count}"
+                    )
+                    notes_res = await self.xhs_client.get_note_by_keyword(
+                        keyword=keyword,
+                        search_id=search_id,
+                        page=page,
+                        sort=SearchSortType.MOST_POPULAR,
+                    )
+                    if not notes_res or not notes_res.get("has_more", False):
+                        utils.logger.info("[search_top] 搜索结果已到底")
+                        break
+
+                    items = [
+                        item for item in notes_res.get("items", [])
+                        if item.get("model_type") not in ("rec_query", "hot_query")
+                    ]
+                    if not items:
+                        break
+
+                    semaphore = asyncio.Semaphore(config.MAX_CONCURRENCY_NUM)
+                    tasks = [
+                        self.get_note_detail_async_task(
+                            note_id=item.get("id"),
+                            xsec_source=item.get("xsec_source"),
+                            xsec_token=item.get("xsec_token"),
+                            semaphore=semaphore,
+                        )
+                        for item in items
+                    ]
+                    details = await asyncio.gather(*tasks)
+                    for detail in details:
+                        if detail:
+                            collected.append(detail)
+
+                    page += 1
+                    sleep_seconds = self._get_sleep_seconds()
+                    await asyncio.sleep(sleep_seconds)
+
+                except SessionExpiredError:
+                    utils.logger.error("[search_top] 登录已过期")
+                    raise
+                except DataFetchError:
+                    utils.logger.error("[search_top] 获取笔记详情出错，停止翻页")
+                    break
+
+            utils.logger.info(
+                f"[search_top] 关键词「{keyword}」搜索完成，共 {len(collected)} 条笔记"
+            )
+            if not collected:
+                continue
+
+            # ---- Phase 2: 按点赞数排序，全部保存 ----
+            def _liked_count(note: Dict) -> int:
+                interact = note.get("interact_info", {})
+                raw = interact.get("liked_count", 0)
+                try:
+                    val = str(raw).replace("+", "").replace("万", "0000")
+                    return int(float(val))
+                except (ValueError, TypeError):
+                    return 0
+
+            collected.sort(key=_liked_count, reverse=True)
+
+            utils.logger.info(
+                f"[search_top] 按赞排序完成 | "
+                f"第1名: {_liked_count(collected[0])}赞, "
+                f"末位: {_liked_count(collected[-1])}赞"
+            )
+
+            for note_detail in collected:
+                await xhs_store.update_xhs_note(note_detail)
+                await self.get_notice_media(note_detail)
+
+            # ---- Phase 3: 对点赞前 M 篇笔记爬评论 ----
+            comment_notes = collected[:comment_top]
+            utils.logger.info(
+                f"[search_top] 开始爬取点赞前 {len(comment_notes)} 篇笔记的评论 "
+                f"(每篇 {comment_pages} 页, 约 {comment_max_count} 条)"
+            )
+            crawl_interval = self._get_sleep_seconds(for_comments=True)
+
+            for idx, note_detail in enumerate(comment_notes, 1):
+                note_id = note_detail.get("note_id", "")
+                xsec_token = note_detail.get("xsec_token", "")
+                if not note_id:
+                    continue
+                utils.logger.info(
+                    f"[search_top] [{idx}/{len(comment_notes)}] "
+                    f"爬评论 note_id={note_id} ({_liked_count(note_detail)}赞)"
+                )
+                try:
+                    await self.xhs_client.get_note_all_comments(
+                        note_id=note_id,
+                        xsec_token=xsec_token,
+                        crawl_interval=crawl_interval,
+                        callback=xhs_store.batch_update_xhs_note_comments,
+                        max_count=comment_max_count,
+                    )
+                    await asyncio.sleep(crawl_interval)
+                except Exception as e:
+                    utils.logger.warning(
+                        f"[search_top] 评论获取失败 note_id={note_id}: {e}"
+                    )
+
+            utils.logger.info(
+                f"[search_top] 关键词「{keyword}」全部完成 — "
+                f"{len(collected)} 条笔记已保存, "
+                f"前 {len(comment_notes)} 篇高赞笔记评论已爬取"
+            )
 
     async def get_creators_and_notes(self) -> None:
         """
