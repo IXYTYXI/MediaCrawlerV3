@@ -64,6 +64,10 @@ class XiaoHongShuCrawler(AbstractCrawler):
         self.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+        self._session_pool = None
+        self._current_session_id: Optional[str] = None
+        self._page_since_rotate = 0
+        self._rotate_every_pages = 0
 
     @staticmethod
     def _load_shared_cookie() -> str:
@@ -100,6 +104,86 @@ class XiaoHongShuCrawler(AbstractCrawler):
         except Exception as e:
             utils.logger.warning(f"[XiaoHongShuCrawler] 读取 manual_web_session.txt 失败: {e}")
         return ""
+
+    def _init_session_pool(self) -> None:
+        """初始化 session 池（搜索模式下的 session 轮换）"""
+        try:
+            cfg_path = os.path.join("config", "anti_crawl_config.json")
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                pool_cfg = json.load(f).get("session_pool", {})
+            if not pool_cfg.get("enabled"):
+                return
+            self._rotate_every_pages = pool_cfg.get("rotate_every_pages", 3)
+            if self._rotate_every_pages <= 0:
+                return
+            from tools.session_pool import SessionPool
+            pool = SessionPool()
+            stats = pool.stats()
+            if stats.get("active", 0) < 1:
+                utils.logger.info("[SessionPool] 池内无可用 session，不启用轮换")
+                return
+            self._session_pool = pool
+            # 取一个初始 session
+            first = pool.get_next()
+            if first:
+                self._current_session_id = first.id
+                utils.logger.info(
+                    f"[SessionPool] 搜索模式已启用 | "
+                    f"{stats.get('active', 0)} 个可用 session | "
+                    f"每 {self._rotate_every_pages} 页轮换 | "
+                    f"初始: {first.label or first.id} ({first.web_session[:12]}...)"
+                )
+        except Exception as e:
+            utils.logger.debug(f"[SessionPool] 初始化跳过: {e}")
+            self._session_pool = None
+
+    async def _rotate_session(self, context: str = "") -> bool:
+        """
+        轮换 session：从池中取下一个，注入浏览器和 client。
+        成功返回 True。
+        """
+        if not self._session_pool:
+            return False
+        next_s = self._session_pool.get_next()
+        if not next_s:
+            utils.logger.warning("[SessionPool] 无可用 session，跳过轮换")
+            return False
+        self._current_session_id = next_s.id
+        try:
+            await self.browser_context.add_cookies([{
+                "name": "web_session",
+                "value": next_s.web_session,
+                "domain": ".xiaohongshu.com",
+                "path": "/",
+            }])
+            await self.xhs_client.update_cookies(browser_context=self.browser_context)
+            utils.logger.info(
+                f"[SessionPool] {context}切换 session → "
+                f"{next_s.label or next_s.id} ({next_s.web_session[:12]}...)"
+            )
+            self._page_since_rotate = 0
+            return True
+        except Exception as e:
+            utils.logger.warning(f"[SessionPool] 切换失败: {e}")
+            return False
+
+    async def _maybe_rotate_session(self, context: str = "") -> None:
+        """每爬 N 页自动检查是否需要轮换"""
+        if not self._session_pool or self._rotate_every_pages <= 0:
+            return
+        self._page_since_rotate += 1
+        if self._page_since_rotate >= self._rotate_every_pages:
+            await self._rotate_session(context)
+
+    def _mark_session_success(self) -> None:
+        if self._session_pool and self._current_session_id:
+            self._session_pool.mark_success(self._current_session_id)
+
+    async def _handle_session_failure(self, context: str = "") -> None:
+        """session 失败时标记并尝试切换"""
+        if self._session_pool and self._current_session_id:
+            self._session_pool.mark_failed(self._current_session_id)
+            await self._rotate_session(f"{context}失效自动")
 
     def _get_sleep_seconds(self, *, for_comments: bool = False) -> float:
         """使用高级随机分布生成等待时间，含限流冷却期加成"""
@@ -349,6 +433,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
     async def search(self) -> None:
         """Search for notes and retrieve their comment information."""
         utils.logger.info("[XiaoHongShuCrawler.search] Begin search Xiaohongshu keywords")
+        self._init_session_pool()
         xhs_limit_count = 20  # Xiaohongshu limit page fixed value
         if config.CRAWLER_MAX_NOTES_COUNT < xhs_limit_count:
             config.CRAWLER_MAX_NOTES_COUNT = xhs_limit_count
@@ -397,16 +482,20 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     page += 1
                     utils.logger.info(f"[XiaoHongShuCrawler.search] Note details: {note_details}")
                     await self.batch_get_note_comments(note_ids, xsec_tokens)
+                    self._mark_session_success()
 
-                    # Sleep after each page navigation
+                    await self._maybe_rotate_session(f"[search] 第{page-1}页后 ")
+
                     sleep_seconds = self._get_sleep_seconds()
                     await asyncio.sleep(sleep_seconds)
                     utils.logger.info(f"[XiaoHongShuCrawler.search] Sleeping for {sleep_seconds} seconds after page {page-1}")
                 except SessionExpiredError:
-                    utils.logger.error("[XiaoHongShuCrawler.search] 登录已过期，请重新登录后重试")
+                    utils.logger.error("[XiaoHongShuCrawler.search] 登录已过期")
+                    await self._handle_session_failure("[search] ")
                     raise
                 except DataFetchError:
                     utils.logger.error("[XiaoHongShuCrawler.search] Get note detail error")
+                    await self._handle_session_failure("[search] ")
                     break
 
     # ==================== 关键词高赞搜索 ====================
@@ -418,6 +507,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         2. 全部保存，按点赞数降序排序
         3. 对点赞前 top_comment_notes_count 篇爬取有限页评论
         """
+        self._init_session_pool()
         fetch_count = getattr(config, "SEARCH_TOP_NOTES_COUNT", 100)
         comment_top = getattr(config, "SEARCH_TOP_COMMENT_NOTES_COUNT", 20)
         comment_pages = getattr(config, "SEARCH_TOP_COMMENT_PAGE_COUNT", 2)
@@ -480,12 +570,15 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         if detail:
                             collected.append(detail)
 
+                    self._mark_session_success()
                     page += 1
+                    await self._maybe_rotate_session(f"[search_top] 第{page-1}页后 ")
                     sleep_seconds = self._get_sleep_seconds()
                     await asyncio.sleep(sleep_seconds)
 
                 except SessionExpiredError:
                     utils.logger.error("[search_top] 登录已过期")
+                    await self._handle_session_failure("[search_top] ")
                     raise
                 except DataFetchError:
                     utils.logger.error("[search_top] 获取笔记详情出错，停止翻页")
@@ -544,11 +637,21 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         callback=xhs_store.batch_update_xhs_note_comments,
                         max_count=comment_max_count,
                     )
+                    self._mark_session_success()
                     await asyncio.sleep(crawl_interval)
+                except SessionExpiredError:
+                    utils.logger.error(f"[search_top] 评论爬取登录过期 note_id={note_id}")
+                    await self._handle_session_failure("[search_top-comment] ")
+                    raise
                 except Exception as e:
                     utils.logger.warning(
                         f"[search_top] 评论获取失败 note_id={note_id}: {e}"
                     )
+                    await self._handle_session_failure("[search_top-comment] ")
+
+                await self._maybe_rotate_session(
+                    f"[search_top] 评论[{idx}/{len(comment_notes)}]后 "
+                )
 
             utils.logger.info(
                 f"[search_top] 关键词「{keyword}」全部完成 — "
