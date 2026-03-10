@@ -880,15 +880,21 @@ class PipelineFeishuWriter:
         overview_table_id = self.client.create_table(
             self.app_token, table_name, overview_fields,
         )
-        overview_keep = {"序号"} | {fd["field_name"] for fd in overview_fields}
-        self.client.cleanup_default_fields_and_records(
-            self.app_token, overview_table_id, overview_keep,
-        )
+        overview_keep = {fd["field_name"] for fd in overview_fields}
+        # 清理默认空记录和多余字段，但不依赖主字段改名
+        try:
+            records = self.client.list_records(self.app_token, overview_table_id)
+            if records:
+                self.client.batch_delete_records(
+                    self.app_token, overview_table_id,
+                    [r["record_id"] for r in records],
+                )
+        except Exception:
+            pass
         self._table_name_to_id[table_name] = overview_table_id
 
         # 摘要行（排名=0 表示这是统计行）
         summary_record = {"fields": {
-            "序号": "📊",
             "排名": 0,
             "标题": f"共 {total_notes} 篇笔记, {total_comments} 条评论",
             "作者昵称": f"平均互动: {avg_interaction:.0f}",
@@ -905,7 +911,6 @@ class PipelineFeishuWriter:
             note_url = n.get("note_url", "")
             note_type = n.get("type", "")
             ranking_records.append({"fields": {
-                "序号": str(rank),
                 "排名": rank,
                 "标题": str(n.get("title", "") or n.get("desc", ""))[:200],
                 "作者昵称": str(n.get("nickname", "")),
