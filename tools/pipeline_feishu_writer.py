@@ -527,6 +527,7 @@ class PipelineFeishuWriter:
         for i, f in enumerate(self._write_futures, 1):
             try:
                 f.result()
+                utils.logger.info(f"[Pipeline] 飞书写入进度: {i}/{total} 已完成")
             except Exception as e:
                 utils.logger.error(f"[Pipeline] 写入任务 {i} 异常: {e}")
         self._write_futures.clear()
