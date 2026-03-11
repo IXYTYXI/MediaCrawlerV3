@@ -111,7 +111,12 @@ class _GracefulShutdown:
             except Exception as e:
                 utils.logger.error(f"[GracefulShutdown] 保存部分数据失败: {e}")
         else:
-            utils.logger.info("[GracefulShutdown] 当前没有正在爬取的作者，无需保存")
+            utils.logger.info(
+                "[GracefulShutdown] 当前没有正在爬取的作者，无需保存 "
+                f"(user_id={'有' if cls.current_user_id else '空'}, "
+                f"session_ts={'有' if cls.current_session_ts else '空'}, "
+                f"task_dir={'有' if cls.current_task_dir else '空'})"
+            )
 
         utils.logger.info("[GracefulShutdown] 退出完成")
         utils.logger.info("=" * 60)
@@ -1518,8 +1523,8 @@ def _upload_note_images_to_feishu(
         except Exception as e:
             utils.logger.warning(f"[图片上传] {field_name} 失败: {e}")
         finally:
-            # 飞书上传API有限流(~100次/分)，每次上传后短暂等待
-            time.sleep(0.3)
+            # 飞书上传API有限流，每次上传后等待 2.2 秒
+            time.sleep(2.2)
         return field_name, None
     
     # 多线程上传
@@ -2789,6 +2794,7 @@ async def run_batch_crawl(
         task_id = datetime.now().strftime("task_%Y%m%d")
 
     utils.logger.info(f"[BatchCrawler] 任务ID: {task_id}")
+    utils.logger.info("[BatchCrawler] 模式: 创作者批量爬取（按 Excel 作者列表），非关键词搜索")
 
     # 初始化进度管理（按任务ID区分）
     progress_file = f"data/batch_progress_{task_id}.json"
@@ -2976,7 +2982,7 @@ async def run_batch_crawl(
 
         # 每作者开始时恢复日期停止配置（增量模式会在下面覆盖）
         config.INCREMENTAL_MODE = False
-        if crawl_mode == "date_range" and date_start:
+        if crawl_mode in ("date_range", "incremental") and date_start:
             config.DATE_EARLY_STOP_ENABLED = True
             config.CRAWL_DATE_START = date_start
         else:
@@ -3972,6 +3978,22 @@ async def run_batch_crawl(
             )
     except Exception as _ne:
         utils.logger.warning(f"[Notify] 发送通知失败: {_ne}")
+
+    # 10. 自动导出进度快照（Checkpoint）
+    try:
+        from tools.checkpoint_manager import export_checkpoint
+        _cp_note = (
+            f"自动快照: {success}/{total} 完成, "
+            f"模式={crawl_mode}, 耗时={_batch_elapsed}s"
+        )
+        _cp_path = export_checkpoint(
+            task_id=task_id,
+            feishu_url=_final_bitable_url,
+            note=_cp_note,
+        )
+        utils.logger.info(f"[Checkpoint] 进度快照已保存: {_cp_path}")
+    except Exception as _ce:
+        utils.logger.warning(f"[Checkpoint] 快照导出失败: {_ce}")
 
 
 # ==================== 仅导出模式 ====================

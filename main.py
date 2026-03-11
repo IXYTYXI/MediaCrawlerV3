@@ -205,15 +205,14 @@ async def main() -> None:
     reset_statistics(platform=config.PLATFORM)
 
     crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
+    crawl_exit_code = 0
     try:
         await crawler.start()
     except SessionExpiredError as e:
         print("\n[MediaCrawler] 登录已过期或会话失效，请刷新 session 后点击重试。", file=sys.stderr)
         print(f"  详情: {e}", file=sys.stderr)
-        sys.exit(1)
+        crawl_exit_code = 1
     except RetryError as e:
-        # 重试耗尽后可能是 SessionExpiredError，从 last_attempt 取出原因并友好退出
-        # tenacity 的 last_attempt 是 asyncio.Future，用 exception() 取异常，无 failed() 方法
         last_exc = None
         if getattr(e, "last_attempt", None) is not None:
             att = e.last_attempt
@@ -225,26 +224,29 @@ async def main() -> None:
         if isinstance(last_exc, SessionExpiredError):
             print("\n[MediaCrawler] 登录已过期或会话失效，请刷新 session 后点击重试。", file=sys.stderr)
             print(f"  详情: {last_exc}", file=sys.stderr)
-            sys.exit(1)
-        raise
-
-    _flush_excel_if_needed()
-
-    # Generate wordcloud after crawling is complete
-    # Only for JSON save mode
-    await _generate_wordcloud_if_needed()
-
-    # 搜索模式爬完后自动写入飞书（如果飞书已配置）
-    if config.CRAWLER_TYPE in ("search", "search_top") and config.SAVE_DATA_OPTION == "json":
-        _push_search_results_to_feishu()
-
-    # 生成并保存爬取统计摘要
-    try:
-        stats = get_statistics()
-        if stats.notes_data:
-            stats.save_summary(output_dir="data")
+            crawl_exit_code = 1
+        else:
+            crawl_exit_code = 1
+            print(f"\n[MediaCrawler] 重试耗尽: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"[Main] Error generating statistics: {e}")
+        crawl_exit_code = 1
+        print(f"\n[MediaCrawler] 爬虫异常: {e}", file=sys.stderr)
+    finally:
+        _flush_excel_if_needed()
+        await _generate_wordcloud_if_needed()
+
+        if config.CRAWLER_TYPE in ("search", "search_top") and config.SAVE_DATA_OPTION == "json":
+            _push_search_results_to_feishu()
+
+        try:
+            stats = get_statistics()
+            if stats.notes_data:
+                stats.save_summary(output_dir="data")
+        except Exception as e:
+            print(f"[Main] Error generating statistics: {e}")
+
+    if crawl_exit_code != 0:
+        sys.exit(crawl_exit_code)
 
 
 async def async_cleanup() -> None:

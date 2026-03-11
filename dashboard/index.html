@@ -162,8 +162,9 @@ window.onerror = function(msg, url, line, col, err) {
       <div class="!mt-6 px-3 pt-4 border-t border-gray-800/40">
         <p class="text-[10px] text-gray-600 uppercase tracking-wider mb-2">快捷操作</p>
         <button @click="activeTab = 'batch'; startBatch()" :disabled="batchStatus.status === 'running'"
-          class="w-full px-3 py-2 rounded-lg text-xs btn-success text-white disabled:opacity-40 disabled:cursor-not-allowed mb-1.5">
-          开始爬取
+          class="w-full px-3 py-2 rounded-lg text-xs btn-success text-white disabled:opacity-40 disabled:cursor-not-allowed mb-1.5"
+          title="创作者批量爬取（按 Excel 作者列表），非关键词搜索">
+          📦 开始批量爬取
         </button>
         <button @click="triggerExport"
           class="w-full px-3 py-2 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition">
@@ -585,8 +586,15 @@ window.onerror = function(msg, url, line, col, err) {
           <span class="text-2xl">📦</span>
           <div><h2 class="text-lg font-semibold text-white">批量爬取</h2><p class="text-xs text-gray-500">从 Excel 读取作者列表，逐个爬取并导出</p></div>
         </div>
+        <div class="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200">
+          <strong>👤 创作者批量爬取</strong> — 本页按 Excel 作者列表逐个爬取创作者主页，支持增量、进度快照。<br>
+          <span class="text-blue-400/80 text-xs mt-1 block">与「任务管理」中的关键词搜索（🔎 关键词搜索 / 🔥 高赞搜索）是不同入口，互不影响。</span>
+        </div>
 
         <div class="grid grid-cols-3 gap-4">
+          <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">任务 ID（进度文件）</label>
+            <input type="text" v-model="config.batch_crawl.task_id" placeholder="task_20260210" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+            <p class="text-[10px] text-gray-600 mt-1">对应 batch_progress_{{ config.batch_crawl?.task_id || 'xxx' }}.json，快照也按此 ID</p></div>
           <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">Excel 路径</label>
             <input type="text" v-model="config.batch_crawl.excel_path" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
           <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">爬取模式</label>
@@ -702,11 +710,118 @@ window.onerror = function(msg, url, line, col, err) {
               class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg text-[11px] transition ml-auto">重置进度</button>
           </div>
         </div>
+
+        <!-- 进度快照管理 -->
+        <div class="card rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-lg">📸</span>
+              <div>
+                <h3 class="text-sm font-semibold text-white">进度快照</h3>
+                <p class="text-[10px] text-gray-500">每次爬取完成后自动保存。增量爬取前可导入快照恢复基线日期</p>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button @click="loadCheckpoints" class="px-3 py-1.5 rounded-lg text-[11px] bg-gray-800 hover:bg-gray-700 text-gray-300 transition">刷新</button>
+              <button @click="exportCheckpoint" class="px-3 py-1.5 rounded-lg text-[11px] bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 transition font-medium">导出当前快照</button>
+            </div>
+          </div>
+
+          <div v-if="cpList.length === 0" class="text-center py-4 text-gray-700 text-sm">暂无快照，爬取完成后会自动保存，也可点击「导出当前快照」手动创建</div>
+
+          <div v-for="cp in cpList" :key="cp.filename" class="bg-black/20 rounded-lg p-3.5 border border-gray-800/50">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="text-[10px] font-mono text-gray-500">{{ cp.created_at }}</span>
+                <span class="text-xs text-gray-300 font-medium">{{ cp.note || cp.checkpoint_id }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button @click="viewCheckpointDetail(cp.filename)" class="px-2 py-1 rounded text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-400 transition">详情</button>
+                <button @click="importCheckpoint(cp.filename)" class="px-2.5 py-1 rounded text-[10px] bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 transition font-medium">导入为基线</button>
+                <button @click="deleteCheckpoint(cp.filename)" class="px-2 py-1 rounded text-[10px] bg-gray-800 hover:bg-red-900/30 text-gray-500 hover:text-red-400 transition">删除</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 text-[10px] text-gray-500 mt-1.5">
+              <span>作者: {{ cp.summary?.total_authors || 0 }}</span>
+              <span>完成: {{ cp.summary?.completed || 0 }}</span>
+              <span>笔记: {{ cp.summary?.total_notes || 0 }}</span>
+              <a v-if="cp.feishu_url" :href="cp.feishu_url" target="_blank" class="text-blue-400 hover:text-blue-300 underline underline-offset-2">飞书表格</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快照详情弹窗 -->
+        <div v-if="cpDetail.visible" class="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="cpDetail.visible = false">
+          <div class="bg-gray-900 border border-gray-700 rounded-xl w-[85%] max-w-3xl max-h-[75vh] overflow-hidden flex flex-col shadow-2xl">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-200">快照详情</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 font-mono">{{ cpDetail.data?.checkpoint_id }}</span>
+              </div>
+              <div class="flex gap-2">
+                <button @click="importCheckpoint(cpDetail.filename)" class="px-3 py-1 rounded text-xs bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 font-medium">导入为基线</button>
+                <button @click="cpDetail.visible = false" class="px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300">关闭</button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-auto p-4">
+              <div v-if="cpDetail.data" class="space-y-3">
+                <div class="flex items-center gap-4 text-xs text-gray-400 mb-3">
+                  <span>创建: {{ cpDetail.data.created_at }}</span>
+                  <span>Task: {{ cpDetail.data.task_id }}</span>
+                  <span v-if="cpDetail.data.note" class="text-gray-500 italic">{{ cpDetail.data.note }}</span>
+                </div>
+                <div class="grid grid-cols-4 gap-3 mb-4">
+                  <div class="bg-black/30 rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-white">{{ cpDetail.data.summary?.total_authors || 0 }}</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">作者总数</div>
+                  </div>
+                  <div class="bg-black/30 rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-emerald-400">{{ cpDetail.data.summary?.completed || 0 }}</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">已完成</div>
+                  </div>
+                  <div class="bg-black/30 rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-red-400">{{ cpDetail.data.summary?.failed || 0 }}</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">失败</div>
+                  </div>
+                  <div class="bg-black/30 rounded-lg p-3 text-center">
+                    <div class="text-lg font-semibold text-blue-400">{{ cpDetail.data.summary?.total_notes || 0 }}</div>
+                    <div class="text-[10px] text-gray-500 mt-0.5">笔记总数</div>
+                  </div>
+                </div>
+                <table class="w-full text-[11px]">
+                  <thead><tr class="text-gray-500 border-b border-gray-800">
+                    <th class="text-left py-2 px-2">作者 ID</th>
+                    <th class="text-left py-2 px-2">状态</th>
+                    <th class="text-left py-2 px-2">最后爬取日期</th>
+                    <th class="text-left py-2 px-2">最新笔记</th>
+                    <th class="text-right py-2 px-2">笔记数</th>
+                    <th class="text-right py-2 px-2">已爬取</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="(info, uid) in cpDetail.data.authors" :key="uid" class="border-b border-gray-800/50 hover:bg-gray-800/20">
+                      <td class="py-1.5 px-2 font-mono text-gray-400">{{ uid.substring(0, 16) }}...</td>
+                      <td class="py-1.5 px-2">
+                        <span class="px-1.5 py-0.5 rounded text-[9px]"
+                          :class="info.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : info.status === 'failed' ? 'bg-red-500/15 text-red-400' : info.status === 'skipped' ? 'bg-gray-700 text-gray-500' : 'bg-yellow-500/15 text-yellow-400'">
+                          {{ info.status }}
+                        </span>
+                      </td>
+                      <td class="py-1.5 px-2 text-gray-400">{{ info.last_crawl_date || '-' }}</td>
+                      <td class="py-1.5 px-2 text-gray-400">{{ info.latest_note_date || '-' }}</td>
+                      <td class="py-1.5 px-2 text-right text-gray-300">{{ info.contents_count || 0 }}</td>
+                      <td class="py-1.5 px-2 text-right text-gray-300">{{ info.crawled_count || 0 }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ========== 任务管理 ========== -->
       <section v-show="activeTab === 'tasks'" class="space-y-5 animate-in">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
             <span class="text-2xl">📌</span>
             <div><h2 class="text-lg font-semibold text-white">任务管理</h2><p class="text-xs text-gray-500">创建、管理和运行独立的爬取任务</p></div>
@@ -718,6 +833,10 @@ window.onerror = function(msg, url, line, col, err) {
               {{ taskShowForm && !taskEditId ? '取消' : '+ 新建任务' }}
             </button>
           </div>
+        </div>
+        <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 mb-6">
+          <strong>🔎 关键词搜索 / 👤 创作者 / 📄 帖子详情</strong> — 本页任务通过 main.py 运行，与「批量爬取」页的创作者批量爬取是不同入口。<br>
+          <span class="text-amber-400/80 text-xs mt-1 block">若要做增量创作者爬取（Excel 作者列表 + 进度快照），请使用左侧「📦 开始批量爬取」或进入「批量爬取」页。</span>
         </div>
 
         <!-- 创建/编辑任务表单 -->
@@ -867,6 +986,25 @@ window.onerror = function(msg, url, line, col, err) {
           <div v-if="t.keywords" class="mt-2 text-xs text-gray-500 truncate">关键词: {{ t.keywords }}</div>
           <div v-if="t.last_run_at" class="mt-1 text-[10px] text-gray-600">上次运行: {{ t.last_run_at }}</div>
           <div v-if="t.notes" class="mt-1 text-[10px] text-gray-600 italic">{{ t.notes }}</div>
+
+          <!-- 飞书写入状态 -->
+          <div v-if="t.crawler_type === 'search' || t.crawler_type === 'search_top'" class="mt-3 pt-3 border-t border-gray-800/50 flex items-center gap-3">
+            <div class="flex items-center gap-1.5">
+              <span v-if="t.feishu_status === 'success'" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium">飞书已写入</span>
+              <span v-else-if="t.feishu_status === 'writing'" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium pulse-dot">飞书写入中...</span>
+              <span v-else-if="t.feishu_status === 'failed'" class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-medium" :title="t.feishu_error">飞书写入失败</span>
+              <span v-else-if="t.status === 'completed'" class="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-500">飞书未写入</span>
+              <span v-else class="text-[10px] text-gray-600">飞书: 等待爬取完成</span>
+            </div>
+            <a v-if="t.feishu_url" :href="t.feishu_url" target="_blank"
+              class="text-[10px] text-blue-400 hover:text-blue-300 underline underline-offset-2 transition">打开多维表格</a>
+            <button v-if="t.status !== 'running' && t.feishu_status !== 'writing' && (t.status === 'completed' || t.status === 'error' || t.feishu_status === 'failed')"
+              @click="resyncFeishu(t.task_id)"
+              class="ml-auto px-2.5 py-1 rounded-lg text-[10px] bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 transition font-medium"
+              :title="t.feishu_status === 'failed' ? '上次写入失败，点击重试' : '重新写入飞书多维表格'">
+              {{ t.feishu_status === 'failed' ? '重试写入飞书' : '写入飞书' }}
+            </button>
+          </div>
         </div>
 
         <!-- 任务日志弹窗 -->
@@ -1077,6 +1215,7 @@ window.onerror = function(msg, url, line, col, err) {
             <div class="toggle" :class="{ active: config['断点续爬'].use_sqlite }" @click="config['断点续爬'].use_sqlite = !config['断点续爬'].use_sqlite"></div>
           </div>
         </div>
+
       </section>
 
       <!-- ========== 日志/文件 ========== -->
@@ -1215,7 +1354,7 @@ window._mcApp = createApp({
       '并发控制': { max_concurrency: 3 },
       '浏览器控制': { auto_close_browser: false, remove_webdriver_flag: true, spoof_canvas_fingerprint: true, spoof_webgl_fingerprint: true },
       '断点续爬': { enabled: true, auto_save_interval: 10, retry_failed: true, use_sqlite: false },
-      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '' },
+      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '', task_id: 'task_20260210' },
       feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '', collaborator_open_ids: [], collaborator_open_ids_text: '' },
       notification: { enabled: false, webhook_url: '', chat_id: '', app_id: '', app_secret: '', at_user_ids: ['all'] },
     }
@@ -1566,6 +1705,83 @@ window._mcApp = createApp({
         if (data?.success) { showToast(data.message || '任务已停止', 'info'); loadTasks() }
         else showToast(data?.detail || '停止失败', 'error')
       } catch (e) { showToast('请求失败', 'error') }
+    }
+
+    async function resyncFeishu(taskId) {
+      try {
+        const r = await fetch(`${TASK_API}/${taskId}/resync-feishu`, { method: 'POST', headers: getAuthHeaders() })
+        const data = await r.json()
+        if (data?.success) { showToast(data.message || '飞书写入已启动', 'success'); loadTasks() }
+        else showToast(data?.detail || '飞书写入失败', 'error')
+      } catch (e) { showToast('请求失败: ' + e.message, 'error') }
+    }
+
+    // ---- 进度快照（Checkpoint）管理 ----
+    const cpTaskId = computed(() => config.batch_crawl?.task_id || 'task_20260210')
+    const cpList = ref([])
+    const cpDetail = reactive({ visible: false, filename: '', data: null })
+
+    async function loadCheckpoints() {
+      try {
+        const tid = cpTaskId.value
+        const url = tid ? `${TASK_API}/${tid}/checkpoints` : `${TASK_API}/checkpoints/list`
+        const r = await fetch(url, { headers: getAuthHeaders() })
+        cpList.value = await r.json()
+      } catch (e) { showToast('加载快照列表失败: ' + e.message, 'error') }
+    }
+
+    async function exportCheckpoint() {
+      const tid = cpTaskId.value
+      if (!tid) { showToast('Task ID 未配置', 'error'); return }
+      try {
+        const r = await fetch(`${TASK_API}/${tid}/checkpoint/export`, {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: '手动导出 - Dashboard' })
+        })
+        const data = await r.json()
+        if (data?.success) {
+          showToast(`快照已导出: ${data.summary?.total_authors || 0} 作者, ${data.summary?.total_notes || 0} 笔记`, 'success')
+          loadCheckpoints()
+        } else { showToast(data?.detail || '导出失败', 'error') }
+      } catch (e) { showToast('导出失败: ' + e.message, 'error') }
+    }
+
+    async function importCheckpoint(filename) {
+      if (!confirm(`确认导入快照 "${filename}" 作为增量爬取基线？\n\n这将覆盖当前的 batch_progress 文件。`)) return
+      const tid = cpTaskId.value
+      if (!tid) { showToast('Task ID 未配置', 'error'); return }
+      try {
+        const r = await fetch(`${TASK_API}/${tid}/checkpoint/import`, {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        })
+        const data = await r.json()
+        if (data?.success) {
+          showToast(`已恢复 ${data.restored_authors} 个作者的增量日期`, 'success')
+        } else { showToast(data?.detail || '导入失败', 'error') }
+      } catch (e) { showToast('导入失败: ' + e.message, 'error') }
+    }
+
+    async function viewCheckpointDetail(filename) {
+      try {
+        const r = await fetch(`${TASK_API}/checkpoints/detail/${filename}`, { headers: getAuthHeaders() })
+        const data = await r.json()
+        cpDetail.data = data
+        cpDetail.filename = filename
+        cpDetail.visible = true
+      } catch (e) { showToast('加载详情失败: ' + e.message, 'error') }
+    }
+
+    async function deleteCheckpoint(filename) {
+      if (!confirm(`确认删除快照 "${filename}"？`)) return
+      try {
+        const r = await fetch(`${TASK_API}/checkpoints/${filename}`, { method: 'DELETE', headers: getAuthHeaders() })
+        const data = await r.json()
+        if (data?.success) { showToast('已删除', 'success'); loadCheckpoints() }
+        else showToast(data?.detail || '删除失败', 'error')
+      } catch (e) { showToast('删除失败: ' + e.message, 'error') }
     }
 
     async function refreshTaskLogs(taskId) {
@@ -1924,6 +2140,7 @@ window._mcApp = createApp({
     watch(activeTab, (tab) => {
       if (tab === 'logs') { refreshLogs(); loadFiles() }
       if (tab === 'tasks') { loadTasks() }
+      if (tab === 'batch') { loadCheckpoints() }
     })
 
     onMounted(async () => {
@@ -1947,7 +2164,7 @@ window._mcApp = createApp({
       setInterval(() => { if (authenticated.value && activeTab.value === 'tasks') loadTasks() }, 5000)
     })
 
-    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, fullConfigImportInput, exportConfigOnly, exportFullConfig, openFullConfigImport, onFullConfigImportFile, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions, taskList, taskShowForm, taskEditId, taskForm, taskLogView, taskLogContainer, taskImportFileInput, taskCreatorUrlsText, loadTasks, saveTask, editTask, deleteTask, exportTask, openTaskImportDialog, onTaskImportFile, startTaskRun, stopTaskRun, viewTaskLogs, refreshTaskLogs }
+    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, fullConfigImportInput, exportConfigOnly, exportFullConfig, openFullConfigImport, onFullConfigImportFile, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions, taskList, taskShowForm, taskEditId, taskForm, taskLogView, taskLogContainer, taskImportFileInput, taskCreatorUrlsText, loadTasks, saveTask, editTask, deleteTask, exportTask, openTaskImportDialog, onTaskImportFile, startTaskRun, stopTaskRun, resyncFeishu, viewTaskLogs, refreshTaskLogs, cpTaskId, cpList, cpDetail, loadCheckpoints, exportCheckpoint, importCheckpoint, viewCheckpointDetail, deleteCheckpoint }
   }
 });
 try { window._mcApp.mount('#app'); } catch (e) {

@@ -6,9 +6,9 @@
   "keywords": "数学超前学",
   "creator_urls": [],
   "max_notes_per_keyword": 80,
-  "enable_comments": false,
+  "enable_comments": true,
   "max_comments": 50,
-  "enable_sub_comments": false,
+  "enable_sub_comments": true,
   "max_sub_comments": 30,
   "max_sub_comments_per_comment": 30,
   "save_data_option": "json",
@@ -19,7 +19,7 @@
   "top_comment_notes_count": 20,
   "comment_page_count": 3,
   "created_at": "2026-03-10 15:54:27",
-  "updated_at": "2026-03-10 16:29:32",
+  "updated_at": "2026-03-10 18:40:36",
   "status": "completed",
-  "last_run_at": "2026-03-10 16:29:32"
+  "last_run_at": "2026-03-10 18:40:36"
 }

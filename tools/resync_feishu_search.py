@@ -8,8 +8,9 @@
 
 用法:
   cd /data/vonjan/program/MediaCrawler-stable
-  python -m tools.resync_feishu_search                    # 使用最新一份搜索数据
-  python -m tools.resync_feishu_search 2026-03-09_231412  # 指定 session 时间戳
+  python -m tools.resync_feishu_search                                        # 使用最新一份搜索数据
+  python -m tools.resync_feishu_search 2026-03-09_231412                      # 指定 session 时间戳
+  python -m tools.resync_feishu_search 2026-03-09_231412 --name 自定义文档名   # 自定义飞书文档名
 """
 import json
 import os
@@ -66,10 +67,24 @@ def main():
         print(f"[ResyncFeishu] 数据目录不存在: {json_dir}")
         sys.exit(1)
 
-    session_ts = ""
-    if len(sys.argv) >= 2 and sys.argv[1].strip():
-        session_ts = sys.argv[1].strip()
-    else:
+    custom_name = ""
+    custom_folder = ""
+    args = sys.argv[1:]
+    positional = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--name" and i + 1 < len(args):
+            custom_name = args[i + 1].strip()
+            i += 2
+        elif args[i] == "--folder" and i + 1 < len(args):
+            custom_folder = args[i + 1].strip()
+            i += 2
+        else:
+            positional.append(args[i])
+            i += 1
+
+    session_ts = positional[0].strip() if positional else ""
+    if not session_ts:
         session_ts = _find_latest_search_session(json_dir, platform)
         if not session_ts:
             print("[ResyncFeishu] 未找到任何 search_contents_*.json，请指定 session 时间戳")
@@ -119,7 +134,7 @@ def main():
         sys.exit(1)
     app_id = feishu_cfg.get("app_id", "")
     app_secret = feishu_cfg.get("app_secret", "")
-    folder_token = feishu_cfg.get("search_folder_token") or feishu_cfg.get("folder_token", "")
+    folder_token = custom_folder or feishu_cfg.get("search_folder_token") or feishu_cfg.get("folder_token", "")
     if not app_id or not app_secret:
         print("[ResyncFeishu] 未配置 feishu.app_id / app_secret")
         sys.exit(1)
@@ -131,7 +146,7 @@ def main():
         with PipelineFeishuWriter(
             feishu_app_id=app_id,
             feishu_app_secret=app_secret,
-            bitable_name=f"搜索爬取_{session_ts}",
+            bitable_name=custom_name or f"搜索爬取_{session_ts}",
             folder_token=folder_token,
         ) as writer:
             writer.write_search_results(

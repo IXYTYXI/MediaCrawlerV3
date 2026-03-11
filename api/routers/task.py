@@ -13,6 +13,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import re
 import signal
@@ -22,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,8 @@ router = APIRouter(prefix="/dashboard/tasks", tags=["tasks"])
 
 _TASKS_DIR = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))) / "config" / "tasks"
 _TASKS_DIR.mkdir(parents=True, exist_ok=True)
+_TASK_LOGS_DIR = _TASKS_DIR.parent / "task_logs"
+_TASK_LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ==================== 运行时状态 ====================
 
@@ -139,8 +142,11 @@ def _compute_status(task_id: str, stored_status: str) -> str:
     return stored_status if stored_status in ("idle", "completed", "error") else "idle"
 
 
+_PROJECT_ROOT = str(Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+
+
 def _build_cmd(data: dict) -> List[str]:
-    cmd = ["conda", "run", "--no-capture-output", "-n", "uvenv", "python", "-u", "main.py"]
+    cmd = ["conda", "run", "--no-capture-output", "-n", "uvenv", "--cwd", _PROJECT_ROOT, "python", "-u", "main.py"]
     cmd.extend(["--platform", data.get("platform", "xhs")])
     cmd.extend(["--lt", "cookie"])
     cmd.extend(["--type", data.get("crawler_type", "search")])
@@ -184,40 +190,62 @@ def _build_cmd(data: dict) -> List[str]:
 
 async def _stream_output(task_id: str, rt: _RunningTask):
     loop = asyncio.get_event_loop()
+    log_file_path = _TASK_LOGS_DIR / f"{task_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_fh = None
+    feishu_status = ""  # "", "writing", "success", "failed"
+    feishu_url = ""
+    feishu_error = ""
     try:
+        log_fh = open(log_file_path, "a", encoding="utf-8")
+
+        def _append_line(line_text: str):
+            nonlocal feishu_status, feishu_url, feishu_error
+            ts = datetime.now().strftime("%H:%M:%S")
+            rt._log_id += 1
+            rt.logs.append({"id": rt._log_id, "timestamp": ts, "message": line_text})
+            if len(rt.logs) > 2000:
+                rt.logs = rt.logs[-1500:]
+            if log_fh:
+                log_fh.write(f"[{ts}] {line_text}\n")
+                log_fh.flush()
+            if "[Main] 开始写入飞书" in line_text:
+                feishu_status = "writing"
+            elif "[Main] 飞书写入完成" in line_text:
+                feishu_status = "success"
+                idx = line_text.find("http")
+                if idx >= 0:
+                    feishu_url = line_text[idx:].strip()
+            elif "[Main] 飞书写入失败" in line_text:
+                feishu_status = "failed"
+                feishu_error = line_text.split("飞书写入失败:")[-1].strip() if "飞书写入失败:" in line_text else line_text
+
         while rt.process and rt.process.poll() is None:
             line = await loop.run_in_executor(None, rt.process.stdout.readline)
             if line:
                 line = line.strip()
                 if line:
-                    rt._log_id += 1
-                    entry = {
-                        "id": rt._log_id,
-                        "timestamp": datetime.now().strftime("%H:%M:%S"),
-                        "message": line,
-                    }
-                    rt.logs.append(entry)
-                    if len(rt.logs) > 2000:
-                        rt.logs = rt.logs[-1500:]
+                    _append_line(line)
 
         if rt.process and rt.process.stdout:
             remaining = await loop.run_in_executor(None, rt.process.stdout.read)
             if remaining:
                 for line in remaining.strip().split("\n"):
                     if line.strip():
-                        rt._log_id += 1
-                        rt.logs.append({
-                            "id": rt._log_id,
-                            "timestamp": datetime.now().strftime("%H:%M:%S"),
-                            "message": line.strip(),
-                        })
+                        _append_line(line.strip())
 
         exit_code = rt.process.returncode if rt.process else -1
         new_status = "completed" if exit_code == 0 else "error"
+        _append_line(f"=== 任务结束: exit_code={exit_code}, status={new_status} ===")
         try:
             data = _read_task_json(task_id)
             data["status"] = new_status
             data["last_run_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if feishu_status:
+                data["feishu_status"] = feishu_status
+            if feishu_url:
+                data["feishu_url"] = feishu_url
+            if feishu_error:
+                data["feishu_error"] = feishu_error
             _write_task_json(task_id, data)
         except Exception:
             pass
@@ -225,6 +253,12 @@ async def _stream_output(task_id: str, rt: _RunningTask):
         pass
     except Exception:
         pass
+    finally:
+        if log_fh:
+            try:
+                log_fh.close()
+            except Exception:
+                pass
 
 # ==================== CRUD 接口 ====================
 
@@ -361,7 +395,7 @@ async def start_task(task_id: str):
                 encoding="utf-8",
                 errors="replace",
                 env=task_env,
-                cwd=str(Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+                cwd=_PROJECT_ROOT
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"启动失败: {e}")
@@ -378,8 +412,19 @@ async def start_task(task_id: str):
     return {"success": True, "message": f"任务 {task_id} 已启动", "pid": proc.pid}
 
 
+def _log_stop_audit(request: Request, task_id: str):
+    client = getattr(request, "client", None)
+    ip = client.host if client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or ip
+    ua = request.headers.get("user-agent", "")[:80]
+    logging.getLogger("MediaCrawler").info(
+        f"[StopAudit] 任务停止请求 task_id={task_id} | 来源={forwarded} | UA={ua}"
+    )
+
+
 @router.post("/{task_id}/stop")
-async def stop_task(task_id: str):
+async def stop_task(task_id: str, request: Request):
+    _log_stop_audit(request, task_id)
     async with _lock:
         rt = _running.get(task_id)
         if not rt or rt.process.poll() is not None:
@@ -424,4 +469,190 @@ async def task_status(task_id: str):
         "last_run_at": data.get("last_run_at", ""),
         "pid": pid,
         "logs": logs,
+        "feishu_status": data.get("feishu_status", ""),
+        "feishu_url": data.get("feishu_url", ""),
+        "feishu_error": data.get("feishu_error", ""),
     }
+
+
+# ==================== 飞书重新写入 ====================
+
+_resync_running: Dict[str, subprocess.Popen] = {}
+
+
+@router.post("/{task_id}/resync-feishu")
+async def resync_feishu(task_id: str):
+    """一键重新写入飞书：从本地已有 JSON 数据推送到飞书多维表格"""
+    if task_id in _resync_running:
+        p = _resync_running[task_id]
+        if p.poll() is None:
+            return {"success": False, "detail": "飞书写入正在进行中，请稍候"}
+
+    data = _read_task_json(task_id)
+    ct = data.get("crawler_type", "search")
+    if ct not in ("search", "search_top"):
+        raise HTTPException(status_code=400, detail="仅搜索类任务支持飞书写入")
+
+    platform = data.get("platform", "xhs")
+    json_dir = Path(_PROJECT_ROOT) / "data" / platform / "json"
+    prefix = "search_top_contents_" if ct == "search_top" else "search_contents_"
+    candidates = sorted(
+        [f for f in json_dir.glob(f"{prefix}*.json")],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    ) if json_dir.is_dir() else []
+
+    if not candidates:
+        raise HTTPException(status_code=404, detail=f"未找到 {prefix}*.json 数据文件")
+
+    latest = candidates[0].name
+    session_ts = latest[len(prefix):-5]
+
+    folder_token = data.get("feishu_folder_token", "")
+    resync_cmd = [
+        "conda", "run", "--no-capture-output", "-n", "uvenv",
+        "--cwd", _PROJECT_ROOT,
+        "python", "-m", "tools.resync_feishu_search", session_ts,
+    ]
+    if folder_token:
+        resync_cmd.extend(["--folder", folder_token])
+
+    data["feishu_status"] = "writing"
+    data["feishu_error"] = ""
+    _write_task_json(task_id, data)
+
+    loop = asyncio.get_event_loop()
+
+    proc = subprocess.Popen(
+        resync_cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=_PROJECT_ROOT,
+    )
+    _resync_running[task_id] = proc
+
+    async def _wait_resync():
+        output_lines = []
+        try:
+            while proc.poll() is None:
+                line = await loop.run_in_executor(None, proc.stdout.readline)
+                if line:
+                    output_lines.append(line.strip())
+            remaining = await loop.run_in_executor(None, proc.stdout.read)
+            if remaining:
+                output_lines.extend(remaining.strip().split("\n"))
+        except Exception:
+            pass
+
+        full_output = "\n".join(output_lines)
+        try:
+            d = _read_task_json(task_id)
+            if "飞书写入完成" in full_output:
+                d["feishu_status"] = "success"
+                for ln in output_lines:
+                    if "http" in ln:
+                        idx = ln.find("http")
+                        if idx >= 0:
+                            d["feishu_url"] = ln[idx:].strip()
+                            break
+            elif "飞书写入失败" in full_output:
+                d["feishu_status"] = "failed"
+                d["feishu_error"] = full_output[-500:] if len(full_output) > 500 else full_output
+            elif proc.returncode != 0:
+                d["feishu_status"] = "failed"
+                d["feishu_error"] = full_output[-500:] if len(full_output) > 500 else full_output
+            else:
+                d["feishu_status"] = "success"
+            _write_task_json(task_id, d)
+        except Exception:
+            pass
+        _resync_running.pop(task_id, None)
+
+    asyncio.create_task(_wait_resync())
+    return {"success": True, "message": f"飞书写入已启动 (session: {session_ts})"}
+
+
+# ==================== 进度快照（Checkpoint）接口 ====================
+
+
+@router.get("/checkpoints/list")
+async def list_all_checkpoints():
+    """列出所有快照"""
+    from tools.checkpoint_manager import list_checkpoints
+    return list_checkpoints()
+
+
+@router.get("/{task_id}/checkpoints")
+async def list_task_checkpoints(task_id: str):
+    """列出指定任务的快照"""
+    from tools.checkpoint_manager import list_checkpoints
+    return list_checkpoints(task_id)
+
+
+@router.post("/{task_id}/checkpoint/export")
+async def export_task_checkpoint(task_id: str, body: dict = None):
+    """导出当前爬取进度为快照"""
+    from tools.checkpoint_manager import export_checkpoint
+    body = body or {}
+    try:
+        path = export_checkpoint(
+            task_id=task_id,
+            feishu_url=body.get("feishu_url", ""),
+            note=body.get("note", "手动导出"),
+        )
+        filename = os.path.basename(path)
+        from tools.checkpoint_manager import get_checkpoint_detail
+        detail = get_checkpoint_detail(filename)
+        return {
+            "success": True,
+            "filename": filename,
+            "summary": detail.get("summary", {}),
+            "message": f"快照已导出: {filename}",
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导出失败: {e}")
+
+
+@router.post("/{task_id}/checkpoint/import")
+async def import_task_checkpoint(task_id: str, body: dict = None):
+    """从快照恢复 batch_progress，作为增量爬取基线"""
+    from tools.checkpoint_manager import import_checkpoint
+    body = body or {}
+    filename = body.get("filename", "")
+    if not filename:
+        raise HTTPException(status_code=400, detail="请指定 filename")
+    from tools.checkpoint_manager import _CHECKPOINT_DIR
+    filepath = os.path.join(_CHECKPOINT_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"快照文件不存在: {filename}")
+    try:
+        result = import_checkpoint(filepath)
+        return {"success": True, **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导入失败: {e}")
+
+
+@router.get("/checkpoints/detail/{filename}")
+async def get_checkpoint(filename: str):
+    """获取快照详情"""
+    from tools.checkpoint_manager import get_checkpoint_detail
+    try:
+        return get_checkpoint_detail(filename)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"快照不存在: {filename}")
+
+
+@router.delete("/checkpoints/{filename}")
+async def delete_checkpoint(filename: str):
+    """删除快照"""
+    from tools.checkpoint_manager import _CHECKPOINT_DIR
+    filepath = os.path.join(_CHECKPOINT_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"快照不存在: {filename}")
+    os.remove(filepath)
+    return {"success": True, "message": f"已删除: {filename}"}

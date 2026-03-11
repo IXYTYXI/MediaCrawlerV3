@@ -10,7 +10,9 @@ import signal
 import time
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import logging
+
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/control", tags=["control"])
@@ -343,10 +345,22 @@ async def start_crawler():
         )
 
 
+def _log_stop_audit(source: str, request: Request, extra: str = ""):
+    client = getattr(request, "client", None)
+    ip = client.host if client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or ip
+    ua = request.headers.get("user-agent", "")[:80]
+    logging.getLogger("MediaCrawler").info(
+        f"[StopAudit] {source} | 来源={forwarded} | UA={ua} | {extra}"
+    )
+
+
 @router.post("/stop")
-async def stop_crawler():
+async def stop_crawler(request: Request):
     """优雅停止爬虫进程（SIGTERM → 等待数据保存 → 退出）"""
     global _crawler_process
+
+    _log_stop_audit("控制面板停止请求", request)
 
     # 面板启动的进程（通过进程组确保 conda 包装和实际 python 进程都收到信号）
     if _crawler_process and _crawler_process.returncode is None:

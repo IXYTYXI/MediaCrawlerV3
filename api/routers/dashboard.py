@@ -5,15 +5,16 @@ Dashboard API - 配置管理 + 批量爬取控制 + Session 管理
 """
 import asyncio
 import json
+import logging
 import os
 import re
-import subprocess
 import signal
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -568,10 +569,23 @@ async def start_batch_crawl(request: BatchStartRequest):
         raise HTTPException(status_code=500, detail=f"启动失败: {e}")
 
 
+def _log_stop_audit(source: str, request: Request, extra: str = ""):
+    """记录停止操作的审计日志（来源 IP、时间等）"""
+    client = getattr(request, "client", None)
+    ip = client.host if client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or ip
+    ua = request.headers.get("user-agent", "")[:80]
+    logging.getLogger("MediaCrawler").info(
+        f"[StopAudit] {source} | 来源={forwarded} | UA={ua} | {extra}"
+    )
+
+
 @router.post("/batch/stop")
-async def stop_batch_crawl():
+async def stop_batch_crawl(request: Request):
     """优雅停止批量爬取（发送 SIGTERM，等待数据保存后退出）"""
     global _batch_process, _batch_status
+
+    _log_stop_audit("批量爬取停止请求", request)
 
     # 本面板启动的进程
     if _batch_process and _batch_process.poll() is None:
@@ -640,16 +654,30 @@ async def stop_batch_crawl():
     raise HTTPException(status_code=400, detail="没有正在运行的批量爬取")
 
 
+def _infer_stopped_from_logs(log_entries: list) -> bool:
+    """从最近日志推断进程是否已退出（GracefulShutdown 等）"""
+    if not log_entries:
+        return False
+    recent = " ".join(e.get("message", "") for e in log_entries[-30:])
+    return "GracefulShutdown" in recent and "退出完成" in recent
+
+
 @router.get("/batch/status")
 async def get_batch_status():
     """获取批量爬取状态"""
-    global _batch_process, _batch_status
+    global _batch_process, _batch_status, _batch_logs
 
-    # 检查进程是否已结束
+    # 1. 检查进程是否已结束（Dashboard 启动的）
     if _batch_process and _batch_process.poll() is not None:
         if _batch_status["status"] == "running":
             _batch_status["status"] = "completed"
             _batch_status["message"] = f"已完成 (exit code: {_batch_process.returncode})"
+    # 2. 若仍显示运行中，从日志推断是否已退出（避免状态与日志不同步）
+    elif _batch_status["status"] == "running":
+        logs_to_check = _batch_logs if _batch_logs else _read_crawler_log_tail(100)
+        if _infer_stopped_from_logs(logs_to_check):
+            _batch_status["status"] = "completed"
+            _batch_status["message"] = "已停止（从日志推断）"
 
     return {
         "success": True,

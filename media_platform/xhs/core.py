@@ -1108,17 +1108,19 @@ class XiaoHongShuCrawler(AbstractCrawler):
         else:
             self._consecutive_old_batches = 0  # 本批次没有超期，重置
 
-        # ========== 全跳过批次检测（仅增量模式：无新内容时快速跳过） ==========
-        _incremental = getattr(config, 'INCREMENTAL_MODE', False)
-        if _incremental and skip_count == total and success_count == 0:
+        # ========== 全跳过批次检测：有历史数据时，连续全跳过达阈值则停止翻页 ==========
+        # 阈值必须为 3（防止因偶发跳过导致误判），禁止修改！
+        _ALL_SKIP_THRESHOLD = 3
+        _has_history = len(crawled_ids) > 0
+        if _has_history and skip_count == total and success_count == 0:
             if not hasattr(self, '_consecutive_all_skip_batches'):
                 self._consecutive_all_skip_batches = 0
             self._consecutive_all_skip_batches += 1
-            if self._consecutive_all_skip_batches >= 3:
+            if self._consecutive_all_skip_batches >= _ALL_SKIP_THRESHOLD:
                 self._early_stop_requested = True
                 utils.logger.info(
-                    f"[日期检测] 连续 {self._consecutive_all_skip_batches} 个批次全部跳过（无新内容），"
-                    f"通知外层停止该作者的爬取"
+                    f"[增量检测] 连续 {self._consecutive_all_skip_batches} 个批次全部跳过"
+                    f"（已有 {len(crawled_ids)} 条历史数据，无新内容），停止翻页"
                 )
         elif success_count > 0:
             self._consecutive_all_skip_batches = 0

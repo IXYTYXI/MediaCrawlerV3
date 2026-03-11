@@ -833,7 +833,7 @@ async def ws_remote_browser(ws: WebSocket):
         # ── 3. 主循环 ──
         login_success = False
         frame_interval = 0.3       # 300ms 一帧 ≈ 3 FPS
-        cookie_check_interval = 3
+        cookie_check_interval = 10
         last_cookie_check = 0
 
         while _ws_active is ws and _ws_is_connected(ws):
@@ -848,6 +848,12 @@ async def ws_remote_browser(ws: WebSocket):
 
                     if evt.get("type") == "close_browser":
                         print("[WS-Browser] 客户端请求关闭浏览器")
+                        if _ws_browser_context and not login_success:
+                            try:
+                                await _save_cookies_to_file(_ws_browser_context, "xhs")
+                                print("[WS-Browser] 关闭前已保存当前 cookie")
+                            except Exception:
+                                pass
                         await _ws_cleanup_browser()
                         await _ws_safe_send_json(ws, {"type": "browser_closed", "message": "浏览器已关闭"})
                         should_break = True
@@ -890,7 +896,7 @@ async def ws_remote_browser(ws: WebSocket):
                     _, cur_dict = utils.convert_cookies(cur_cookies)
                     cur_ws = cur_dict.get("web_session", "")
 
-                    if cur_ws and cur_ws != init_ws:
+                    if cur_ws and (cur_ws != init_ws or not login_success):
                         valid = await _ws_page.evaluate("""
                             async () => {
                                 try {
@@ -904,7 +910,7 @@ async def ws_remote_browser(ws: WebSocket):
                                 } catch(e) { return false; }
                             }
                         """)
-                        if valid:
+                        if valid and not login_success:
                             print(f"[WS-Browser] ★ 登录成功！web_session={cur_ws[:16]}...")
                             await _save_cookies_to_file(_ws_browser_context, "xhs")
                             await _ws_safe_send_json(ws, {
@@ -913,14 +919,7 @@ async def ws_remote_browser(ws: WebSocket):
                                 "web_session": cur_ws[:16] + "...",
                             })
                             login_success = True
-                            # 推送最后一帧
-                            try:
-                                shot = await _ws_page.screenshot(type="jpeg", quality=40)
-                                await _ws_safe_send_bytes(ws, shot)
-                            except Exception:
-                                pass
-                            await asyncio.sleep(2)
-                            break
+                            init_ws = cur_ws
                 except Exception as e:
                     print(f"[WS-Browser] cookie 检查异常: {e}")
 
@@ -936,9 +935,14 @@ async def ws_remote_browser(ws: WebSocket):
         print(f"[WS-Browser] 异常: {e}")
         await _ws_safe_send_json(ws, {"type": "error", "message": str(e)})
     finally:
+        if _ws_browser_context and not login_success:
+            try:
+                await _save_cookies_to_file(_ws_browser_context, "xhs")
+                print("[WS-Browser] 会话结束前已保存当前 cookie")
+            except Exception:
+                pass
         if _ws_active is ws:
             _ws_active = None
-        # 注意：不自动清理浏览器，以便重连时复用
         print("[WS-Browser] 会话结束")
 
 
