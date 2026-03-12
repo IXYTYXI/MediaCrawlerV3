@@ -667,17 +667,35 @@ async def get_batch_status():
     """获取批量爬取状态"""
     global _batch_process, _batch_status, _batch_logs
 
-    # 1. 检查进程是否已结束（Dashboard 启动的）
-    if _batch_process and _batch_process.poll() is not None:
+    # 1. Dashboard 启动的进程仍存活 → 保持 running
+    if _batch_process and _batch_process.poll() is None:
+        if _batch_status["status"] != "running":
+            _batch_status["status"] = "running"
+    # 2. Dashboard 启动的进程已退出
+    elif _batch_process and _batch_process.poll() is not None:
         if _batch_status["status"] == "running":
             _batch_status["status"] = "completed"
             _batch_status["message"] = f"已完成 (exit code: {_batch_process.returncode})"
-    # 2. 若仍显示运行中，从日志推断是否已退出（避免状态与日志不同步）
-    elif _batch_status["status"] == "running":
+    # 3. 无进程引用但状态仍为 running（外部启动 / 进程丢失）→ 从日志推断
+    elif _batch_status["status"] == "running" and not _batch_process:
         logs_to_check = _batch_logs if _batch_logs else _read_crawler_log_tail(100)
         if _infer_stopped_from_logs(logs_to_check):
             _batch_status["status"] = "completed"
             _batch_status["message"] = "已停止（从日志推断）"
+
+    # 4. 兜底：Dashboard 状态 idle 但检测到外部爬虫进程 → 标记 running
+    if _batch_status["status"] != "running":
+        try:
+            from .control import _detect_external_crawler
+            ext = _detect_external_crawler()
+            if ext:
+                _batch_status = {
+                    "status": "running",
+                    "started_at": _batch_status.get("started_at"),
+                    "message": f"外部进程运行中 (pid={ext['pid']})",
+                }
+        except Exception:
+            pass
 
     return {
         "success": True,

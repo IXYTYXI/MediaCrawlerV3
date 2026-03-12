@@ -185,6 +185,7 @@ INCREMENTAL_MODE = False  # 由 batch_crawler 动态注入，仅增量更新模�
 # 由 batch_crawler 在增量+刷新互动模式下自动设置
 LIST_LEVEL_STATS_UPDATE = False
 LIST_LEVEL_STATS_CUTOFF_DATE = ""  # 此日期之前的笔记视为「旧笔记」，格式 "2026-03-06"
+LIST_LEVEL_DATE_FLOOR = ""  # 日期地板：早于此日期的笔记直接跳过，连续触发后停止翻页
 
 # 假动作策略：随机访问无关内容，模拟真实用户浏览
 FAKE_ACTION_ENABLED = True

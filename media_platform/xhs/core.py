@@ -859,11 +859,15 @@ class XiaoHongShuCrawler(AbstractCrawler):
         # 列表阶段轻量互动量刷新
         list_level_stats = getattr(config, 'LIST_LEVEL_STATS_UPDATE', False)
         list_cutoff_date = getattr(config, 'LIST_LEVEL_STATS_CUTOFF_DATE', '')
-        list_stats_updated = 0  # 通过列表直接更新互动量的计数
-        list_fallback_count = 0  # 旧笔记无本地详情、回退调详情接口的计数
+        list_date_floor = getattr(config, 'LIST_LEVEL_DATE_FLOOR', '')
+        list_stats_updated = 0
+        list_fallback_count = 0
+        floor_consecutive_old = 0
+        _FLOOR_STOP_THRESHOLD = 10
 
         def _parse_list_publish_date(post_item: dict) -> str:
-            """从列表条目的 note_card.corner_tag_info 解析发布日期，返回 'YYYY-MM-DD' 或 ''"""
+            """从列表条目解析发布日期，返回 'YYYY-MM-DD' 或 ''
+            优先 corner_tag_info（搜索结果），回退到 timestamp（user_posted API）"""
             from datetime import datetime as _dt, date as _date
             note_card = post_item.get("note_card", {})
             for tag in note_card.get("corner_tag_info", []):
@@ -871,21 +875,39 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     text = tag.get("text", "").strip()
                     if not text:
                         continue
-                    # "2024-01-31" 完整格式
                     try:
                         _dt.strptime(text, "%Y-%m-%d")
                         return text
                     except ValueError:
                         pass
-                    # "02-05" 当年月日
                     try:
                         this_year = _date.today().year
                         d = _dt.strptime(f"{this_year}-{text}", "%Y-%m-%d")
                         return d.strftime("%Y-%m-%d")
                     except ValueError:
                         pass
-                    # "4天前" / "昨天" 等相对时间 → 视为今天（肯定是新内容）
                     return _date.today().strftime("%Y-%m-%d")
+            # 回退：从 timestamp 解析（user_posted API 返回毫秒级时间戳）
+            for time_key in ["time", "create_time", "last_update_time"]:
+                ts = note_card.get(time_key) or post_item.get(time_key)
+                if ts and isinstance(ts, (int, float)) and ts > 0:
+                    try:
+                        if ts > 1e12:
+                            ts = ts / 1000
+                        return _dt.fromtimestamp(ts).strftime("%Y-%m-%d")
+                    except (ValueError, OSError):
+                        pass
+            # 字符串类型的时间戳 fallback
+            for time_key in ["time", "create_time", "last_update_time"]:
+                ts_raw = note_card.get(time_key) or post_item.get(time_key)
+                if ts_raw and isinstance(ts_raw, str):
+                    try:
+                        ts_val = int(ts_raw)
+                        if ts_val > 1e12:
+                            ts_val = ts_val / 1000
+                        return _dt.fromtimestamp(ts_val).strftime("%Y-%m-%d")
+                    except (ValueError, OSError):
+                        pass
             return ""
 
         def _extract_list_interact(post_item: dict) -> dict:
@@ -919,15 +941,25 @@ class XiaoHongShuCrawler(AbstractCrawler):
             xsec_token = post_item.get("xsec_token", "")
             display_title = post_item.get("display_title", "")[:20]
 
-            # ========== 列表阶段轻量互动量刷新 ==========
-            # 开启后：先判断该笔记是否属于「截止日期之前的旧笔记」
-            # - 旧笔记已有本地详情 → 直接用列表里的互动量更新，跳过详情接口
-            # - 旧笔记无本地详情（遗漏）→ 回退调详情接口补完整
-            # - 新笔记（截止日期之后）→ 不在 crawled_ids 里，走下面正常详情流程
-            if list_level_stats and list_cutoff_date and note_id:
+            # ========== 列表阶段轻量互动量刷新（含 date_floor + crawled_ids 整合） ==========
+            if list_level_stats and note_id:
                 pub_date = _parse_list_publish_date(post_item)
-                is_old = pub_date and pub_date <= list_cutoff_date
-                if is_old:
+
+                # 日期地板：早于 date_floor 的笔记直接跳过，不更新也不补爬
+                if list_date_floor and pub_date and pub_date < list_date_floor:
+                    floor_consecutive_old += 1
+                    if floor_consecutive_old >= _FLOOR_STOP_THRESHOLD:
+                        self._early_stop_requested = True
+                        utils.logger.info(
+                            f"[详情获取] 连续 {floor_consecutive_old} 条早于 {list_date_floor}，停止翻页"
+                        )
+                    skip_count += 1
+                    continue
+                elif pub_date:
+                    floor_consecutive_old = 0
+
+                # 已爬取过的笔记：直接从列表取互动量更新，跳过详情接口
+                if note_id in crawled_ids:
                     task_dir = getattr(config, 'XHS_TASK_DIR', '') or ''
                     user_id_cur = getattr(config, 'XHS_CURRENT_USER_ID', '') or ''
                     _cache_key = f"_stats_existing_cache_{user_id_cur}"
@@ -948,10 +980,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
                                     pass
                         setattr(self, _cache_key, cache)
                     existing_cache = getattr(self, _cache_key, {})
-                    has_local = note_id in existing_cache
-                    if has_local:
-                        # 直接从列表取互动量，更新本地文件 + 不调详情接口
-                        existing_note = existing_cache[note_id]
+                    existing_note = existing_cache.get(note_id)
+                    if existing_note:
                         stats = _extract_list_interact(post_item)
                         existing_note.update({
                             "liked_count": stats["liked"],
@@ -967,18 +997,14 @@ class XiaoHongShuCrawler(AbstractCrawler):
                             f"[详情获取] ({idx}/{total}) ⚡ 列表互动量更新: {display_title}... "
                             f"[👍{stats['liked']} 🌟{stats['collected']} 💬{stats['comment']}]"
                         )
-                        skip_count += 1
-                        continue
-                    else:
-                        # 旧笔记无本地详情 → 正常调详情接口补完整，不 continue，往下走
-                        list_fallback_count += 1
-                        utils.logger.debug(
-                            f"[详情获取] ({idx}/{total}) 🔄 旧笔记无详情，补爬: {display_title}..."
-                        )
-                        # 走下面的详情接口流程（不走 crawled_ids 跳过分支）
+                    skip_count += 1
+                    continue
 
-            # ========== 断点续爬：已爬取作品 ==========
-            if note_id in crawled_ids:
+                # 不在 crawled_ids 中 + pub_date 为空 → 无法判断日期，标记需要后验
+                # 不在 crawled_ids 中 + pub_date 有效 → 真正的新笔记，走详情接口流程
+
+            # ========== 断点续爬：已爬取作品（list_level_stats 关闭时的原逻辑） ==========
+            if not list_level_stats and note_id in crawled_ids:
                 # 老作品只更新互动数据：获取详情、合并、写入，不下载媒体
                 if getattr(config, 'ENABLE_STATS_UPDATE_FOR_CRAWLED', False):
                     task_dir = getattr(config, 'XHS_TASK_DIR', '') or ''
@@ -1060,18 +1086,42 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         "xsec_token": xsec_token,
                         "xsec_source": post_item.get("xsec_source", "")
                     })
-                    # 保存完整详情
+
+                    # date_floor 后验：列表阶段无法解析日期时，用详情的 time 兜底
+                    if list_date_floor:
+                        _note_ts = note_detail.get("time", 0)
+                        if _note_ts and isinstance(_note_ts, (int, float)):
+                            try:
+                                from datetime import datetime as _dt
+                                _ts = _note_ts / 1000 if _note_ts > 1e12 else _note_ts
+                                _note_date = _dt.fromtimestamp(_ts).strftime("%Y-%m-%d")
+                                if _note_date < list_date_floor:
+                                    floor_consecutive_old += 1
+                                    utils.logger.info(
+                                        f"[详情获取] ({idx}/{total}) ✗ {display_title}... | {_note_date} "
+                                        f"早于地板 {list_date_floor}，丢弃 (连续 {floor_consecutive_old})"
+                                    )
+                                    if floor_consecutive_old >= _FLOOR_STOP_THRESHOLD:
+                                        self._early_stop_requested = True
+                                        utils.logger.info(
+                                            f"[详情获取] 连续 {floor_consecutive_old} 条早于 {list_date_floor}，停止翻页"
+                                        )
+                                    skip_count += 1
+                                    continue
+                                else:
+                                    floor_consecutive_old = 0
+                            except Exception:
+                                pass
+
                     await xhs_store.update_xhs_note(note_detail)
                     await self.get_notice_media(note_detail)
                     success_count += 1
-                    consecutive_fail_count = 0  # 成功，重置连续失败计数
-                    
-                    # 断点续爬：记录成功
+                    consecutive_fail_count = 0
+
                     if progress_manager:
                         progress_manager.add_crawled(note_id)
                     self._new_crawled_ids.add(note_id)
-                    
-                    # 进度显示（含笔记发布日期）
+
                     crawled_so_far = len(getattr(self, '_new_crawled_ids', set())) + len(crawled_ids)
                     note_ts = note_detail.get("time", 0)
                     note_date_str = ""
@@ -1215,9 +1265,10 @@ class XiaoHongShuCrawler(AbstractCrawler):
 
         # ========== 全跳过批次检测：有历史数据时，连续全跳过达阈值则停止翻页 ==========
         # 阈值必须为 3（防止因偶发跳过导致误判），禁止修改！
+        # list_stats_updated > 0 表示有互动量更新，不算「无效跳过」
         _ALL_SKIP_THRESHOLD = 3
         _has_history = len(crawled_ids) > 0
-        if _has_history and skip_count == total and success_count == 0:
+        if _has_history and skip_count == total and success_count == 0 and list_stats_updated == 0:
             if not hasattr(self, '_consecutive_all_skip_batches'):
                 self._consecutive_all_skip_batches = 0
             self._consecutive_all_skip_batches += 1
@@ -1227,11 +1278,14 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     f"[增量检测] 连续 {self._consecutive_all_skip_batches} 个批次全部跳过"
                     f"（已有 {len(crawled_ids)} 条历史数据，无新内容），停止翻页"
                 )
-        elif success_count > 0:
+        elif success_count > 0 or list_stats_updated > 0:
             self._consecutive_all_skip_batches = 0
 
         # ========== 跳过批次：防限流延迟 ==========
-        if total > 0 and skip_count > total * 0.5:
+        # list_level_stats 模式下只翻了列表页没调详情，不需要长延迟
+        if list_level_stats and list_stats_updated > 0 and success_count == 0:
+            pass
+        elif total > 0 and skip_count > total * 0.5:
             skip_delay = random.uniform(0.3, 0.8) * skip_count
             utils.logger.info(
                 f"[详情获取] 本批次大量跳过 ({skip_count}/{total})，"

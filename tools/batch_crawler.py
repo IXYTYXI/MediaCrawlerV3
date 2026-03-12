@@ -1523,8 +1523,7 @@ def _upload_note_images_to_feishu(
         except Exception as e:
             utils.logger.warning(f"[图片上传] {field_name} 失败: {e}")
         finally:
-            # 飞书上传API有限流，每次上传后等待 2.2 秒
-            time.sleep(2.2)
+            time.sleep(0.3)
         return field_name, None
     
     # 多线程上传
@@ -3002,6 +3001,7 @@ async def run_batch_crawl(
         config.INCREMENTAL_MODE = False
         config.LIST_LEVEL_STATS_UPDATE = False
         config.LIST_LEVEL_STATS_CUTOFF_DATE = ""
+        config.LIST_LEVEL_DATE_FLOOR = ""
         if crawl_mode in ("date_range", "incremental") and date_start:
             config.DATE_EARLY_STOP_ENABLED = True
             config.CRAWL_DATE_START = date_start
@@ -3040,12 +3040,13 @@ async def run_batch_crawl(
                     config.DATE_EARLY_STOP_ENABLED = False
                     config.CRAWL_DATE_START = ""
                     config.INCREMENTAL_MODE = False
-                    # 列表阶段轻量互动量刷新：旧笔记直接从列表取互动量，跳过详情接口
                     config.LIST_LEVEL_STATS_UPDATE = True
-                    config.LIST_LEVEL_STATS_CUTOFF_DATE = last_date  # 上次爬取日期作为截止
+                    config.LIST_LEVEL_STATS_CUTOFF_DATE = last_date
+                    config.LIST_LEVEL_DATE_FLOOR = date_start  # 日期地板：早于此日期的笔记直接跳过
                     utils.logger.info(
                         f"[BatchCrawler] [{idx}/{total}] [增量+刷新] {creator_name}，"
-                        f"新笔记(>{last_date})调详情追加，旧笔记直接从列表更新互动量"
+                        f"新笔记(>{last_date})调详情追加，已爬笔记从列表更新互动量，"
+                        f"地板={date_start or '无'}"
                     )
                 else:
                     config.DATE_EARLY_STOP_ENABLED = True

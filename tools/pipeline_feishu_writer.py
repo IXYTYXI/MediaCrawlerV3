@@ -78,7 +78,7 @@ class PipelineFeishuWriter:
         self._fn_comment = {**DEFAULT_FIELD_NAMES_COMMENT, **(_raw.get("comment") or {})}
 
         self.is_image_mode = self._feishu_cfg.get("image_mode", "link") == "image"
-        self._image_threads = self._feishu_cfg.get("image_threads", 2)
+        self._image_threads = self._feishu_cfg.get("image_threads", 4)
 
         self.app_token: Optional[str] = None
         self.bitable_url: Optional[str] = None
@@ -93,6 +93,7 @@ class PipelineFeishuWriter:
         self._is_reusing = False
         self._video_summary_note_map: Dict[str, str] = {}
         self._image_text_summary_note_map: Dict[str, str] = {}
+        self._summary_lock = threading.Lock()
 
         self._owner_open_id: str = ""
 
@@ -264,6 +265,34 @@ class PipelineFeishuWriter:
         )
         return self._script_extractor
 
+    def _ensure_table_fields(self, table_id: str, records: List[Dict]):
+        """检查 records 中的字段是否都存在于表中，缺失的自动添加"""
+        all_rec_fields: Set[str] = set()
+        for rec in records:
+            all_rec_fields.update(rec.get("fields", {}).keys())
+        if not all_rec_fields:
+            return
+        try:
+            existing = self.client.list_fields(self.app_token, table_id)
+            existing_names = {f.get("field_name", "") for f in existing if f}
+        except Exception as e:
+            utils.logger.warning(f"[Feishu] 获取表字段列表失败: {e}")
+            return
+        missing = all_rec_fields - existing_names
+        if not missing:
+            return
+        added = 0
+        for fn in sorted(missing):
+            try:
+                self.client.add_field(
+                    self.app_token, table_id, fn, self._resolve_field_type(fn),
+                )
+                added += 1
+            except Exception:
+                pass
+        if added:
+            utils.logger.info(f"[Feishu] 自动补齐 {added} 个缺失字段: {sorted(missing)}")
+
     def _create_summary_table(self, table_name: str) -> str:
         """创建汇总表，先尝试带字段创建，失败则回退到逐个添加字段"""
         table_id = ""
@@ -396,7 +425,9 @@ class PipelineFeishuWriter:
     ) -> List[Dict]:
         """去重汇总表记录：已存在的更新互动量，返回仅需新插入的记录"""
         if not note_map:
+            utils.logger.info(f"[Feishu] 汇总表去重: 无已有记录映射，全部为新记录 ({len(records)} 条)")
             return records
+        utils.logger.info(f"[Feishu] 汇总表去重: 对比 {len(records)} 条记录 (已有映射 {len(note_map)} 条)")
 
         new_records = []
         update_records = []
@@ -491,6 +522,10 @@ class PipelineFeishuWriter:
 
         safe_name = creator_name[:100]
         summary_only = self._feishu_cfg.get("summary_only", False)
+        utils.logger.info(
+            f"[Feishu] 开始写入: {safe_name} ({len(notes)} 条笔记"
+            f", summary_only={summary_only})"
+        )
         existing_table_id = None
         seq_offset = 0
         inserted = 0
@@ -499,8 +534,10 @@ class PipelineFeishuWriter:
             existing_table_id = self._table_name_to_id.get(safe_name) if self._is_reusing else None
 
         if existing_table_id:
+            utils.logger.info(f"[Feishu] {safe_name}: 查询已有记录...")
             note_to_record = self._get_existing_note_map(existing_table_id)
             existing_note_ids = set(note_to_record.keys())
+            utils.logger.info(f"[Feishu] {safe_name}: 已有 {len(existing_note_ids)} 条记录")
 
             new_notes = []
             update_notes = []
@@ -539,8 +576,37 @@ class PipelineFeishuWriter:
             self._all_field_names.update(record.get("fields", {}).keys())
 
         if self.is_image_mode:
-            self._upload_images_for_records(notes, records)
-            self._upload_videos_for_records(notes, records)
+            skip_ids: set = set()
+            if summary_only and self._is_reusing:
+                skip_ids = (
+                    set(self._video_summary_note_map.keys())
+                    | set(self._image_text_summary_note_map.keys())
+                )
+
+            if skip_ids:
+                new_pairs = [
+                    (n, r) for n, r in zip(notes, records)
+                    if n.get("note_id", "") not in skip_ids
+                ]
+                skip_count = len(notes) - len(new_pairs)
+                if new_pairs:
+                    up_notes, up_recs = zip(*new_pairs)
+                    utils.logger.info(
+                        f"[Feishu] {safe_name}: 仅上传 {len(up_notes)}/{len(notes)} "
+                        f"条新笔记的附件 (跳过 {skip_count} 条已有)"
+                    )
+                    self._upload_images_for_records(list(up_notes), list(up_recs))
+                    self._upload_videos_for_records(list(up_notes), list(up_recs))
+                else:
+                    utils.logger.info(
+                        f"[Feishu] {safe_name}: 全部为已有记录，跳过附件上传"
+                    )
+                self._strip_string_attachments(records)
+            else:
+                utils.logger.info(f"[Feishu] {safe_name}: 开始上传图片/视频附件...")
+                self._upload_images_for_records(notes, records)
+                self._upload_videos_for_records(notes, records)
+                utils.logger.info(f"[Feishu] {safe_name}: 附件上传完成")
 
         self._rebuild_field_defs()
         note_seq = self._fn_note.get("seq", "序号")
@@ -602,10 +668,13 @@ class PipelineFeishuWriter:
             for i, rec in enumerate(records, seq_offset + 1):
                 rec["fields"][note_seq] = str(i)
 
+            self._ensure_table_fields(table_id, records)
+            utils.logger.info(f"[Feishu] {safe_name}: 批量插入 {len(records)} 条记录到作者表...")
             inserted = self.client.batch_insert_records(
                 self.app_token, table_id, records
             )
             self._total_inserted += inserted
+            utils.logger.info(f"[Feishu] {safe_name}: 插入完成 ({inserted} 条成功)")
 
             if not existing_table_id:
                 try:
@@ -669,9 +738,11 @@ class PipelineFeishuWriter:
             return
         self._ensure_bitable()
         if self._write_executor is None:
+            workers = int(self._feishu_cfg.get("write_workers", 2))
             self._write_executor = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="feishu-writer"
+                max_workers=workers, thread_name_prefix="feishu-writer"
             )
+            utils.logger.info(f"[Feishu] 写入线程池: {workers} 个并发线程")
         future = self._write_executor.submit(
             self.write_creator, creator_name, list(notes)
         )
@@ -688,7 +759,11 @@ class PipelineFeishuWriter:
                 f.result()
                 utils.logger.info(f"[Pipeline] 飞书写入进度: {i}/{total} 已完成")
             except Exception as e:
-                utils.logger.error(f"[Pipeline] 写入任务 {i} 异常: {e}")
+                import traceback
+                utils.logger.error(
+                    f"[Pipeline] 写入任务 {i} 异常: {e}\n"
+                    f"{traceback.format_exc()}"
+                )
         self._write_futures.clear()
         if self._write_executor:
             self._write_executor.shutdown(wait=False)
@@ -1093,6 +1168,17 @@ class PipelineFeishuWriter:
 
     # ==================== 图片/视频上传 ====================
 
+    @staticmethod
+    def _strip_string_attachments(records: List[Dict]):
+        """清理记录中未上传的字符串类型附件字段（图片URL、视频URL）"""
+        for record in records:
+            flds = record.get("fields", {})
+            for key in list(flds.keys()):
+                if key.startswith("图片") and isinstance(flds[key], str):
+                    del flds[key]
+                if key == "视频附件" and isinstance(flds[key], str):
+                    del flds[key]
+
     def _upload_images_for_records(
         self, notes: List[Dict], records: List[Dict]
     ):
@@ -1165,32 +1251,35 @@ class PipelineFeishuWriter:
         """将图文类笔记追加到「图文汇总」表"""
         if not image_text_records:
             return
+        utils.logger.info(f"[Feishu] 图文汇总: 处理 {len(image_text_records)} 条记录...")
 
-        if not self.image_text_summary_table_id:
-            self.image_text_summary_table_id = self._create_summary_table("图文汇总")
+        with self._summary_lock:
             if not self.image_text_summary_table_id:
+                self.image_text_summary_table_id = self._create_summary_table("图文汇总")
+                if not self.image_text_summary_table_id:
+                    return
+
+            new_records = self._dedup_and_update_summary(
+                image_text_records, self._image_text_summary_note_map,
+                self.image_text_summary_table_id,
+            )
+            skipped = len(image_text_records) - len(new_records)
+
+            if not new_records:
+                if skipped:
+                    utils.logger.info(f"[Pipeline] 图文汇总: {skipped} 条已存在(互动量已更新)")
                 return
 
-        new_records = self._dedup_and_update_summary(
-            image_text_records, self._image_text_summary_note_map,
-            self.image_text_summary_table_id,
-        )
-        skipped = len(image_text_records) - len(new_records)
+            note_seq = self._fn_note.get("seq", "序号")
+            for rec in new_records:
+                self._image_text_serial += 1
+                rec["fields"][note_seq] = str(self._image_text_serial)
 
-        if not new_records:
-            if skipped:
-                utils.logger.info(f"[Pipeline] 图文汇总: {skipped} 条已存在(互动量已更新)")
-            return
-
-        note_seq = self._fn_note.get("seq", "序号")
-        for rec in new_records:
-            self._image_text_serial += 1
-            rec["fields"][note_seq] = str(self._image_text_serial)
-
-        inserted = self.client.batch_insert_records(
-            self.app_token, self.image_text_summary_table_id,
-            new_records
-        )
+            self._ensure_table_fields(self.image_text_summary_table_id, new_records)
+            inserted = self.client.batch_insert_records(
+                self.app_token, self.image_text_summary_table_id,
+                new_records
+            )
         parts = [f"[Pipeline] 图文汇总: {inserted} 条写入"]
         if skipped:
             parts.append(f", {skipped} 条已存在(互动量已更新)")
@@ -1199,36 +1288,39 @@ class PipelineFeishuWriter:
     # ==================== 视频汇总 + 脚本流水线 ====================
 
     def _append_video_summary(self, video_records: List[Dict]):
-        if not self.summary_table_id:
-            self.summary_table_id = self._create_summary_table("视频汇总")
+        utils.logger.info(f"[Feishu] 视频汇总: 处理 {len(video_records)} 条记录...")
+        with self._summary_lock:
             if not self.summary_table_id:
+                self.summary_table_id = self._create_summary_table("视频汇总")
+                if not self.summary_table_id:
+                    return
+                try:
+                    self.client.add_field(
+                        self.app_token, self.summary_table_id, "视频公网链接", 15
+                    )
+                except Exception:
+                    pass
+
+            new_records = self._dedup_and_update_summary(
+                video_records, self._video_summary_note_map,
+                self.summary_table_id,
+            )
+            video_skipped = len(video_records) - len(new_records)
+
+            if not new_records:
+                if video_skipped:
+                    utils.logger.info(f"[Pipeline] 视频汇总: {video_skipped} 条已存在(互动量已更新)")
                 return
-            try:
-                self.client.add_field(
-                    self.app_token, self.summary_table_id, "视频公网链接", 15
-                )
-            except Exception:
-                pass
 
-        new_records = self._dedup_and_update_summary(
-            video_records, self._video_summary_note_map,
-            self.summary_table_id,
-        )
-        video_skipped = len(video_records) - len(new_records)
+            note_seq = self._fn_note.get("seq", "序号")
+            for vr in new_records:
+                self._video_serial += 1
+                vr["fields"][note_seq] = str(self._video_serial)
 
-        if not new_records:
-            if video_skipped:
-                utils.logger.info(f"[Pipeline] 视频汇总: {video_skipped} 条已存在(互动量已更新)")
-            return
-
-        note_seq = self._fn_note.get("seq", "序号")
-        for vr in new_records:
-            self._video_serial += 1
-            vr["fields"][note_seq] = str(self._video_serial)
-
-        inserted = self.client.batch_insert_records_full(
-            self.app_token, self.summary_table_id, new_records
-        )
+            self._ensure_table_fields(self.summary_table_id, new_records)
+            inserted = self.client.batch_insert_records_full(
+                self.app_token, self.summary_table_id, new_records
+            )
 
         hot_count = 0
         skip_count = 0
