@@ -123,15 +123,16 @@ class FeishuBitableClient:
             table_id
         """
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables"
-        body = {
-            "table": {
-                "name": table_name,
-                "fields": fields,
-            }
-        }
+        table_def: Dict[str, Any] = {"name": table_name}
+        if fields:
+            table_def["fields"] = fields
+        body = {"table": table_def}
 
         data = self._request("POST", url, json=body)
-        table_id = data.get("table_id", "")
+        utils.logger.info(f"[FeishuBitable] create_table 响应 keys={list(data.keys())}, data={str(data)[:300]}")
+        table_id = data.get("table_id") or (data.get("table") or {}).get("table_id", "")
+        if not table_id:
+            utils.logger.error(f"[FeishuBitable] create_table 返回空 table_id! 完整响应: {data}")
         utils.logger.info(f"[FeishuBitable] 创建数据表成功: {table_name} (id={table_id})")
         return table_id
 
@@ -399,6 +400,42 @@ class FeishuBitableClient:
             return True
         except Exception as e:
             utils.logger.warning(f"[FeishuBitable] 添加协作者失败: {e}")
+            return False
+
+    def transfer_owner(
+        self,
+        token: str,
+        new_owner_id: str,
+        member_type: str = "openid",
+        node_type: str = "bitable",
+    ) -> bool:
+        """
+        转移云文档所有者。
+        文档: https://open.feishu.cn/document/server-docs/docs/drive-v1/permission-member/transfer_owner
+
+        Args:
+            token: 多维表格 app_token
+            new_owner_id: 新所有者 ID
+            member_type: openid / userid / email
+            node_type: 文档类型
+
+        Returns:
+            是否成功
+        """
+        url = f"{self.BASE_URL}/drive/v1/permissions/{token}/members/transfer_owner"
+        params = {"type": node_type}
+        body = {
+            "member_type": member_type,
+            "member_id": new_owner_id.strip(),
+        }
+        try:
+            self._request("POST", url, params=params, json=body)
+            utils.logger.info(
+                f"[FeishuBitable] 所有者已转移给: {new_owner_id[:16]}..."
+            )
+            return True
+        except Exception as e:
+            utils.logger.warning(f"[FeishuBitable] 转移所有者失败: {e}")
             return False
 
     # ==================== 媒体上传 ====================
@@ -826,6 +863,7 @@ def map_note_to_feishu_record(
     is_hot = "🔥 热门" if interaction >= 50 else ""
 
     img_prefix = n("image_prefix", "图片")
+    # 飞书多维表格中若为文本类型，数值须转为字符串，避免 TextFieldConvFail
     fields: Dict[str, Any] = {
         n("creator_name", "账号名称"): creator_name,
         n("content_type", "内容类型"): content_type,
@@ -834,10 +872,10 @@ def map_note_to_feishu_record(
         n("tag_list", "标签"): note_data.get("tag_list", ""),
         n("link", "链接"): {"link": note_url, "text": note_url} if note_url else "",
         n("time", "发布时间"): time_ms if time_ms else "",
-        n("liked_count", "点赞数"): liked,
-        n("collected_count", "收藏数"): collected,
-        n("comment_count", "评论数"): comment,
-        n("interaction", "互动量"): interaction,
+        n("liked_count", "点赞数"): str(liked),
+        n("collected_count", "收藏数"): str(collected),
+        n("comment_count", "评论数"): str(comment),
+        n("interaction", "互动量"): str(interaction),
         n("hot", "热门"): is_hot,
         n("video_script", "视频脚本"): "",
     }

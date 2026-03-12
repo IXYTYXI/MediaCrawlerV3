@@ -623,6 +623,18 @@ window.onerror = function(msg, url, line, col, err) {
             <div class="card rounded-xl p-4"><label class="text-[11px] text-gray-500 uppercase tracking-wider">结束日期</label>
               <input type="date" v-model="config.batch_crawl.date_end" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white"></div>
           </template>
+          <template v-if="config.batch_crawl.crawl_mode === 'incremental'">
+            <div class="card rounded-xl p-4 col-span-2"><label class="text-[11px] text-gray-500 uppercase tracking-wider">增量起始日期覆盖 <span class="text-gray-600">(可选)</span></label>
+              <input type="date" v-model="config.batch_crawl.incremental_start_override" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
+              <p class="text-[10px] text-gray-600 mt-1">填写后所有作者都从此日期开始重新增量爬取，忽略进度文件中的上次日期。留空则使用各作者各自的上次爬取日期。</p></div>
+            <div class="card rounded-xl p-4 col-span-2 flex items-center justify-between">
+              <div>
+                <label class="text-sm text-gray-300 font-medium">全量刷新互动量</label>
+                <p class="text-[10px] text-gray-600 mt-0.5">开启后遍历每个作者全部页面：截止日期之前的旧笔记直接从列表取互动量更新（跳过详情接口，大幅减少请求量）；新笔记正常调详情追加。关闭则只爬截止日期之后的新笔记。</p>
+              </div>
+              <div class="toggle" :class="{ active: config.batch_crawl.refresh_existing_stats }" @click="config.batch_crawl.refresh_existing_stats = !config.batch_crawl.refresh_existing_stats"></div>
+            </div>
+          </template>
         </div>
 
         <!-- 作者列表 -->
@@ -1042,6 +1054,24 @@ window.onerror = function(msg, url, line, col, err) {
           <div><label class="text-sm text-gray-300 font-medium">启用飞书写入</label><p class="text-[11px] text-gray-600 mt-0.5">爬取完成后自动创建并写入多维表格</p></div>
           <div class="toggle" :class="{ active: config.feishu.enabled }" @click="config.feishu.enabled = !config.feishu.enabled"></div>
         </div>
+        <div class="card rounded-xl p-5 flex items-center justify-between">
+          <div><label class="text-sm text-gray-300 font-medium">AI 视频脚本自动提取</label><p class="text-[11px] text-gray-600 mt-0.5">爬取完成后自动调用 Gemini 从视频中提取口播脚本，关闭后仅保存原始数据</p></div>
+          <div class="toggle" :class="{ active: config.feishu.video_script_enabled }" @click="config.feishu.video_script_enabled = !config.feishu.video_script_enabled"></div>
+        </div>
+        <div class="card rounded-xl p-5 flex items-center justify-between">
+          <div><label class="text-sm text-gray-300 font-medium">复用已有多维表格</label><p class="text-[11px] text-gray-600 mt-0.5">增量爬取时复用上次创建的多维表格，仅追加新内容，避免重复上传媒体</p></div>
+          <div class="toggle" :class="{ active: config.feishu.reuse_bitable }" @click="config.feishu.reuse_bitable = !config.feishu.reuse_bitable"></div>
+        </div>
+        <div class="card rounded-xl p-5 space-y-3" v-if="config.feishu.reuse_bitable">
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">复用多维表格 APP TOKEN <span class="text-gray-600">(指定要追加数据的多维表格)</span></label>
+            <input type="text" v-model="config.feishu.reuse_app_token" :placeholder="(config.feishu.last_bitable && config.feishu.last_bitable.app_token) || '留空则自动使用上次创建的表格'" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            <p class="text-[10px] text-gray-600 mt-1.5">从飞书多维表格 URL 中获取，如 https://xxx.feishu.cn/base/<b>HZebb1btnaiCHqs01F4cw3XXnAc</b>，粗体部分即 App Token。留空则使用上次自动记录的表格。</p>
+          </div>
+        </div>
+        <div class="card rounded-xl p-5 flex items-center justify-between">
+          <div><label class="text-sm text-gray-300 font-medium">仅写入汇总表</label><p class="text-[11px] text-gray-600 mt-0.5">增量数据只追加到视频汇总和图文汇总，不创建或更新各作者的独立分表</p></div>
+          <div class="toggle" :class="{ active: config.feishu.summary_only }" @click="config.feishu.summary_only = !config.feishu.summary_only"></div>
+        </div>
         <div class="card rounded-xl p-5 space-y-4">
           <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">App ID</label>
             <input type="text" v-model="config.feishu.app_id" placeholder="cli_xxxxxxxx" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
@@ -1354,8 +1384,8 @@ window._mcApp = createApp({
       '并发控制': { max_concurrency: 3 },
       '浏览器控制': { auto_close_browser: false, remove_webdriver_flag: true, spoof_canvas_fingerprint: true, spoof_webgl_fingerprint: true },
       '断点续爬': { enabled: true, auto_save_interval: 10, retry_failed: true, use_sqlite: false },
-      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '', task_id: 'task_20260210' },
-      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '', collaborator_open_ids: [], collaborator_open_ids_text: '' },
+      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', incremental_start_override: '', refresh_existing_stats: false, max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '', task_id: 'task_20260210' },
+      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '', collaborator_open_ids: [], collaborator_open_ids_text: '', video_script_enabled: false, reuse_bitable: false, reuse_app_token: '', summary_only: false },
       notification: { enabled: false, webhook_url: '', chat_id: '', app_id: '', app_secret: '', at_user_ids: ['all'] },
     }
 
@@ -1848,6 +1878,7 @@ window._mcApp = createApp({
       const res = await api('/config', { method: 'PUT', body: JSON.stringify(toSave) });
       setTimeout(() => { saving.value = false }, 500);
       if (res?.success) { configOriginal.value = JSON.stringify(config); showToast('配置已保存', 'success') }
+      else { showToast('保存失败: ' + (res?.detail || res?.message || '请检查网络或登录状态'), 'error') }
     }
 
     async function loadCreators() {

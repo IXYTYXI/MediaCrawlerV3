@@ -855,6 +855,53 @@ class XiaoHongShuCrawler(AbstractCrawler):
         consecutive_old_count = 0  # 连续超出日期范围的计数
         early_stopped = False
         batch_has_old_notes = False  # 本批次是否有超期笔记
+
+        # 列表阶段轻量互动量刷新
+        list_level_stats = getattr(config, 'LIST_LEVEL_STATS_UPDATE', False)
+        list_cutoff_date = getattr(config, 'LIST_LEVEL_STATS_CUTOFF_DATE', '')
+        list_stats_updated = 0  # 通过列表直接更新互动量的计数
+        list_fallback_count = 0  # 旧笔记无本地详情、回退调详情接口的计数
+
+        def _parse_list_publish_date(post_item: dict) -> str:
+            """从列表条目的 note_card.corner_tag_info 解析发布日期，返回 'YYYY-MM-DD' 或 ''"""
+            from datetime import datetime as _dt, date as _date
+            note_card = post_item.get("note_card", {})
+            for tag in note_card.get("corner_tag_info", []):
+                if tag.get("type") == "publish_time":
+                    text = tag.get("text", "").strip()
+                    if not text:
+                        continue
+                    # "2024-01-31" 完整格式
+                    try:
+                        _dt.strptime(text, "%Y-%m-%d")
+                        return text
+                    except ValueError:
+                        pass
+                    # "02-05" 当年月日
+                    try:
+                        this_year = _date.today().year
+                        d = _dt.strptime(f"{this_year}-{text}", "%Y-%m-%d")
+                        return d.strftime("%Y-%m-%d")
+                    except ValueError:
+                        pass
+                    # "4天前" / "昨天" 等相对时间 → 视为今天（肯定是新内容）
+                    return _date.today().strftime("%Y-%m-%d")
+            return ""
+
+        def _extract_list_interact(post_item: dict) -> dict:
+            """从列表条目的 note_card.interact_info 提取互动量字段"""
+            note_card = post_item.get("note_card", {})
+            info = note_card.get("interact_info", {})
+            def _i(v):
+                try:
+                    return int(str(v).replace(",", "").strip()) if v else 0
+                except (ValueError, TypeError):
+                    return 0
+            liked = _i(info.get("liked_count", 0))
+            collected = _i(info.get("collected_count", 0))
+            comment = _i(info.get("comment_count", 0))
+            return {"liked": liked, "collected": collected, "comment": comment,
+                    "interaction": liked + collected + comment}
         
         is_parallel_mode = comments_mode == 'parallel' and enable_comments
         
@@ -871,7 +918,65 @@ class XiaoHongShuCrawler(AbstractCrawler):
             note_id = post_item.get("note_id")
             xsec_token = post_item.get("xsec_token", "")
             display_title = post_item.get("display_title", "")[:20]
-            
+
+            # ========== 列表阶段轻量互动量刷新 ==========
+            # 开启后：先判断该笔记是否属于「截止日期之前的旧笔记」
+            # - 旧笔记已有本地详情 → 直接用列表里的互动量更新，跳过详情接口
+            # - 旧笔记无本地详情（遗漏）→ 回退调详情接口补完整
+            # - 新笔记（截止日期之后）→ 不在 crawled_ids 里，走下面正常详情流程
+            if list_level_stats and list_cutoff_date and note_id:
+                pub_date = _parse_list_publish_date(post_item)
+                is_old = pub_date and pub_date <= list_cutoff_date
+                if is_old:
+                    task_dir = getattr(config, 'XHS_TASK_DIR', '') or ''
+                    user_id_cur = getattr(config, 'XHS_CURRENT_USER_ID', '') or ''
+                    _cache_key = f"_stats_existing_cache_{user_id_cur}"
+                    if not getattr(self, _cache_key, None):
+                        cache: dict = {}
+                        for suffix in ["_contents.json", "_reuse.json"]:
+                            fp = os.path.join(task_dir, f"creator_{user_id_cur}{suffix}")
+                            if os.path.exists(fp):
+                                try:
+                                    with open(fp, "r", encoding="utf-8") as _f:
+                                        arr = json.load(_f)
+                                    if isinstance(arr, list):
+                                        for it in arr:
+                                            nid = it.get("note_id")
+                                            if nid:
+                                                cache[nid] = it
+                                except Exception:
+                                    pass
+                        setattr(self, _cache_key, cache)
+                    existing_cache = getattr(self, _cache_key, {})
+                    has_local = note_id in existing_cache
+                    if has_local:
+                        # 直接从列表取互动量，更新本地文件 + 不调详情接口
+                        existing_note = existing_cache[note_id]
+                        stats = _extract_list_interact(post_item)
+                        existing_note.update({
+                            "liked_count": stats["liked"],
+                            "collected_count": stats["collected"],
+                            "comment_count": stats["comment"],
+                        })
+                        try:
+                            await xhs_store.update_xhs_note(existing_note)
+                        except Exception:
+                            pass
+                        list_stats_updated += 1
+                        utils.logger.debug(
+                            f"[详情获取] ({idx}/{total}) ⚡ 列表互动量更新: {display_title}... "
+                            f"[👍{stats['liked']} 🌟{stats['collected']} 💬{stats['comment']}]"
+                        )
+                        skip_count += 1
+                        continue
+                    else:
+                        # 旧笔记无本地详情 → 正常调详情接口补完整，不 continue，往下走
+                        list_fallback_count += 1
+                        utils.logger.debug(
+                            f"[详情获取] ({idx}/{total}) 🔄 旧笔记无详情，补爬: {display_title}..."
+                        )
+                        # 走下面的详情接口流程（不走 crawled_ids 跳过分支）
+
             # ========== 断点续爬：已爬取作品 ==========
             if note_id in crawled_ids:
                 # 老作品只更新互动数据：获取详情、合并、写入，不下载媒体
@@ -1136,7 +1241,11 @@ class XiaoHongShuCrawler(AbstractCrawler):
 
         early_stop_msg = f", 提前停止(早于{crawl_date_start})" if early_stopped else ""
         stats_msg = f", 统计更新 {stats_updated_count}" if stats_updated_count > 0 else ""
-        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}{stats_msg}, 总计 {total}{early_stop_msg}")
+        list_stats_msg = (
+            f", 列表互动量更新 {list_stats_updated}"
+            + (f"(补爬 {list_fallback_count} 条)" if list_fallback_count else "")
+        ) if list_stats_updated > 0 else ""
+        utils.logger.info(f"[详情获取] 汇总: 成功 {success_count}, 失败 {fail_count}, 跳过 {skip_count}{stats_msg}{list_stats_msg}, 总计 {total}{early_stop_msg}")
     
     async def _fetch_comments_with_delay(
         self, 

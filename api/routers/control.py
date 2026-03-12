@@ -7,8 +7,9 @@ import asyncio
 import json
 import os
 import signal
+import subprocess
 import time
-from typing import Optional
+from typing import Dict, List, Optional
 
 import logging
 
@@ -831,3 +832,137 @@ async def _verify_web_session(web_session: str) -> bool:
     except Exception:
         pass
     return False
+
+
+# ── 飞书重新写入（批量作者数据 → 飞书多维表格） ──
+
+_resync_feishu_proc: Optional[subprocess.Popen] = None
+_resync_feishu_logs: List[str] = []
+_resync_feishu_status: str = ""  # "", "running", "success", "failed"
+
+
+@router.post("/resync-feishu")
+async def resync_feishu_creator():
+    """一键将本地已爬取的作者数据重新写入飞书多维表格"""
+    global _resync_feishu_proc, _resync_feishu_logs, _resync_feishu_status
+
+    if _resync_feishu_proc and _resync_feishu_proc.poll() is None:
+        return JSONResponse(
+            status_code=409,
+            content={"success": False, "message": "飞书写入正在运行中，请等待完成"}
+        )
+
+    cfg = _read_config()
+    feishu = cfg.get("feishu", {})
+    if not feishu.get("enabled"):
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "飞书推送未启用，请先开启"}
+        )
+
+    _resync_feishu_logs = []
+    _resync_feishu_status = "running"
+
+    cmd = [
+        "conda", "run", "--no-capture-output", "-n", "uvenv",
+        "--cwd", PROJECT_ROOT,
+        "python", "-u", "-m", "tools.resync_feishu_creator",
+    ]
+
+    try:
+        _resync_feishu_proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=PROJECT_ROOT,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        )
+    except Exception as e:
+        _resync_feishu_status = "failed"
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": f"启动失败: {e}"}
+        )
+
+    async def _wait_resync():
+        global _resync_feishu_status, _resync_feishu_proc
+        loop = asyncio.get_event_loop()
+        try:
+            while _resync_feishu_proc and _resync_feishu_proc.poll() is None:
+                line = await loop.run_in_executor(
+                    None, _resync_feishu_proc.stdout.readline
+                )
+                if line:
+                    stripped = line.strip()
+                    if stripped:
+                        _resync_feishu_logs.append(stripped)
+                        if len(_resync_feishu_logs) > 2000:
+                            _resync_feishu_logs[:] = _resync_feishu_logs[-1500:]
+            remaining = await loop.run_in_executor(
+                None, _resync_feishu_proc.stdout.read
+            )
+            if remaining:
+                for ln in remaining.strip().split("\n"):
+                    if ln.strip():
+                        _resync_feishu_logs.append(ln.strip())
+        except Exception:
+            pass
+
+        exit_code = _resync_feishu_proc.returncode if _resync_feishu_proc else -1
+        full = "\n".join(_resync_feishu_logs)
+        if "飞书写入完成" in full or exit_code == 0:
+            _resync_feishu_status = "success"
+        else:
+            _resync_feishu_status = "failed"
+        _resync_feishu_logs.append(
+            f"=== 写入结束: exit_code={exit_code}, status={_resync_feishu_status} ==="
+        )
+
+    asyncio.create_task(_wait_resync())
+    return {"success": True, "message": "飞书写入已启动，请在页面查看进度"}
+
+
+@router.get("/resync-feishu/status")
+async def resync_feishu_status():
+    """获取飞书重新写入的状态和日志"""
+    running = bool(
+        _resync_feishu_proc and _resync_feishu_proc.poll() is None
+    )
+    bitable_url = ""
+    for ln in reversed(_resync_feishu_logs):
+        if "多维表格链接:" in ln:
+            idx = ln.find("http")
+            if idx >= 0:
+                bitable_url = ln[idx:].strip()
+            break
+
+    return {
+        "success": True,
+        "status": "running" if running else _resync_feishu_status,
+        "logs": _resync_feishu_logs[-200:],
+        "bitable_url": bitable_url,
+    }
+
+
+@router.post("/resync-feishu/stop")
+async def resync_feishu_stop(request: Request):
+    """停止飞书写入进程"""
+    global _resync_feishu_proc, _resync_feishu_status
+    if not _resync_feishu_proc or _resync_feishu_proc.poll() is not None:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "没有正在运行的飞书写入进程"}
+        )
+    try:
+        _resync_feishu_proc.send_signal(signal.SIGTERM)
+        _resync_feishu_proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        _resync_feishu_proc.kill()
+    except Exception:
+        pass
+    _resync_feishu_status = "failed"
+    _resync_feishu_logs.append("=== 已手动停止 ===")
+    return {"success": True, "message": "飞书写入已停止"}

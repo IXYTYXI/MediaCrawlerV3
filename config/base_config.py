@@ -180,6 +180,12 @@ DATE_EARLY_STOP_THRESHOLD = 5  # 连续多少条超出范围后停止
 CRAWL_DATE_START = ""  # 由 batch_crawler 动态注入，格式 "2025-01-01"
 INCREMENTAL_MODE = False  # 由 batch_crawler 动态注入，仅增量更新模式下为 True
 
+# 列表阶段轻量互动量刷新：开启后对列表里的旧笔记（已有详情）直接取互动量更新，跳过详情接口
+# 遗漏笔记（无本地详情）仍正常调详情补完整；新笔记走正常详情流程
+# 由 batch_crawler 在增量+刷新互动模式下自动设置
+LIST_LEVEL_STATS_UPDATE = False
+LIST_LEVEL_STATS_CUTOFF_DATE = ""  # 此日期之前的笔记视为「旧笔记」，格式 "2026-03-06"
+
 # 假动作策略：随机访问无关内容，模拟真实用户浏览
 FAKE_ACTION_ENABLED = True
 FAKE_ACTION_PROBABILITY = 0.15  # 15% 概率触发假动作

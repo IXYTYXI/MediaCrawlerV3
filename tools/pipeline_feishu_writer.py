@@ -83,12 +83,18 @@ class PipelineFeishuWriter:
         self.app_token: Optional[str] = None
         self.bitable_url: Optional[str] = None
         self.summary_table_id: Optional[str] = None
+        self.image_text_summary_table_id: Optional[str] = None
         self._first_creator = True
         self._total_inserted = 0
         self._total_skipped_existing = 0
         self._creator_count = 0
         self._video_serial = 0
+        self._image_text_serial = 0
         self._is_reusing = False
+        self._video_summary_note_map: Dict[str, str] = {}
+        self._image_text_summary_note_map: Dict[str, str] = {}
+
+        self._owner_open_id: str = ""
 
         self._existing_tables: Dict[str, str] = {}
         self._table_name_to_id: Dict[str, str] = {}
@@ -141,6 +147,14 @@ class PipelineFeishuWriter:
                             self.app_token, tid
                         )
                         self._video_serial = len(existing_records)
+                        self._video_summary_note_map = self._build_note_map_from_records(existing_records)
+                    elif name == "图文汇总":
+                        self.image_text_summary_table_id = tid
+                        existing_records = self.client.list_all_records(
+                            self.app_token, tid
+                        )
+                        self._image_text_serial = len(existing_records)
+                        self._image_text_summary_note_map = self._build_note_map_from_records(existing_records)
 
                 self._is_reusing = True
                 self._first_creator = False
@@ -250,6 +264,48 @@ class PipelineFeishuWriter:
         )
         return self._script_extractor
 
+    def _create_summary_table(self, table_name: str) -> str:
+        """创建汇总表，先尝试带字段创建，失败则回退到逐个添加字段"""
+        table_id = ""
+        try:
+            table_id = self.client.create_table(
+                self.app_token, table_name, self._all_table_fields
+            )
+        except Exception as e:
+            utils.logger.warning(
+                f"[Pipeline] 带字段创建 {table_name} 失败({e})，回退到逐个添加"
+            )
+
+        if not table_id:
+            utils.logger.warning(
+                f"[Pipeline] {table_name} table_id 为空，回退到逐个添加字段"
+            )
+            table_id = self.client.create_table(
+                self.app_token, table_name, []
+            )
+
+        if not table_id:
+            utils.logger.error(f"[Pipeline] 无法创建 {table_name}，跳过")
+            return ""
+
+        note_seq = self._fn_note.get("seq", "序号")
+        ordered_with_serial = set(self._ordered_fields) | {note_seq}
+        self.client.cleanup_default_fields_and_records(
+            self.app_token, table_id, ordered_with_serial
+        )
+
+        for fn in self._ordered_fields:
+            if fn == note_seq:
+                continue
+            try:
+                self.client.add_field(
+                    self.app_token, table_id, fn,
+                    self._resolve_field_type(fn),
+                )
+            except Exception:
+                pass
+        return table_id
+
     # ==================== 去重辅助 ====================
 
     def _get_existing_note_ids(self, table_id: str) -> Set[str]:
@@ -291,6 +347,90 @@ class PipelineFeishuWriter:
             utils.logger.warning(f"[Pipeline] 查询已有记录失败: {e}")
             return {}
 
+    def _build_note_map_from_records(self, records: list) -> Dict[str, str]:
+        """从已加载的记录列表构建 {note_id: record_id} 映射"""
+        note_map: Dict[str, str] = {}
+        link_field = self._fn_note.get("link", "链接")
+        for rec in records:
+            record_id = rec.get("record_id", "")
+            link = rec.get("fields", {}).get(link_field, "")
+            url = ""
+            if isinstance(link, dict):
+                url = link.get("link", "") or link.get("text", "")
+            elif isinstance(link, str):
+                url = link
+            elif isinstance(link, list):
+                for seg in link:
+                    if isinstance(seg, dict) and seg.get("link"):
+                        url = seg["link"]
+                        break
+                    elif isinstance(seg, dict) and seg.get("text"):
+                        url = seg["text"]
+                        break
+            nid = ""
+            if "/explore/" in url:
+                nid = url.split("/explore/")[1].split("?")[0].split("/")[0]
+            elif "/discovery/item/" in url:
+                nid = url.split("/discovery/item/")[1].split("?")[0].split("/")[0]
+            if nid and record_id:
+                note_map[nid] = record_id
+        return note_map
+
+    def _extract_note_id_from_record(self, rec: Dict) -> str:
+        """从待写入的飞书记录中提取 note_id"""
+        link_field = self._fn_note.get("link", "链接")
+        link = rec.get("fields", {}).get(link_field, "")
+        url = ""
+        if isinstance(link, dict):
+            url = link.get("link", "") or link.get("text", "")
+        elif isinstance(link, str):
+            url = link
+        if "/explore/" in url:
+            return url.split("/explore/")[1].split("?")[0].split("/")[0]
+        elif "/discovery/item/" in url:
+            return url.split("/discovery/item/")[1].split("?")[0].split("/")[0]
+        return ""
+
+    def _dedup_and_update_summary(
+        self, records: List[Dict], note_map: Dict[str, str], table_id: str,
+    ) -> List[Dict]:
+        """去重汇总表记录：已存在的更新互动量，返回仅需新插入的记录"""
+        if not note_map:
+            return records
+
+        new_records = []
+        update_records = []
+        fn = self._fn_note
+        for rec in records:
+            nid = self._extract_note_id_from_record(rec)
+            existing_rid = note_map.get(nid) if nid else None
+            if existing_rid:
+                fields = rec.get("fields", {})
+                update_records.append({
+                    "record_id": existing_rid,
+                    "fields": {
+                        fn.get("liked_count", "点赞数"): fields.get(fn.get("liked_count", "点赞数"), ""),
+                        fn.get("collected_count", "收藏数"): fields.get(fn.get("collected_count", "收藏数"), ""),
+                        fn.get("comment_count", "评论数"): fields.get(fn.get("comment_count", "评论数"), ""),
+                        fn.get("interaction", "互动量"): fields.get(fn.get("interaction", "互动量"), ""),
+                        fn.get("hot", "热门"): fields.get(fn.get("hot", "热门"), ""),
+                    },
+                })
+            else:
+                new_records.append(rec)
+                if nid:
+                    note_map[nid] = "__pending__"
+
+        if update_records:
+            updated = self.client.batch_update_records(
+                self.app_token, table_id, update_records,
+            )
+            utils.logger.info(
+                f"[Pipeline] 汇总表互动量更新: {updated}/{len(update_records)} 条"
+            )
+
+        return new_records
+
     # ==================== 互动量增量更新 ====================
 
     def _update_interaction_stats(
@@ -319,14 +459,16 @@ class PipelineFeishuWriter:
             comment = _safe_int(note.get("comment_count", 0))
             interaction = liked + collected + comment
             is_hot = "🔥 热门" if interaction >= 50 else ""
+            # 飞书多维表格中若为文本类型，数值须转为字符串，避免 TextFieldConvFail
+            fn = self._fn_note
             update_records.append({
                 "record_id": record_id,
                 "fields": {
-                    "点赞数": liked,
-                    "收藏数": collected,
-                    "评论数": comment,
-                    "互动量": interaction,
-                    "热门": is_hot,
+                    fn.get("liked_count", "点赞数"): str(liked),
+                    fn.get("collected_count", "收藏数"): str(collected),
+                    fn.get("comment_count", "评论数"): str(comment),
+                    fn.get("interaction", "互动量"): str(interaction),
+                    fn.get("hot", "热门"): is_hot,
                 },
             })
 
@@ -348,8 +490,13 @@ class PipelineFeishuWriter:
         self._ensure_bitable()
 
         safe_name = creator_name[:100]
-        existing_table_id = self._table_name_to_id.get(safe_name) if self._is_reusing else None
+        summary_only = self._feishu_cfg.get("summary_only", False)
+        existing_table_id = None
         seq_offset = 0
+        inserted = 0
+
+        if not summary_only:
+            existing_table_id = self._table_name_to_id.get(safe_name) if self._is_reusing else None
 
         if existing_table_id:
             note_to_record = self._get_existing_note_map(existing_table_id)
@@ -399,28 +546,9 @@ class PipelineFeishuWriter:
         note_seq = self._fn_note.get("seq", "序号")
         ordered_with_serial = set(self._ordered_fields) | {note_seq}
 
-        if existing_table_id:
-            table_id = existing_table_id
-            for fn in self._ordered_fields:
-                if fn == note_seq:
-                    continue
-                try:
-                    self.client.add_field(
-                        self.app_token, table_id, fn,
-                        self._resolve_field_type(fn),
-                    )
-                except Exception:
-                    pass
-        elif self._first_creator:
-            tables = self.client.list_tables(self.app_token)
-            if tables:
-                table_id = tables[0]["table_id"]
-                try:
-                    self.client.rename_table(
-                        self.app_token, table_id, safe_name
-                    )
-                except Exception:
-                    pass
+        if not summary_only:
+            if existing_table_id:
+                table_id = existing_table_id
                 for fn in self._ordered_fields:
                     if fn == note_seq:
                         continue
@@ -431,78 +559,109 @@ class PipelineFeishuWriter:
                         )
                     except Exception:
                         pass
+            elif self._first_creator:
+                tables = self.client.list_tables(self.app_token)
+                if tables:
+                    table_id = tables[0]["table_id"]
+                    try:
+                        self.client.rename_table(
+                            self.app_token, table_id, safe_name
+                        )
+                    except Exception:
+                        pass
+                    for fn in self._ordered_fields:
+                        if fn == note_seq:
+                            continue
+                        try:
+                            self.client.add_field(
+                                self.app_token, table_id, fn,
+                                self._resolve_field_type(fn),
+                            )
+                        except Exception:
+                            pass
+                else:
+                    table_id = self.client.create_table(
+                        self.app_token, safe_name, self._all_table_fields
+                    )
+                self._first_creator = False
             else:
+                utils.logger.info(
+                    f"[Pipeline] 写入作者: {safe_name} ({len(records)} 条)"
+                )
                 table_id = self.client.create_table(
                     self.app_token, safe_name, self._all_table_fields
                 )
-            self._first_creator = False
-        else:
-            utils.logger.info(
-                f"[Pipeline] 写入作者: {safe_name} ({len(records)} 条)"
+
+            if not existing_table_id:
+                self.client.cleanup_default_fields_and_records(
+                    self.app_token, table_id, ordered_with_serial
+                )
+
+            self._table_name_to_id[safe_name] = table_id
+
+            for i, rec in enumerate(records, seq_offset + 1):
+                rec["fields"][note_seq] = str(i)
+
+            inserted = self.client.batch_insert_records(
+                self.app_token, table_id, records
             )
-            table_id = self.client.create_table(
-                self.app_token, safe_name, self._all_table_fields
-            )
+            self._total_inserted += inserted
 
-        if not existing_table_id:
-            self.client.cleanup_default_fields_and_records(
-                self.app_token, table_id, ordered_with_serial
-            )
+            if not existing_table_id:
+                try:
+                    fields_list = self.client.list_fields(self.app_token, table_id)
+                    hot_fid = ""
+                    for f in fields_list:
+                        if f and f.get("field_name") == "热门":
+                            hot_fid = f.get("field_id", "")
+                            break
+                    if hot_fid:
+                        self.client.create_view(
+                            self.app_token, table_id,
+                            view_name="🔥 热门作品",
+                            filter_conditions=[
+                                {"field_id": hot_fid, "operator": "isNotEmpty"}
+                            ],
+                        )
+                except Exception:
+                    pass
 
-        self._table_name_to_id[safe_name] = table_id
-
-        for i, rec in enumerate(records, seq_offset + 1):
-            rec["fields"][note_seq] = str(i)
-
-        inserted = self.client.batch_insert_records(
-            self.app_token, table_id, records
-        )
-        self._total_inserted += inserted
         self._creator_count += 1
-
-        if not existing_table_id:
-            try:
-                fields_list = self.client.list_fields(self.app_token, table_id)
-                hot_fid = ""
-                for f in fields_list:
-                    if f and f.get("field_name") == "热门":
-                        hot_fid = f.get("field_id", "")
-                        break
-                if hot_fid:
-                    self.client.create_view(
-                        self.app_token, table_id,
-                        view_name="🔥 热门作品",
-                        filter_conditions=[
-                            {"field_id": hot_fid, "operator": "isNotEmpty"}
-                        ],
-                    )
-            except Exception:
-                pass
 
         ct_name = self._fn_note.get("content_type", "内容类型")
         va_name = self._fn_note.get("video_attachment", "视频附件")
         creator_fname = self._fn_note.get("creator_name", "账号名称")
         video_records = []
+        image_text_records = []
         for rec in records:
             fields = rec.get("fields", {})
             has_video = (
                 fields.get(ct_name) == "视频"
                 or fields.get(va_name)
             )
+            summary_rec = {"fields": dict(fields)}
+            summary_rec["fields"][creator_fname] = creator_name
             if has_video:
-                vr = {"fields": dict(fields)}
-                vr["fields"][creator_fname] = creator_name
-                video_records.append(vr)
+                video_records.append(summary_rec)
+            else:
+                image_text_records.append(summary_rec)
 
         if video_records:
             self._append_video_summary(video_records)
+        if image_text_records:
+            self._append_image_text_summary(image_text_records)
 
-        utils.logger.info(
-            f"[Pipeline] {safe_name}: {inserted} 条写入完成"
-            + (f" (追加到已有表)" if existing_table_id else "")
-            + (f", {len(video_records)} 条视频入汇总表"
-               if video_records else "")
-        )
+        if summary_only:
+            parts = [f"[Pipeline] {safe_name}: {len(records)} 条仅写汇总表"]
+        else:
+            parts = [f"[Pipeline] {safe_name}: {inserted} 条写入完成"]
+            if existing_table_id:
+                parts.append("(追加到已有表)")
+        if video_records:
+            parts.append(f", {len(video_records)} 条视频入汇总表")
+        if image_text_records:
+            parts.append(f", {len(image_text_records)} 条图文入汇总表")
+        utils.logger.info("".join(parts))
 
     def write_creator_async(self, creator_name: str, notes: List[Dict]):
         """异步版本：提交到后台队列，不阻塞主爬虫线程"""
@@ -1000,18 +1159,50 @@ class PipelineFeishuWriter:
             if "视频附件" in flds and isinstance(flds["视频附件"], str):
                 del flds["视频附件"]
 
+    # ==================== 图文汇总表 ====================
+
+    def _append_image_text_summary(self, image_text_records: List[Dict]):
+        """将图文类笔记追加到「图文汇总」表"""
+        if not image_text_records:
+            return
+
+        if not self.image_text_summary_table_id:
+            self.image_text_summary_table_id = self._create_summary_table("图文汇总")
+            if not self.image_text_summary_table_id:
+                return
+
+        new_records = self._dedup_and_update_summary(
+            image_text_records, self._image_text_summary_note_map,
+            self.image_text_summary_table_id,
+        )
+        skipped = len(image_text_records) - len(new_records)
+
+        if not new_records:
+            if skipped:
+                utils.logger.info(f"[Pipeline] 图文汇总: {skipped} 条已存在(互动量已更新)")
+            return
+
+        note_seq = self._fn_note.get("seq", "序号")
+        for rec in new_records:
+            self._image_text_serial += 1
+            rec["fields"][note_seq] = str(self._image_text_serial)
+
+        inserted = self.client.batch_insert_records(
+            self.app_token, self.image_text_summary_table_id,
+            new_records
+        )
+        parts = [f"[Pipeline] 图文汇总: {inserted} 条写入"]
+        if skipped:
+            parts.append(f", {skipped} 条已存在(互动量已更新)")
+        utils.logger.info("".join(parts))
+
     # ==================== 视频汇总 + 脚本流水线 ====================
 
     def _append_video_summary(self, video_records: List[Dict]):
         if not self.summary_table_id:
-            self.summary_table_id = self.client.create_table(
-                self.app_token, "视频汇总", self._all_table_fields
-            )
-            note_seq = self._fn_note.get("seq", "序号")
-            ordered_with_serial = set(self._ordered_fields) | {note_seq}
-            self.client.cleanup_default_fields_and_records(
-                self.app_token, self.summary_table_id, ordered_with_serial
-            )
+            self.summary_table_id = self._create_summary_table("视频汇总")
+            if not self.summary_table_id:
+                return
             try:
                 self.client.add_field(
                     self.app_token, self.summary_table_id, "视频公网链接", 15
@@ -1019,13 +1210,24 @@ class PipelineFeishuWriter:
             except Exception:
                 pass
 
+        new_records = self._dedup_and_update_summary(
+            video_records, self._video_summary_note_map,
+            self.summary_table_id,
+        )
+        video_skipped = len(video_records) - len(new_records)
+
+        if not new_records:
+            if video_skipped:
+                utils.logger.info(f"[Pipeline] 视频汇总: {video_skipped} 条已存在(互动量已更新)")
+            return
+
         note_seq = self._fn_note.get("seq", "序号")
-        for vr in video_records:
+        for vr in new_records:
             self._video_serial += 1
             vr["fields"][note_seq] = str(self._video_serial)
 
         inserted = self.client.batch_insert_records_full(
-            self.app_token, self.summary_table_id, video_records
+            self.app_token, self.summary_table_id, new_records
         )
 
         hot_count = 0
@@ -1182,11 +1384,14 @@ class PipelineFeishuWriter:
             self._extraction_pool.shutdown(wait=True)
             self._extraction_pool = None
 
-        if self.summary_table_id:
+        for tid, label in [
+            (self.summary_table_id, "热门视频"),
+            (self.image_text_summary_table_id, "热门图文"),
+        ]:
+            if not tid:
+                continue
             try:
-                sf = self.client.list_fields(
-                    self.app_token, self.summary_table_id
-                )
+                sf = self.client.list_fields(self.app_token, tid)
                 hot_fid = ""
                 for f in sf:
                     if f and f.get("field_name") == "热门":
@@ -1194,8 +1399,8 @@ class PipelineFeishuWriter:
                         break
                 if hot_fid:
                     self.client.create_view(
-                        self.app_token, self.summary_table_id,
-                        view_name="🔥 热门视频",
+                        self.app_token, tid,
+                        view_name=f"🔥 {label}",
                         filter_conditions=[{
                             "field_id": hot_fid,
                             "operator": "isNotEmpty",
@@ -1204,6 +1409,7 @@ class PipelineFeishuWriter:
             except Exception:
                 pass
 
+        if self.summary_table_id:
             try:
                 self._write_public_video_urls()
             except Exception as e:
@@ -1216,6 +1422,16 @@ class PipelineFeishuWriter:
             except Exception as e:
                 utils.logger.warning(
                     f"[Pipeline] 最终脚本校验失败: {e}"
+                )
+
+        if self._owner_open_id and self.app_token:
+            try:
+                self.client.transfer_owner(
+                    self.app_token, self._owner_open_id,
+                )
+            except Exception as e:
+                utils.logger.warning(
+                    f"[Pipeline] 转移所有者失败: {e}"
                 )
 
         self._save_bitable_to_config()
@@ -1243,9 +1459,10 @@ class PipelineFeishuWriter:
                 "tables": {
                     name: tid
                     for name, tid in self._table_name_to_id.items()
-                    if name != "视频汇总"
+                    if name not in ("视频汇总", "图文汇总")
                 },
                 "summary_table_id": self.summary_table_id or "",
+                "image_text_summary_table_id": self.image_text_summary_table_id or "",
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:

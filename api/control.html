@@ -680,6 +680,37 @@
                         <label class="form-label">图片上传线程数</label>
                         <input class="form-input" type="number" v-model.number="config.feishu.image_threads" />
                     </div>
+
+                    <!-- 重新写入飞书 -->
+                    <div class="form-group full" style="border-top:1px solid rgba(148,163,184,0.1);padding-top:16px;margin-top:8px;">
+                        <label class="form-label" style="font-size:14px;font-weight:700;margin-bottom:10px;">写入飞书多维表格</label>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                            <button class="btn btn-primary btn-sm"
+                                    @click="startResyncFeishu"
+                                    :disabled="resyncFeishu.status === 'running'"
+                                    style="min-width:120px;">
+                                {{ resyncFeishu.status === 'running' ? '写入中...' : '重新写入飞书' }}
+                            </button>
+                            <button v-if="resyncFeishu.status === 'running'"
+                                    class="btn btn-danger btn-sm"
+                                    @click="stopResyncFeishu">
+                                停止
+                            </button>
+                            <span v-if="resyncFeishu.status === 'success'" style="color:#4ade80;font-size:13px;font-weight:600;">写入完成</span>
+                            <span v-if="resyncFeishu.status === 'failed'" style="color:#f87171;font-size:13px;font-weight:600;">写入失败</span>
+                            <a v-if="resyncFeishu.bitableUrl" :href="resyncFeishu.bitableUrl" target="_blank"
+                               style="color:#60a5fa;font-size:13px;text-decoration:underline;">打开多维表格</a>
+                        </div>
+                        <div v-if="resyncFeishu.logs.length" style="margin-top:12px;">
+                            <div ref="resyncLogBox" style="background:rgba(0,0,0,0.3);border-radius:8px;padding:12px;max-height:240px;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.6;color:#94a3b8;">
+                                <div v-for="(line, i) in resyncFeishu.logs" :key="i"
+                                     :style="line.includes('ERROR') || line.includes('失败') ? 'color:#f87171' : line.includes('完成') || line.includes('成功') ? 'color:#4ade80' : ''">
+                                    {{ line }}
+                                </div>
+                            </div>
+                        </div>
+                        <span class="form-desc" style="margin-top:6px;">将已爬取的全部作者数据推送到飞书多维表格（含图片/视频上传，耗时较长）</span>
+                    </div>
                 </div>
             </div>
 
@@ -1055,6 +1086,62 @@
                 const autoScroll = ref(true);
                 const logEl = ref(null);
                 let logWs = null;
+
+                // ── 飞书重新写入 ──
+                const resyncFeishu = reactive({ status: '', logs: [], bitableUrl: '' });
+                const resyncLogBox = ref(null);
+                let resyncTimer = null;
+
+                async function startResyncFeishu() {
+                    try {
+                        const res = await authFetch(basePath + '/api/control/resync-feishu', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(data.message, 'success');
+                            resyncFeishu.status = 'running';
+                            resyncFeishu.logs = [];
+                            resyncFeishu.bitableUrl = '';
+                            pollResyncStatus();
+                        } else {
+                            showToast(data.message || '启动失败', 'error');
+                        }
+                    } catch (e) {
+                        showToast('请求失败: ' + e.message, 'error');
+                    }
+                }
+
+                async function stopResyncFeishu() {
+                    try {
+                        const res = await authFetch(basePath + '/api/control/resync-feishu/stop', { method: 'POST' });
+                        const data = await res.json();
+                        showToast(data.message || '已停止', data.success ? 'success' : 'error');
+                    } catch (e) {
+                        showToast('请求失败', 'error');
+                    }
+                }
+
+                async function pollResyncStatus() {
+                    if (resyncTimer) clearInterval(resyncTimer);
+                    resyncTimer = setInterval(async () => {
+                        try {
+                            const res = await authFetch(basePath + '/api/control/resync-feishu/status');
+                            const data = await res.json();
+                            if (data.success) {
+                                resyncFeishu.status = data.status;
+                                resyncFeishu.logs = data.logs || [];
+                                resyncFeishu.bitableUrl = data.bitable_url || '';
+                                await nextTick();
+                                if (resyncLogBox.value) {
+                                    resyncLogBox.value.scrollTop = resyncLogBox.value.scrollHeight;
+                                }
+                                if (data.status !== 'running') {
+                                    clearInterval(resyncTimer);
+                                    resyncTimer = null;
+                                }
+                            }
+                        } catch (e) { /* ignore */ }
+                    }, 3000);
+                }
 
                 // ── Toast ──
                 let toastTimer = null;
@@ -1534,6 +1621,14 @@
                         loadCreators();
                         loadSessions();
                         statusTimer = setInterval(fetchStatus, 5000);
+                        authFetch(basePath + '/api/control/resync-feishu/status').then(r => r.json()).then(d => {
+                            if (d.success && d.status) {
+                                resyncFeishu.status = d.status;
+                                resyncFeishu.logs = d.logs || [];
+                                resyncFeishu.bitableUrl = d.bitable_url || '';
+                                if (d.status === 'running') pollResyncStatus();
+                            }
+                        }).catch(() => {});
                     } else {
                         nextTick(() => { if (pwdInput.value) pwdInput.value.focus(); });
                     }
@@ -1560,6 +1655,7 @@
                     loadCreators, addCreator, startEdit, saveEdit, deleteCreator,
                     notifyMethod, crawlModes, crawlModeDesc, setCrawlMode,
                     files, fileView, loadFiles, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, switchToFiles,
+                    resyncFeishu, resyncLogBox, startResyncFeishu, stopResyncFeishu,
                 };
             }
         });

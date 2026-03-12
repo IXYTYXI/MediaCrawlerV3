@@ -2874,7 +2874,11 @@ async def run_batch_crawl(
         crawl_mode = batch_r.get("crawl_mode", "full")
         date_start = batch_r.get("date_start", "")
         date_end = batch_r.get("date_end", "")
+        _incremental_override = batch_r.get("incremental_start_override", "")
+        _refresh_stats = batch_r.get("refresh_existing_stats", False)
     except Exception:
+        _incremental_override = ""
+        _refresh_stats = False
         pass
 
     if crawl_mode_override:
@@ -2895,9 +2899,18 @@ async def run_batch_crawl(
         config.CRAWL_DATE_START = date_start
         utils.logger.info(f"[BatchCrawler] 日期提前停止已启用: 连续5条早于 {date_start} 时自动跳过")
     elif crawl_mode == "incremental":
-        utils.logger.info(
-            "[BatchCrawler] 增量更新模式: 已完成的作者将只爬取上次爬取日期之后的新内容"
-        )
+        if _incremental_override:
+            utils.logger.info(
+                f"[BatchCrawler] 增量更新模式: 全局覆盖起始日期 = {_incremental_override}（忽略各作者的上次日期）"
+            )
+        else:
+            utils.logger.info(
+                "[BatchCrawler] 增量更新模式: 已完成的作者将只爬取上次爬取日期之后的新内容"
+            )
+        if _refresh_stats:
+            utils.logger.info(
+                "[BatchCrawler] 全量刷新互动量已启用: 爬取所有页面以更新已有笔记的互动数据"
+            )
         config.DATE_EARLY_STOP_ENABLED = False  # 每个作者的日期由 get_last_crawl_date 动态设置
     else:
         config.DATE_EARLY_STOP_ENABLED = False
@@ -2954,12 +2967,14 @@ async def run_batch_crawl(
         if pipeline_mode:
             from tools.pipeline_feishu_writer import PipelineFeishuWriter
             _reuse_token = ""
-            if crawl_mode == "incremental" and _feishu_cfg_for_pipeline.get("reuse_bitable", False):
-                _last_bi = _feishu_cfg_for_pipeline.get("last_bitable", {})
-                _reuse_token = _last_bi.get("app_token", "")
+            if _feishu_cfg_for_pipeline.get("reuse_bitable", False):
+                _reuse_token = (_feishu_cfg_for_pipeline.get("reuse_app_token") or "").strip()
+                if not _reuse_token:
+                    _last_bi = _feishu_cfg_for_pipeline.get("last_bitable", {})
+                    _reuse_token = _last_bi.get("app_token", "")
                 if _reuse_token:
                     utils.logger.info(
-                        f"[BatchCrawler] 增量模式: 将复用已有多维表格 "
+                        f"[BatchCrawler] 将复用已有多维表格 "
                         f"(token={_reuse_token})"
                     )
             pipeline_writer = PipelineFeishuWriter(
@@ -2968,6 +2983,9 @@ async def run_batch_crawl(
                 folder_token=feishu_folder_token,
                 reuse_app_token=_reuse_token,
             )
+            _owner_oid = _feishu_cfg_for_pipeline.get("owner_open_id", "")
+            if _owner_oid:
+                pipeline_writer._owner_open_id = _owner_oid
             utils.logger.info("[BatchCrawler] 流水线模式已启用: 每完成一个作者立即写入飞书")
 
     # 6. 逐个作者处理
@@ -2982,6 +3000,8 @@ async def run_batch_crawl(
 
         # 每作者开始时恢复日期停止配置（增量模式会在下面覆盖）
         config.INCREMENTAL_MODE = False
+        config.LIST_LEVEL_STATS_UPDATE = False
+        config.LIST_LEVEL_STATS_CUTOFF_DATE = ""
         if crawl_mode in ("date_range", "incremental") and date_start:
             config.DATE_EARLY_STOP_ENABLED = True
             config.CRAWL_DATE_START = date_start
@@ -3002,10 +3022,12 @@ async def run_batch_crawl(
         _incremental_start_date = ""
         if resume and progress.is_completed(creator_url):
             if crawl_mode == "incremental":
-                # 优先用 progress 中保存的成功日期，其次从文件推断
-                last_date = progress.get_last_crawl_date(creator_url)
-                if not last_date:
-                    last_date = get_last_crawl_date_for_creator(task_dir, user_id)
+                if _incremental_override:
+                    last_date = _incremental_override
+                else:
+                    last_date = progress.get_last_crawl_date(creator_url)
+                    if not last_date:
+                        last_date = get_last_crawl_date_for_creator(task_dir, user_id)
                 if not last_date:
                     utils.logger.info(
                         f"[BatchCrawler] [{idx}/{total}] [增量] 无历史数据，跳过: {creator_name}"
@@ -3014,14 +3036,28 @@ async def run_batch_crawl(
                     continue
                 incremental_this_creator = True
                 _incremental_start_date = last_date
-                config.DATE_EARLY_STOP_ENABLED = True
-                config.DATE_EARLY_STOP_THRESHOLD = 5
-                config.CRAWL_DATE_START = last_date
-                config.INCREMENTAL_MODE = True
-                utils.logger.info(
-                    f"[BatchCrawler] [{idx}/{total}] [增量更新] {creator_name}，"
-                    f"只爬 {last_date} 之后的新内容"
-                )
+                if _refresh_stats:
+                    config.DATE_EARLY_STOP_ENABLED = False
+                    config.CRAWL_DATE_START = ""
+                    config.INCREMENTAL_MODE = False
+                    # 列表阶段轻量互动量刷新：旧笔记直接从列表取互动量，跳过详情接口
+                    config.LIST_LEVEL_STATS_UPDATE = True
+                    config.LIST_LEVEL_STATS_CUTOFF_DATE = last_date  # 上次爬取日期作为截止
+                    utils.logger.info(
+                        f"[BatchCrawler] [{idx}/{total}] [增量+刷新] {creator_name}，"
+                        f"新笔记(>{last_date})调详情追加，旧笔记直接从列表更新互动量"
+                    )
+                else:
+                    config.DATE_EARLY_STOP_ENABLED = True
+                    config.DATE_EARLY_STOP_THRESHOLD = 5
+                    config.CRAWL_DATE_START = last_date
+                    config.INCREMENTAL_MODE = True
+                    config.LIST_LEVEL_STATS_UPDATE = False
+                    config.LIST_LEVEL_STATS_CUTOFF_DATE = ""
+                    utils.logger.info(
+                        f"[BatchCrawler] [{idx}/{total}] [增量更新] {creator_name}，"
+                        f"只爬 {last_date} 之后的新内容"
+                    )
             else:
                 utils.logger.info(
                     f"[BatchCrawler] [{idx}/{total}] 跳过已完成: {creator_name}"
