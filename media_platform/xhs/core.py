@@ -41,6 +41,10 @@ from store import xhs as xhs_store
 from tools import utils
 from tools.cdp_browser import CDPBrowserManager
 from var import crawler_type_var, source_keyword_var
+from tools.keyword_filter import (
+    parse_multi_keyword_expressions, match_note_multi,
+    FilterScope, KeywordExpression,
+)
 
 from .client import XiaoHongShuClient
 from .exception import DataFetchError, SessionExpiredError
@@ -425,10 +429,44 @@ class XiaoHongShuCrawler(AbstractCrawler):
             elif config.CRAWLER_TYPE == "creator":
                 # Get creator's information and their notes and comments
                 await self.get_creators_and_notes()
+            elif config.CRAWLER_TYPE == "creator_keyword":
+                await self.get_creators_and_notes_by_keyword()
             else:
                 pass
 
             utils.logger.info("[XiaoHongShuCrawler.start] Xhs Crawler finished ...")
+
+    def _get_search_keywords(self) -> List[str]:
+        """根据 KEYWORDS_COMBINE_MODE 返回待搜索关键词列表。
+        True=组合模式：逗号分隔的词用空格拼接为一个搜索词（如 A,B,C → "A B C"）；
+        False=逐词模式：每个词单独搜索。"""
+        parts = [k.strip() for k in config.KEYWORDS.split(",") if k.strip()]
+        if not parts:
+            return []
+        if getattr(config, "KEYWORDS_COMBINE_MODE", False):
+            return [" ".join(parts)]
+        return parts
+
+    @staticmethod
+    def _note_in_date_range(note_detail: dict, date_start: str, date_end: str) -> bool:
+        """Check if a note's publish time is within [date_start, date_end]."""
+        if not date_start and not date_end:
+            return True
+        note_time = note_detail.get("time", 0)
+        if not note_time or not isinstance(note_time, (int, float)):
+            return True
+        try:
+            from datetime import datetime as _dt
+            publish_date = _dt.fromtimestamp(note_time / 1000)
+            if date_start:
+                if publish_date < _dt.strptime(date_start, "%Y-%m-%d"):
+                    return False
+            if date_end:
+                if publish_date > _dt.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59):
+                    return False
+            return True
+        except Exception:
+            return True
 
     async def search(self) -> None:
         """Search for notes and retrieve their comment information."""
@@ -438,7 +476,23 @@ class XiaoHongShuCrawler(AbstractCrawler):
         if config.CRAWLER_MAX_NOTES_COUNT < xhs_limit_count:
             config.CRAWLER_MAX_NOTES_COUNT = xhs_limit_count
         start_page = config.START_PAGE
-        for keyword in config.KEYWORDS.split(","):
+        keywords_to_search = self._get_search_keywords()
+        if not keywords_to_search:
+            utils.logger.warning("[XiaoHongShuCrawler.search] 无有效关键词，跳过搜索")
+            return
+        combine_mode = getattr(config, "KEYWORDS_COMBINE_MODE", False)
+        _date_start = getattr(config, "CRAWL_DATE_START", "")
+        _date_end = getattr(config, "CRAWL_DATE_END", "")
+        _date_filter_active = bool(_date_start or _date_end)
+        if _date_filter_active:
+            utils.logger.info(
+                f"[XiaoHongShuCrawler.search] 日期过滤已启用: {_date_start or '不限'} ~ {_date_end or '不限'}"
+            )
+        utils.logger.info(
+            f"[XiaoHongShuCrawler.search] 关键词模式: {'组合为一个搜索' if combine_mode else '逐词分别搜索'} | "
+            f"共 {len(keywords_to_search)} 个搜索项"
+        )
+        for keyword in keywords_to_search:
             source_keyword_var.set(keyword)
             utils.logger.info(f"[XiaoHongShuCrawler.search] Current search keyword: {keyword}")
             page = 1
@@ -473,12 +527,18 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         ) for post_item in notes_res.get("items", {}) if post_item.get("model_type") not in ("rec_query", "hot_query")
                     ]
                     note_details = await asyncio.gather(*task_list)
+                    _date_skipped = 0
                     for note_detail in note_details:
                         if note_detail:
+                            if _date_filter_active and not self._note_in_date_range(note_detail, _date_start, _date_end):
+                                _date_skipped += 1
+                                continue
                             await xhs_store.update_xhs_note(note_detail)
                             await self.get_notice_media(note_detail)
                             note_ids.append(note_detail.get("note_id"))
                             xsec_tokens.append(note_detail.get("xsec_token"))
+                    if _date_skipped > 0:
+                        utils.logger.info(f"[XiaoHongShuCrawler.search] 日期过滤: 本页跳过 {_date_skipped} 条不在范围内的笔记")
                     page += 1
                     utils.logger.info(f"[XiaoHongShuCrawler.search] Note details: {note_details}")
                     await self.batch_get_note_comments(note_ids, xsec_tokens)
@@ -515,16 +575,20 @@ class XiaoHongShuCrawler(AbstractCrawler):
         xhs_page_size = 20
 
         est_pages = (fetch_count + xhs_page_size - 1) // xhs_page_size
+        keywords_to_search = self._get_search_keywords()
+        if not keywords_to_search:
+            utils.logger.warning("[search_top] 无有效关键词，跳过")
+            return
+        combine_mode = getattr(config, "KEYWORDS_COMBINE_MODE", False)
         utils.logger.info(
             f"[search_top] 开始关键词高赞搜索 | "
+            f"关键词模式: {'组合为一个搜索' if combine_mode else '逐词分别搜索'} | "
+            f"共 {len(keywords_to_search)} 个搜索项 | "
             f"搜索{fetch_count}条(约{est_pages}页) → 按赞排序 → "
             f"前{comment_top}篇爬{comment_pages}页评论"
         )
 
-        for keyword in config.KEYWORDS.split(","):
-            keyword = keyword.strip()
-            if not keyword:
-                continue
+        for keyword in keywords_to_search:
             source_keyword_var.set(keyword)
             utils.logger.info(f"[search_top] 关键词: {keyword}")
 
@@ -807,6 +871,72 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     self._progress_manager.save_progress()
                     stats = self._progress_manager.get_stats()
                     utils.logger.info(f"[断点续爬] 进度已保存: 成功 {stats['crawled_count']} 条")
+
+    def _parse_filter_scope(self) -> FilterScope:
+        """从 config 解析过滤范围配置"""
+        scope_str = getattr(config, "CREATOR_KEYWORD_FILTER_SCOPE", "title,desc,tags")
+        parts = {s.strip().lower() for s in scope_str.split(",") if s.strip()}
+        return FilterScope(
+            title="title" in parts,
+            desc="desc" in parts,
+            tags="tags" in parts,
+            comments="comments" in parts,
+            author_desc="author_desc" in parts,
+        )
+
+    async def get_creators_and_notes_by_keyword(self) -> None:
+        """
+        作者×关键词 组合搜索模式：
+        复用 creator 模式获取作者的全部笔记，在获取详情后按关键词本地过滤，
+        只保存匹配的笔记。
+
+        流程：
+        1. 解析过滤关键词表达式
+        2. 设置关键词过滤器到实例属性（供 _fetch_all_notes_detail 使用）
+        3. 调用现有的 get_creators_and_notes 执行爬取（自动过滤）
+        4. 清理过滤器状态
+        """
+        filter_kw = getattr(config, "CREATOR_KEYWORD_FILTER_KEYWORDS", "")
+        if not filter_kw.strip():
+            utils.logger.warning(
+                "[creator_keyword] CREATOR_KEYWORD_FILTER_KEYWORDS 为空，"
+                "将退化为普通 creator 模式（不过滤）"
+            )
+
+        expressions = parse_multi_keyword_expressions(filter_kw)
+        scope = self._parse_filter_scope()
+
+        kw_display = [e.raw for e in expressions] if expressions else ["(无过滤)"]
+        scope_parts = []
+        if scope.title: scope_parts.append("标题")
+        if scope.desc: scope_parts.append("正文")
+        if scope.tags: scope_parts.append("标签")
+        if scope.comments: scope_parts.append("评论")
+        if scope.author_desc: scope_parts.append("作者简介")
+
+        utils.logger.info(
+            f"[creator_keyword] 作者×关键词模式启动\n"
+            f"  关键词: {kw_display}\n"
+            f"  过滤范围: {', '.join(scope_parts)}\n"
+            f"  作者数: {len(config.XHS_CREATOR_ID_LIST)}"
+        )
+
+        self._keyword_filter_expressions = expressions
+        self._keyword_filter_scope = scope
+        self._keyword_filter_stats = {"matched": 0, "filtered": 0}
+
+        try:
+            await self.get_creators_and_notes()
+        finally:
+            stats = getattr(self, "_keyword_filter_stats", {})
+            utils.logger.info(
+                f"[creator_keyword] 完成 | "
+                f"匹配: {stats.get('matched', 0)} | "
+                f"过滤: {stats.get('filtered', 0)}"
+            )
+            self._keyword_filter_expressions = None
+            self._keyword_filter_scope = None
+            self._keyword_filter_stats = None
 
     async def _fetch_all_notes_detail(self, note_list: List[Dict]):
         """
@@ -1113,6 +1243,22 @@ class XiaoHongShuCrawler(AbstractCrawler):
                             except Exception:
                                 pass
 
+                    # ========== 作者×关键词 本地过滤 ==========
+                    _kf_expressions = getattr(self, '_keyword_filter_expressions', None)
+                    if _kf_expressions is not None and _kf_expressions:
+                        _kf_scope = getattr(self, '_keyword_filter_scope', None)
+                        _kf_matched = match_note_multi(note_detail, _kf_expressions, _kf_scope)
+                        _kf_stats = getattr(self, '_keyword_filter_stats', {})
+                        if not _kf_matched:
+                            _kf_stats["filtered"] = _kf_stats.get("filtered", 0) + 1
+                            skip_count += 1
+                            utils.logger.debug(
+                                f"[详情获取] ({idx}/{total}) 🔍 关键词未匹配，跳过: {display_title}..."
+                            )
+                            continue
+                        _kf_stats["matched"] = _kf_stats.get("matched", 0) + 1
+                        note_detail["source_keyword"] = "|".join(_kf_matched)
+
                     await xhs_store.update_xhs_note(note_detail)
                     await self.get_notice_media(note_detail)
                     success_count += 1
@@ -1133,7 +1279,11 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         except Exception:
                             pass
                     date_tag = f" | {note_date_str}" if note_date_str else ""
-                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}...{date_tag} [累计: {crawled_so_far}]")
+                    _kw_tag = ""
+                    if getattr(self, '_keyword_filter_expressions', None):
+                        _matched_kw = note_detail.get("source_keyword", "")
+                        _kw_tag = f" | 🔍{_matched_kw}" if _matched_kw else ""
+                    utils.logger.info(f"[详情获取] ({idx}/{total}) ✓ {display_title}...{date_tag}{_kw_tag} [累计: {crawled_so_far}]")
                     
                     # ========== 按日期提前停止检查 ==========
                     if early_stop_enabled and crawl_date_start:

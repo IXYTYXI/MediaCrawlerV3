@@ -422,7 +422,7 @@ window.onerror = function(msg, url, line, col, err) {
           <div class="card rounded-xl p-4">
             <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">爬取类型</label>
             <select v-model="config.crawl_settings.crawler_type" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white">
-              <option value="search">🔎 关键词搜索</option><option value="search_top">🔥 关键词高赞搜索</option><option value="creator">👤 作者主页</option><option value="detail">📄 指定帖子</option>
+              <option value="search">🔎 关键词搜索</option><option value="search_top">🔥 关键词高赞搜索</option><option value="creator">👤 作者主页</option><option value="creator_keyword">👤🔍 作者×关键词</option><option value="detail">📄 指定帖子</option>
             </select>
           </div>
           <div class="card rounded-xl p-4">
@@ -432,6 +432,10 @@ window.onerror = function(msg, url, line, col, err) {
           <div class="card rounded-xl p-4">
             <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">搜索关键词</label>
             <input type="text" v-model="config.crawl_settings.keywords" placeholder="逗号分隔，如：新东方,好未来" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            <div v-if="config.crawl_settings.crawler_type === 'search' || config.crawl_settings.crawler_type === 'search_top'" class="mt-2 flex items-center gap-2">
+              <div class="toggle" :class="{ active: config.crawl_settings.keywords_combine_mode }" @click="config.crawl_settings.keywords_combine_mode = !config.crawl_settings.keywords_combine_mode"></div>
+              <span class="text-[11px] text-gray-400">多关键词组合为一个搜索（如 A,B,C → 搜索「A B C」）</span>
+            </div>
           </div>
         </div>
         
@@ -870,7 +874,7 @@ window.onerror = function(msg, url, line, col, err) {
             <div>
               <label class="text-[11px] text-gray-500 uppercase tracking-wider">爬取模式</label>
               <select v-model="taskForm.crawler_type" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
-                <option value="search">关键词搜索</option><option value="search_top">🔥 关键词高赞搜索</option><option value="creator">创作者主页</option><option value="detail">帖子详情</option>
+                <option value="search">关键词搜索</option><option value="search_top">🔥 关键词高赞搜索</option><option value="creator">创作者主页</option><option value="creator_keyword">👤🔍 作者×关键词</option><option value="detail">帖子详情</option>
               </select>
             </div>
             <div>
@@ -885,7 +889,38 @@ window.onerror = function(msg, url, line, col, err) {
           <div v-if="taskForm.crawler_type === 'search'">
             <label class="text-[11px] text-gray-500 uppercase tracking-wider">搜索关键词</label>
             <textarea v-model="taskForm.keywords" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="多个关键词用逗号分隔，如: 小学数学,数学网课,陪读经验"></textarea>
-            <p class="text-[10px] text-gray-600 mt-1">每个关键词最多爬取 <input v-model.number="taskForm.max_notes_per_keyword" type="number" class="w-14 px-1 py-0.5 bg-gray-800 border border-gray-700 rounded text-center text-white inline-block mx-0.5 text-[11px]"> 条笔记</p>
+            <div class="mt-1.5 flex items-center gap-2">
+              <div class="toggle" style="width:32px;height:18px" :class="{ active: taskForm.keywords_combine_mode }" @click="taskForm.keywords_combine_mode = !taskForm.keywords_combine_mode"></div>
+              <span class="text-[10px] text-gray-500">组合为一个搜索（A,B,C → A B C）</span>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label class="text-[11px] text-gray-500 uppercase tracking-wider">排序方式</label>
+                <select v-model="taskForm.sort_type" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
+                  <option value="general">📊 综合排序</option>
+                  <option value="popularity_descending">🔥 热度排序</option>
+                  <option value="time_descending">🕐 最新排序</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[11px] text-gray-500 uppercase tracking-wider">每个关键词最多爬取</label>
+                <input v-model.number="taskForm.max_notes_per_keyword" type="number" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="30">
+                <p class="text-[10px] text-gray-600 mt-0.5">条笔记（默认 80）</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label class="text-[11px] text-gray-500 uppercase tracking-wider">开始日期（可选）</label>
+                <input v-model="taskForm.date_start" type="date" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
+                <p class="text-[10px] text-gray-600 mt-0.5">只保留此日期及之后发布的笔记</p>
+              </div>
+              <div>
+                <label class="text-[11px] text-gray-500 uppercase tracking-wider">结束日期（可选）</label>
+                <input v-model="taskForm.date_end" type="date" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white">
+                <p class="text-[10px] text-gray-600 mt-0.5">只保留此日期及之前发布的笔记</p>
+              </div>
+            </div>
+            <p v-if="taskForm.date_start || taskForm.date_end" class="text-[10px] text-amber-400/80 mt-1">⚠ 小红书搜索 API 不支持按日期筛选，实际会先爬取再按发布时间过滤，建议适当增大爬取数量以获得足够的有效数据</p>
           </div>
 
           <!-- 关键词高赞搜索模式 -->
@@ -893,6 +928,10 @@ window.onerror = function(msg, url, line, col, err) {
             <div>
               <label class="text-[11px] text-gray-500 uppercase tracking-wider">搜索关键词</label>
               <textarea v-model="taskForm.keywords" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="如: #数学超前学,奥数培训"></textarea>
+              <div class="mt-1.5 flex items-center gap-2">
+                <div class="toggle" style="width:32px;height:18px" :class="{ active: taskForm.keywords_combine_mode }" @click="taskForm.keywords_combine_mode = !taskForm.keywords_combine_mode"></div>
+                <span class="text-[10px] text-gray-500">组合为一个搜索（A,B,C → A B C）</span>
+              </div>
               <p class="text-[10px] text-gray-600 mt-1">按热度搜索，自动按点赞量排序取 Top N</p>
             </div>
             <div class="grid grid-cols-3 gap-3">
@@ -912,17 +951,34 @@ window.onerror = function(msg, url, line, col, err) {
                 <p class="text-[9px] text-gray-600 mt-0.5">每篇笔记爬几页评论 (每页≈20条)</p>
               </div>
             </div>
-            <div class="mt-3">
-              <label class="text-[10px] text-gray-500 uppercase">飞书目标文件夹 Token <span class="text-gray-600">(可选)</span></label>
-              <input v-model="taskForm.feishu_folder_token" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2 text-sm text-white" placeholder="留空则使用全局配置">
-              <p class="text-[9px] text-gray-600 mt-0.5">爬完后多维表格创建到此文件夹，不同任务可指定不同位置</p>
-            </div>
           </div>
 
           <!-- 创作者模式 -->
-          <div v-if="taskForm.crawler_type === 'creator'">
+          <div v-if="taskForm.crawler_type === 'creator' || taskForm.crawler_type === 'creator_keyword'">
             <label class="text-[11px] text-gray-500 uppercase tracking-wider">创作者 URL 列表</label>
             <textarea v-model="taskCreatorUrlsText" rows="3" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="每行一个创作者主页 URL"></textarea>
+          </div>
+
+          <!-- 作者×关键词 过滤设置 -->
+          <div v-if="taskForm.crawler_type === 'creator_keyword'" class="space-y-3">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">过滤关键词</label>
+              <input v-model="taskForm.filter_keywords" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="| = OR, & = AND, 空格 = 组合词，逗号分隔多个">
+              <p class="text-[10px] text-gray-600 mt-1">示例：小学&数学, 网课|在线 → 同时含「小学」和「数学」，或含「网课」或「在线」</p>
+            </div>
+            <div>
+              <p class="text-[10px] text-gray-500 mt-1">默认匹配标题、正文、标签。可扩展到评论和作者简介：</p>
+              <div class="flex gap-4 mt-1.5">
+                <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                  <input type="checkbox" value="comments" v-model="taskFilterScopeArr" class="accent-blue-500">
+                  也搜评论内容
+                </label>
+                <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                  <input type="checkbox" value="author_desc" v-model="taskFilterScopeArr" class="accent-blue-500">
+                  也搜作者简介
+                </label>
+              </div>
+            </div>
           </div>
 
           <!-- 评论设置 -->
@@ -943,6 +999,16 @@ window.onerror = function(msg, url, line, col, err) {
                 </div>
               </div>
               <input v-if="taskForm.enable_sub_comments" v-model.number="taskForm.max_sub_comments" type="number" class="input-field w-full rounded-lg px-3 py-2 text-sm text-white" placeholder="上限">
+            </div>
+          </div>
+
+          <!-- 飞书配置 -->
+          <div class="card rounded-lg p-4 space-y-3">
+            <div class="flex items-center gap-2"><span class="text-sm">📊</span><h4 class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">飞书多维表格（可选）</h4></div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">目标文件夹 Token</label>
+              <input v-model="taskForm.feishu_folder_token" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="留空则使用全局配置的文件夹">
+              <p class="text-[10px] text-gray-600 mt-0.5">从飞书文件夹 URL 获取，如 https://xxx.feishu.cn/drive/folder/<b>XxxFolderToken</b>，不同任务可指定不同文件夹</p>
             </div>
           </div>
 
@@ -978,7 +1044,9 @@ window.onerror = function(msg, url, line, col, err) {
                 <h4 class="text-sm font-semibold text-white">{{ t.name || t.task_id }}</h4>
                 <div class="flex items-center gap-3 mt-0.5">
                   <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">{{ t.platform }}</span>
-                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">{{ t.crawler_type === 'search' ? '搜索' : t.crawler_type === 'search_top' ? '高赞搜索' : t.crawler_type === 'creator' ? '创作者' : '详情' }}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">{{ t.crawler_type === 'search' ? '搜索' : t.crawler_type === 'search_top' ? '高赞搜索' : t.crawler_type === 'creator' ? '创作者' : t.crawler_type === 'creator_keyword' ? '作者×关键词' : '详情' }}</span>
+                  <span v-if="t.sort_type && t.crawler_type === 'search'" class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">{{ t.sort_type === 'general' ? '综合' : t.sort_type === 'popularity_descending' ? '热度' : '最新' }}</span>
+                  <span v-if="t.date_start || t.date_end" class="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400">{{ (t.date_start || '不限') + ' ~ ' + (t.date_end || '不限') }}</span>
                   <span v-if="t.enable_comments" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">含评论</span>
                   <span class="text-[10px] text-gray-600">{{ t.status === 'running' ? '运行中' : t.status === 'completed' ? '已完成' : t.status === 'error' ? '出错' : '空闲' }}</span>
                 </div>
@@ -996,6 +1064,8 @@ window.onerror = function(msg, url, line, col, err) {
             </div>
           </div>
           <div v-if="t.keywords" class="mt-2 text-xs text-gray-500 truncate">关键词: {{ t.keywords }}</div>
+          <div v-if="t.max_notes_per_keyword && t.max_notes_per_keyword !== 80" class="mt-1 text-[10px] text-gray-600">每词上限: {{ t.max_notes_per_keyword }} 条</div>
+          <div v-if="t.feishu_folder_token" class="mt-1 text-[10px] text-gray-600">📊 飞书文件夹: <span class="text-gray-400 font-mono">{{ t.feishu_folder_token }}</span></div>
           <div v-if="t.last_run_at" class="mt-1 text-[10px] text-gray-600">上次运行: {{ t.last_run_at }}</div>
           <div v-if="t.notes" class="mt-1 text-[10px] text-gray-600 italic">{{ t.notes }}</div>
 
@@ -1535,12 +1605,14 @@ window._mcApp = createApp({
     const taskShowForm = ref(false)
     const taskEditId = ref('')
     const taskForm = reactive({
-      name: '', platform: 'xhs', crawler_type: 'search', keywords: '', creator_urls: [],
-      max_notes_per_keyword: 80, enable_comments: false, max_comments: 50,
+      name: '', platform: 'xhs', crawler_type: 'search', keywords: '', keywords_combine_mode: false, creator_urls: [],
+      max_notes_per_keyword: 80, sort_type: 'general', date_start: '', date_end: '',
+      enable_comments: false, max_comments: 50,
       enable_sub_comments: false, max_sub_comments: 30, save_data_option: 'json',
       cookies: '', headless: true, notes: '',
       top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
       feishu_folder_token: '',
+      filter_keywords: '', filter_scope: 'title,desc,tags',
     })
     const taskLogView = reactive({ visible: false, task_id: '', status: '', logs: [] })
     const taskLogContainer = ref(null)
@@ -1552,15 +1624,25 @@ window._mcApp = createApp({
       get: () => (taskForm.creator_urls || []).join('\n'),
       set: (val) => { taskForm.creator_urls = val.split('\n').map(s => s.trim()).filter(Boolean) }
     })
+    const _BASE_SCOPE = ['title', 'desc', 'tags']
+    const taskFilterScopeArr = computed({
+      get: () => {
+        const all = (taskForm.filter_scope || '').split(',').map(s => s.trim()).filter(Boolean)
+        return all.filter(s => !_BASE_SCOPE.includes(s))
+      },
+      set: (val) => { taskForm.filter_scope = [..._BASE_SCOPE, ...val].join(',') }
+    })
 
     function _resetTaskForm() {
       Object.assign(taskForm, {
-        name: '', platform: 'xhs', crawler_type: 'search', keywords: '', creator_urls: [],
-        max_notes_per_keyword: 80, enable_comments: false, max_comments: 50,
+        name: '', platform: 'xhs', crawler_type: 'search', keywords: '', keywords_combine_mode: false, creator_urls: [],
+        max_notes_per_keyword: 80, sort_type: 'general', date_start: '', date_end: '',
+        enable_comments: false, max_comments: 50,
         enable_sub_comments: false, max_sub_comments: 30, save_data_option: 'json',
         cookies: '', headless: true, notes: '',
         top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
         feishu_folder_token: '',
+        filter_keywords: '', filter_scope: 'title,desc,tags',
       })
     }
 
@@ -1595,8 +1677,10 @@ window._mcApp = createApp({
       taskEditId.value = t.task_id
       Object.assign(taskForm, {
         name: t.name || '', platform: t.platform || 'xhs', crawler_type: t.crawler_type || 'search',
-        keywords: t.keywords || '', creator_urls: t.creator_urls || [],
+        keywords: t.keywords || '', keywords_combine_mode: !!t.keywords_combine_mode, creator_urls: t.creator_urls || [],
         max_notes_per_keyword: t.max_notes_per_keyword || 80,
+        sort_type: t.sort_type || 'general',
+        date_start: t.date_start || '', date_end: t.date_end || '',
         enable_comments: !!t.enable_comments, max_comments: t.max_comments || 50,
         enable_sub_comments: !!t.enable_sub_comments, max_sub_comments: t.max_sub_comments || 30,
         save_data_option: t.save_data_option || 'json', cookies: t.cookies || '',

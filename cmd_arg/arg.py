@@ -63,6 +63,7 @@ class CrawlerTypeEnum(str, Enum):
     DETAIL = "detail"
     CREATOR = "creator"
     SEARCH_TOP = "search_top"
+    CREATOR_KEYWORD = "creator_keyword"
 
 
 class SaveDataOptionEnum(str, Enum):
@@ -162,7 +163,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
             CrawlerTypeEnum,
             typer.Option(
                 "--type",
-                help="Crawler type (search=Search | detail=Detail | creator=Creator)",
+                help="Crawler type (search=Search | detail=Detail | creator=Creator | creator_keyword=Creator+Keyword)",
                 rich_help_panel="Basic Configuration",
             ),
         ] = _coerce_enum(CrawlerTypeEnum, config.CRAWLER_TYPE, CrawlerTypeEnum.SEARCH),
@@ -182,6 +183,14 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Basic Configuration",
             ),
         ] = config.KEYWORDS,
+        keywords_combine: Annotated[
+            bool,
+            typer.Option(
+                "--keywords-combine/--no-keywords-combine",
+                help="Combine multiple keywords as one search (A,B,C → 'A B C')",
+                rich_help_panel="Basic Configuration",
+            ),
+        ] = getattr(config, "KEYWORDS_COMBINE_MODE", False),
         get_detail: Annotated[
             str,
             typer.Option(
@@ -308,6 +317,54 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Feishu Configuration",
             ),
         ] = "",
+        filter_keywords: Annotated[
+            str,
+            typer.Option(
+                "--filter_keywords",
+                help="[creator_keyword] Filter keywords (| = OR, & = AND, space = compound), comma-separated for multiple",
+                rich_help_panel="Creator+Keyword Configuration",
+            ),
+        ] = getattr(config, "CREATOR_KEYWORD_FILTER_KEYWORDS", ""),
+        filter_scope: Annotated[
+            str,
+            typer.Option(
+                "--filter_scope",
+                help="[creator_keyword] Filter scope, comma-separated (title,desc,tags,comments,author_desc)",
+                rich_help_panel="Creator+Keyword Configuration",
+            ),
+        ] = "title,desc,tags",
+        sort_type: Annotated[
+            str,
+            typer.Option(
+                "--sort_type",
+                help="Search sort type (general=综合 | popularity_descending=热度 | time_descending=最新)",
+                rich_help_panel="Basic Configuration",
+            ),
+        ] = getattr(config, "SORT_TYPE", "general"),
+        max_notes: Annotated[
+            int,
+            typer.Option(
+                "--max_notes",
+                help="Maximum number of notes to crawl (overrides CRAWLER_MAX_NOTES_COUNT)",
+                rich_help_panel="Basic Configuration",
+            ),
+        ] = config.CRAWLER_MAX_NOTES_COUNT,
+        date_start: Annotated[
+            str,
+            typer.Option(
+                "--date_start",
+                help="Filter: only keep notes published on or after this date (YYYY-MM-DD)",
+                rich_help_panel="Date Filter",
+            ),
+        ] = getattr(config, "CRAWL_DATE_START", ""),
+        date_end: Annotated[
+            str,
+            typer.Option(
+                "--date_end",
+                help="Filter: only keep notes published on or before this date (YYYY-MM-DD)",
+                rich_help_panel="Date Filter",
+            ),
+        ] = getattr(config, "CRAWL_DATE_END", ""),
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
@@ -327,6 +384,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.CRAWLER_TYPE = crawler_type.value
         config.START_PAGE = start
         config.KEYWORDS = keywords
+        config.KEYWORDS_COMBINE_MODE = keywords_combine
         config.ENABLE_GET_NOTE_DETAIL = enable_detail
         config.ENABLE_GET_COMMENTS = enable_comment
         config.ENABLE_GET_SUB_COMMENTS = enable_sub_comment
@@ -341,6 +399,13 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.SEARCH_TOP_COMMENT_PAGE_COUNT = comment_page_count
         if feishu_folder:
             config.FEISHU_FOLDER_TOKEN_OVERRIDE = feishu_folder
+
+        config.CREATOR_KEYWORD_FILTER_KEYWORDS = filter_keywords
+        config.CREATOR_KEYWORD_FILTER_SCOPE = filter_scope
+        config.SORT_TYPE = sort_type
+        config.CRAWLER_MAX_NOTES_COUNT = max_notes
+        config.CRAWL_DATE_START = date_start
+        config.CRAWL_DATE_END = date_end
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:

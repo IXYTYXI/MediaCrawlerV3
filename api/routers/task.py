@@ -59,8 +59,12 @@ class TaskConfig(BaseModel):
     platform: str = "xhs"
     crawler_type: str = "search"
     keywords: str = ""
+    keywords_combine_mode: bool = False
     creator_urls: List[str] = []
     max_notes_per_keyword: int = 80
+    sort_type: str = "general"
+    date_start: str = ""
+    date_end: str = ""
     enable_comments: bool = False
     max_comments: int = 50
     enable_sub_comments: bool = False
@@ -74,6 +78,8 @@ class TaskConfig(BaseModel):
     top_comment_notes_count: int = 20
     comment_page_count: int = 2
     feishu_folder_token: str = ""
+    filter_keywords: str = ""
+    filter_scope: str = "title,desc,tags"
 
 
 class TaskConfigUpdate(BaseModel):
@@ -81,8 +87,12 @@ class TaskConfigUpdate(BaseModel):
     platform: Optional[str] = None
     crawler_type: Optional[str] = None
     keywords: Optional[str] = None
+    keywords_combine_mode: Optional[bool] = None
     creator_urls: Optional[List[str]] = None
     max_notes_per_keyword: Optional[int] = None
+    sort_type: Optional[str] = None
+    date_start: Optional[str] = None
+    date_end: Optional[str] = None
     enable_comments: Optional[bool] = None
     max_comments: Optional[int] = None
     enable_sub_comments: Optional[bool] = None
@@ -96,6 +106,8 @@ class TaskConfigUpdate(BaseModel):
     top_comment_notes_count: Optional[int] = None
     comment_page_count: Optional[int] = None
     feishu_folder_token: Optional[str] = None
+    filter_keywords: Optional[str] = None
+    filter_scope: Optional[str] = None
 
 # ==================== 辅助函数 ====================
 
@@ -152,12 +164,30 @@ def _build_cmd(data: dict) -> List[str]:
     cmd.extend(["--type", data.get("crawler_type", "search")])
     cmd.extend(["--save_data_option", data.get("save_data_option", "json")])
 
+    if data.get("sort_type"):
+        cmd.extend(["--sort_type", data["sort_type"]])
+    if data.get("max_notes_per_keyword"):
+        cmd.extend(["--max_notes", str(data["max_notes_per_keyword"])])
+    if data.get("date_start"):
+        cmd.extend(["--date_start", data["date_start"]])
+    if data.get("date_end"):
+        cmd.extend(["--date_end", data["date_end"]])
+
     ct = data.get("crawler_type", "search")
     # 搜索模式：有关键词则传入，否则不传，由 main 从 config/search_keyword_pool.json 加载
     if ct in ("search", "search_top") and data.get("keywords"):
         cmd.extend(["--keywords", data["keywords"]])
+        if data.get("keywords_combine_mode"):
+            cmd.append("--keywords-combine")
     elif ct == "creator" and data.get("creator_urls"):
         cmd.extend(["--creator_id", ",".join(data["creator_urls"])])
+    elif ct == "creator_keyword":
+        if data.get("creator_urls"):
+            cmd.extend(["--creator_id", ",".join(data["creator_urls"])])
+        if data.get("filter_keywords"):
+            cmd.extend(["--filter_keywords", data["filter_keywords"]])
+        if data.get("filter_scope"):
+            cmd.extend(["--filter_scope", data["filter_scope"]])
 
     if ct == "search_top":
         if data.get("top_notes_count"):

@@ -16,6 +16,7 @@ _IS_LINUX = _platform.system() == "Linux"
 
 PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "编程副业,编程兼职"  # 关键词搜索配置，以英文逗号分隔
+KEYWORDS_COMBINE_MODE = False  # 多关键词组合模式：True=逗号分隔的词组合为一个搜索(如"A,B,C"→"A B C")；False=逐个分别搜索
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
 COOKIES = "web_session=040069b8083b3cc3b8d62a4a853b4bb7113874"
 
@@ -81,10 +82,14 @@ SAVE_DATA_OPTION = "json"  # csv or db or json or sqlite or excel or postgres
 # 用户浏览器缓存的浏览器文件配置
 USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
 
-# 多实例隔离：通过环境变量 MC_INSTANCE_ID 自动修改路径
+# 多实例隔离：通过环境变量 MC_INSTANCE_ID 自动修改浏览器数据路径
 _INSTANCE_ID = os.environ.get("MC_INSTANCE_ID", "")
 if _INSTANCE_ID:
     USER_DATA_DIR = f"instance_{_INSTANCE_ID}/%s_user_data_dir"
+
+# 数据目录隔离：MC_DATA_DIR 环境变量控制爬取数据输出目录（默认 "data"）
+# 管理平台通过此变量将各部门数据写入独立目录
+MC_DATA_DIR = os.environ.get("MC_DATA_DIR", "data")
 
 # 爬取开始页数 默认从第一页开始
 START_PAGE = 1
@@ -178,6 +183,7 @@ XHS_CURRENT_USER_ID = ""
 DATE_EARLY_STOP_ENABLED = False
 DATE_EARLY_STOP_THRESHOLD = 5  # 连续多少条超出范围后停止
 CRAWL_DATE_START = ""  # 由 batch_crawler 动态注入，格式 "2025-01-01"
+CRAWL_DATE_END = ""  # 由 batch_crawler 或任务管理注入，格式 "2025-12-31"
 INCREMENTAL_MODE = False  # 由 batch_crawler 动态注入，仅增量更新模式下为 True
 
 # 列表阶段轻量互动量刷新：开启后对列表里的旧笔记（已有详情）直接取互动量更新，跳过详情接口
@@ -186,6 +192,13 @@ INCREMENTAL_MODE = False  # 由 batch_crawler 动态注入，仅增量更新模�
 LIST_LEVEL_STATS_UPDATE = False
 LIST_LEVEL_STATS_CUTOFF_DATE = ""  # 此日期之前的笔记视为「旧笔记」，格式 "2026-03-06"
 LIST_LEVEL_DATE_FLOOR = ""  # 日期地板：早于此日期的笔记直接跳过，连续触发后停止翻页
+
+# ==================== 作者×关键词 组合搜索模式 (creator_keyword) ====================
+# 过滤关键词：支持 |(OR)、&(AND)、空格(组合词)，逗号分隔多个独立表达式
+# 示例："小学&数学, 网课|在线" → 两个独立过滤条件
+CREATOR_KEYWORD_FILTER_KEYWORDS = ""
+# 过滤范围：逗号分隔，可选值 title,desc,tags,comments,author_desc
+CREATOR_KEYWORD_FILTER_SCOPE = "title,desc,tags"
 
 # 假动作策略：随机访问无关内容，模拟真实用户浏览
 FAKE_ACTION_ENABLED = True
