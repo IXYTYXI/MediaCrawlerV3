@@ -1,0 +1,1097 @@
+{
+  "crawl_time": "2026-03-10 18:40:36",
+  "platform": "xhs",
+  "creator_nickname": "乐妈～",
+  "creator_id": "608a833d000000000101f769",
+  "total_notes": 100,
+  "total_comments": 1833,
+  "total_likes": 108699,
+  "total_collects": 154363,
+  "total_shares": 26339,
+  "avg_likes": 1086.99,
+  "avg_collects": 1543.63,
+  "avg_comments": 180.12,
+  "avg_shares": 263.39,
+  "most_liked": {
+    "note_id": "680a07f7000000000900d50d",
+    "title": "报喜！粉丝的娃半年从问题生冲进班级前十",
+    "note_url": "https://www.xiaohongshu.com/explore/680a07f7000000000900d50d",
+    "liked_count": 29000,
+    "collected_count": 38000,
+    "comment_count": 249,
+    "share_count": 5267,
+    "publish_time": 1745492569000
+  },
+  "least_liked": {
+    "note_id": "6927ef11000000001f00e625",
+    "title": "数学怎样超前学",
+    "note_url": "https://www.xiaohongshu.com/explore/6927ef11000000001f00e625",
+    "liked_count": 168,
+    "collected_count": 220,
+    "comment_count": 205,
+    "share_count": 24,
+    "publish_time": 1764224785000
+  },
+  "most_collected": {
+    "note_id": "680a07f7000000000900d50d",
+    "title": "报喜！粉丝的娃半年从问题生冲进班级前十",
+    "note_url": "https://www.xiaohongshu.com/explore/680a07f7000000000900d50d",
+    "liked_count": 29000,
+    "collected_count": 38000,
+    "comment_count": 249,
+    "share_count": 5267,
+    "publish_time": 1745492569000
+  },
+  "least_collected": {
+    "note_id": "69328dcd000000001e0201d8",
+    "title": "五年级数学满分秘籍：三个方法➕一个工具",
+    "note_url": "https://www.xiaohongshu.com/explore/69328dcd000000001e0201d8",
+    "liked_count": 203,
+    "collected_count": 122,
+    "comment_count": 51,
+    "share_count": 44,
+    "publish_time": 1764922111000
+  },
+  "most_commented": {
+    "note_id": "669e04f0000000000d00d755",
+    "title": "数学超前学习的经验",
+    "note_url": "https://www.xiaohongshu.com/explore/669e04f0000000000d00d755",
+    "liked_count": 270,
+    "collected_count": 226,
+    "comment_count": 1263,
+    "share_count": 25,
+    "publish_time": 1721631984000
+  },
+  "least_commented": {
+    "note_id": "69742fcc000000002801e648",
+    "title": "超前学初中数学实操方法干货",
+    "note_url": "https://www.xiaohongshu.com/explore/69742fcc000000002801e648",
+    "liked_count": 2061,
+    "collected_count": 3588,
+    "comment_count": 0,
+    "share_count": 430,
+    "publish_time": 1769222092000
+  },
+  "most_shared": {
+    "note_id": "680a07f7000000000900d50d",
+    "title": "报喜！粉丝的娃半年从问题生冲进班级前十",
+    "note_url": "https://www.xiaohongshu.com/explore/680a07f7000000000900d50d",
+    "liked_count": 29000,
+    "collected_count": 38000,
+    "comment_count": 249,
+    "share_count": 5267,
+    "publish_time": 1745492569000
+  },
+  "least_shared": {
+    "note_id": "68a57ac2000000001d02012b",
+    "title": "数学提前学用完的资料存起来还是扔了？",
+    "note_url": "https://www.xiaohongshu.com/explore/68a57ac2000000001d02012b",
+    "liked_count": 201,
+    "collected_count": 145,
+    "comment_count": 113,
+    "share_count": 6,
+    "publish_time": 1755675330000
+  },
+  "all_notes": [
+    {
+      "note_id": "680988f3000000000b01d4d5",
+      "title": "这才是高端鸡娃的内幕！",
+      "note_url": "https://www.xiaohongshu.com/explore/680988f3000000000b01d4d5",
+      "liked_count": 7171,
+      "collected_count": 8291,
+      "comment_count": 442,
+      "share_count": 1402,
+      "publish_time": 1745455347000
+    },
+    {
+      "note_id": "6821d8f5000000000303a851",
+      "title": "数学超前学入门思路规划",
+      "note_url": "https://www.xiaohongshu.com/explore/6821d8f5000000000303a851",
+      "liked_count": 4813,
+      "collected_count": 8104,
+      "comment_count": 238,
+      "share_count": 999,
+      "publish_time": 1747048693000
+    },
+    {
+      "note_id": "663d7a3e000000001e022716",
+      "title": "数学如何超前学？",
+      "note_url": "https://www.xiaohongshu.com/explore/663d7a3e000000001e022716",
+      "liked_count": 3216,
+      "collected_count": 4847,
+      "comment_count": 434,
+      "share_count": 996,
+      "publish_time": 1715305022000
+    },
+    {
+      "note_id": "693bffb8000000000d03b117",
+      "title": "海淀牛妈：3个月学完小学数学的实操分享",
+      "note_url": "https://www.xiaohongshu.com/explore/693bffb8000000000d03b117",
+      "liked_count": 2841,
+      "collected_count": 5168,
+      "comment_count": 31,
+      "share_count": 724,
+      "publish_time": 1765546210000
+    },
+    {
+      "note_id": "67829ad7000000002001a8fa",
+      "title": "小学生提前学数学的一点真心话",
+      "note_url": "https://www.xiaohongshu.com/explore/67829ad7000000002001a8fa",
+      "liked_count": 2551,
+      "collected_count": 3542,
+      "comment_count": 638,
+      "share_count": 641,
+      "publish_time": 1736612567000
+    },
+    {
+      "note_id": "67b953c80000000029026a42",
+      "title": "只有我敢说实话吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/67b953c80000000029026a42",
+      "liked_count": 2395,
+      "collected_count": 3536,
+      "comment_count": 854,
+      "share_count": 434,
+      "publish_time": 1740198856000
+    },
+    {
+      "note_id": "67581cef0000000002037a6d",
+      "title": "超前学初中，小学儿子做初二试卷考了95分",
+      "note_url": "https://www.xiaohongshu.com/explore/67581cef0000000002037a6d",
+      "liked_count": 2389,
+      "collected_count": 3286,
+      "comment_count": 235,
+      "share_count": 864,
+      "publish_time": 1733827823000
+    },
+    {
+      "note_id": "68fc40c9000000000300d2fa",
+      "title": "高端的鸡娃：超前学+运动+阅读+9点睡！",
+      "note_url": "https://www.xiaohongshu.com/explore/68fc40c9000000000300d2fa",
+      "liked_count": 2319,
+      "collected_count": 3260,
+      "comment_count": 177,
+      "share_count": 564,
+      "publish_time": 1761362121000
+    },
+    {
+      "note_id": "64b40c43000000000f00e0af",
+      "title": "小学阶段➡️哪些科目可以提前学？",
+      "note_url": "https://www.xiaohongshu.com/explore/64b40c43000000000f00e0af",
+      "liked_count": 2290,
+      "collected_count": 4701,
+      "comment_count": 39,
+      "share_count": 507,
+      "publish_time": 1689521219000
+    },
+    {
+      "note_id": "69742fcc000000002801e648",
+      "title": "超前学初中数学实操方法干货",
+      "note_url": "https://www.xiaohongshu.com/explore/69742fcc000000002801e648",
+      "liked_count": 2061,
+      "collected_count": 3588,
+      "comment_count": 0,
+      "share_count": 430,
+      "publish_time": 1769222092000
+    },
+    {
+      "note_id": "66606f49000000000d00e3d6",
+      "title": "小学四年级每天如何安排数学提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/66606f49000000000d00e3d6",
+      "liked_count": 2038,
+      "collected_count": 3210,
+      "comment_count": 501,
+      "share_count": 825,
+      "publish_time": 1717595977000
+    },
+    {
+      "note_id": "67fcf9ff000000001a00648d",
+      "title": "小学数学，要不要超前学？",
+      "note_url": "https://www.xiaohongshu.com/explore/67fcf9ff000000001a00648d",
+      "liked_count": 1937,
+      "collected_count": 1602,
+      "comment_count": 512,
+      "share_count": 1316,
+      "publish_time": 1744632319000
+    },
+    {
+      "note_id": "68803682000000001301285f",
+      "title": "二升三提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/68803682000000001301285f",
+      "liked_count": 1657,
+      "collected_count": 2459,
+      "comment_count": 804,
+      "share_count": 206,
+      "publish_time": 1753233026000
+    },
+    {
+      "note_id": "6607e81a000000001b00974d",
+      "title": "初中回头看，小学后悔太浪费时间了",
+      "note_url": "https://www.xiaohongshu.com/explore/6607e81a000000001b00974d",
+      "liked_count": 1476,
+      "collected_count": 2609,
+      "comment_count": 211,
+      "share_count": 677,
+      "publish_time": 1711794202000
+    },
+    {
+      "note_id": "678903a1000000001901b56b",
+      "title": "提前学是捷径还是弯路？99%的家长都搞错了！",
+      "note_url": "https://www.xiaohongshu.com/explore/678903a1000000001901b56b",
+      "liked_count": 1462,
+      "collected_count": 1723,
+      "comment_count": 160,
+      "share_count": 309,
+      "publish_time": 1737032609000
+    },
+    {
+      "note_id": "6750989d0000000002019378",
+      "title": "小学提前学数学，每天怎么做？",
+      "note_url": "https://www.xiaohongshu.com/explore/6750989d0000000002019378",
+      "liked_count": 1454,
+      "collected_count": 2290,
+      "comment_count": 203,
+      "share_count": 358,
+      "publish_time": 1733335197000
+    },
+    {
+      "note_id": "694e6bec000000002103eef3",
+      "title": "放弃奥数改超前学，女儿最大的变化",
+      "note_url": "https://www.xiaohongshu.com/explore/694e6bec000000002103eef3",
+      "liked_count": 1325,
+      "collected_count": 1871,
+      "comment_count": 88,
+      "share_count": 566,
+      "publish_time": 1766747116000
+    },
+    {
+      "note_id": "663f111d000000001e036b5e",
+      "title": "6+大童数学规划路线(1-9年级)-提前学+奥数",
+      "note_url": "https://www.xiaohongshu.com/explore/663f111d000000001e036b5e",
+      "liked_count": 1316,
+      "collected_count": 2453,
+      "comment_count": 153,
+      "share_count": 408,
+      "publish_time": 1715409181000
+    },
+    {
+      "note_id": "6717bf49000000002401b557",
+      "title": "自学小学数学最快的方法",
+      "note_url": "https://www.xiaohongshu.com/explore/6717bf49000000002401b557",
+      "liked_count": 1296,
+      "collected_count": 1892,
+      "comment_count": 152,
+      "share_count": 223,
+      "publish_time": 1729609545000
+    },
+    {
+      "note_id": "6899f75f0000000003030260",
+      "title": "数学超前学的一年速通清单",
+      "note_url": "https://www.xiaohongshu.com/explore/6899f75f0000000003030260",
+      "liked_count": 1282,
+      "collected_count": 2236,
+      "comment_count": 158,
+      "share_count": 251,
+      "publish_time": 1754920799000
+    },
+    {
+      "note_id": "645b6470000000001203d2bf",
+      "title": "溪宝的数学自学经历，一切为了理想",
+      "note_url": "https://www.xiaohongshu.com/explore/645b6470000000001203d2bf",
+      "liked_count": 1274,
+      "collected_count": 2084,
+      "comment_count": 347,
+      "share_count": 680,
+      "publish_time": 1683711088000
+    },
+    {
+      "note_id": "65c08ce6000000002c03410d",
+      "title": "自鸡奥数三年，踩坑无数，好不容易从坑里爬出来。整理出来，希望对大家有些帮助：\n1)🌍奥数别鸡太早！\n",
+      "note_url": "https://www.xiaohongshu.com/explore/65c08ce6000000002c03410d",
+      "liked_count": 1159,
+      "collected_count": 2411,
+      "comment_count": 43,
+      "share_count": 317,
+      "publish_time": 1707117798000
+    },
+    {
+      "note_id": "675bdcb5000000000600c771",
+      "title": "小学数学超前学到底应该如何学(一)",
+      "note_url": "https://www.xiaohongshu.com/explore/675bdcb5000000000600c771",
+      "liked_count": 1114,
+      "collected_count": 1539,
+      "comment_count": 83,
+      "share_count": 435,
+      "publish_time": 1734073525000
+    },
+    {
+      "note_id": "67c060c7000000002902933d",
+      "title": "数学如何超前学（纯干货）",
+      "note_url": "https://www.xiaohongshu.com/explore/67c060c7000000002902933d",
+      "liked_count": 1110,
+      "collected_count": 1061,
+      "comment_count": 65,
+      "share_count": 184,
+      "publish_time": 1740660935000
+    },
+    {
+      "note_id": "65aa182a000000002d03e93f",
+      "title": "如何用《教材全解》进行数学提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/65aa182a000000002d03e93f",
+      "liked_count": 1013,
+      "collected_count": 1603,
+      "comment_count": 132,
+      "share_count": 221,
+      "publish_time": 1705646122000
+    },
+    {
+      "note_id": "65b4e5d80000000011002394",
+      "title": "为了初中不熬夜，五六年级应该提前学点什么",
+      "note_url": "https://www.xiaohongshu.com/explore/65b4e5d80000000011002394",
+      "liked_count": 839,
+      "collected_count": 1301,
+      "comment_count": 312,
+      "share_count": 129,
+      "publish_time": 1706354136000
+    },
+    {
+      "note_id": "6960bcee000000000c037e76",
+      "title": "放弃奥数转提前学，孩子最大的变化",
+      "note_url": "https://www.xiaohongshu.com/explore/6960bcee000000000c037e76",
+      "liked_count": 828,
+      "collected_count": 1242,
+      "comment_count": 41,
+      "share_count": 377,
+      "publish_time": 1767947502000
+    },
+    {
+      "note_id": "66e6459b000000002603f06f",
+      "title": "五年级超前自学：五下《学霸》刷完啦！",
+      "note_url": "https://www.xiaohongshu.com/explore/66e6459b000000002603f06f",
+      "liked_count": 805,
+      "collected_count": 820,
+      "comment_count": 326,
+      "share_count": 95,
+      "publish_time": 1726367131000
+    },
+    {
+      "note_id": "6660158e000000000d00e73c",
+      "title": "四年级果姐｜✔️超前学小奥的正确路径……",
+      "note_url": "https://www.xiaohongshu.com/explore/6660158e000000000d00e73c",
+      "liked_count": 790,
+      "collected_count": 965,
+      "comment_count": 198,
+      "share_count": 99,
+      "publish_time": 1717578045000
+    },
+    {
+      "note_id": "676400c5000000000800e45f",
+      "title": "六年级超前自学，每天咋安排？",
+      "note_url": "https://www.xiaohongshu.com/explore/676400c5000000000800e45f",
+      "liked_count": 782,
+      "collected_count": 1074,
+      "comment_count": 49,
+      "share_count": 253,
+      "publish_time": 1734607045000
+    },
+    {
+      "note_id": "67fa396e000000001e004468",
+      "title": "数学自学超前有多重要",
+      "note_url": "https://www.xiaohongshu.com/explore/67fa396e000000001e004468",
+      "liked_count": 745,
+      "collected_count": 1029,
+      "comment_count": 94,
+      "share_count": 327,
+      "publish_time": 1744451950000
+    },
+    {
+      "note_id": "681e18520000000023000d3f",
+      "title": "在小升初之前，把语数外拉到中考水平",
+      "note_url": "https://www.xiaohongshu.com/explore/681e18520000000023000d3f",
+      "liked_count": 702,
+      "collected_count": 1252,
+      "comment_count": 190,
+      "share_count": 208,
+      "publish_time": 1746802770000
+    },
+    {
+      "note_id": "670450d8000000002c02b220",
+      "title": "超前学习初中数学，不要刷题！",
+      "note_url": "https://www.xiaohongshu.com/explore/670450d8000000002c02b220",
+      "liked_count": 690,
+      "collected_count": 1284,
+      "comment_count": 412,
+      "share_count": 181,
+      "publish_time": 1728336088000
+    },
+    {
+      "note_id": "670ea2d300000000240195f0",
+      "title": "小学1-4年级的数学怎么规划",
+      "note_url": "https://www.xiaohongshu.com/explore/670ea2d300000000240195f0",
+      "liked_count": 672,
+      "collected_count": 1096,
+      "comment_count": 230,
+      "share_count": 285,
+      "publish_time": 1729012436000
+    },
+    {
+      "note_id": "662f7794000000001e03449a",
+      "title": "普娃小学数学超前学实操技术帖",
+      "note_url": "https://www.xiaohongshu.com/explore/662f7794000000001e03449a",
+      "liked_count": 672,
+      "collected_count": 780,
+      "comment_count": 128,
+      "share_count": 155,
+      "publish_time": 1714395680000
+    },
+    {
+      "note_id": "673c4d5b0000000002018597",
+      "title": "数学课本，是我们超前学的第一步",
+      "note_url": "https://www.xiaohongshu.com/explore/673c4d5b0000000002018597",
+      "liked_count": 667,
+      "collected_count": 1058,
+      "comment_count": 47,
+      "share_count": 129,
+      "publish_time": 1732011007000
+    },
+    {
+      "note_id": "66e4f8e000000000270034bf",
+      "title": "小学数学提前学计划 总计划：三年级学完小学",
+      "note_url": "https://www.xiaohongshu.com/explore/66e4f8e000000000270034bf",
+      "liked_count": 632,
+      "collected_count": 1031,
+      "comment_count": 116,
+      "share_count": 112,
+      "publish_time": 1726281952000
+    },
+    {
+      "note_id": "67501ac3000000000201bbf6",
+      "title": "普娃超前学，真的有用吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/67501ac3000000000201bbf6",
+      "liked_count": 578,
+      "collected_count": 852,
+      "comment_count": 250,
+      "share_count": 137,
+      "publish_time": 1733302979000
+    },
+    {
+      "note_id": "6669d4de000000000e0308a2",
+      "title": "小学数学-提前学还是奥数？",
+      "note_url": "https://www.xiaohongshu.com/explore/6669d4de000000000e0308a2",
+      "liked_count": 564,
+      "collected_count": 610,
+      "comment_count": 176,
+      "share_count": 192,
+      "publish_time": 1718211806000
+    },
+    {
+      "note_id": "688a2cb8000000002500f25e",
+      "title": "数学超前学的核心一定是深度化的学习",
+      "note_url": "https://www.xiaohongshu.com/explore/688a2cb8000000002500f25e",
+      "liked_count": 508,
+      "collected_count": 791,
+      "comment_count": 82,
+      "share_count": 182,
+      "publish_time": 1753885880000
+    },
+    {
+      "note_id": "68bae1b2000000001d009223",
+      "title": "一年级难在哪",
+      "note_url": "https://www.xiaohongshu.com/explore/68bae1b2000000001d009223",
+      "liked_count": 506,
+      "collected_count": 535,
+      "comment_count": 93,
+      "share_count": 63,
+      "publish_time": 1757077938000
+    },
+    {
+      "note_id": "66eb6935000000002603f9f9",
+      "title": "因为超前学，被同学家长找上门（后续）",
+      "note_url": "https://www.xiaohongshu.com/explore/66eb6935000000002603f9f9",
+      "liked_count": 499,
+      "collected_count": 536,
+      "comment_count": 410,
+      "share_count": 17,
+      "publish_time": 1726703925000
+    },
+    {
+      "note_id": "6401f61b00000000130349fb",
+      "title": "超前学习，轻松领跑｜初中数学自学方法与心得",
+      "note_url": "https://www.xiaohongshu.com/explore/6401f61b00000000130349fb",
+      "liked_count": 492,
+      "collected_count": 1028,
+      "comment_count": 175,
+      "share_count": 207,
+      "publish_time": 1677850139000
+    },
+    {
+      "note_id": "6665178f0000000006004011",
+      "title": "超前学习初中数学，开学领先考第一",
+      "note_url": "https://www.xiaohongshu.com/explore/6665178f0000000006004011",
+      "liked_count": 478,
+      "collected_count": 993,
+      "comment_count": 46,
+      "share_count": 168,
+      "publish_time": 1717901930000
+    },
+    {
+      "note_id": "67516b3f000000000201a34b",
+      "title": "庆幸自己的坚持：带孩子超前学数学，真香",
+      "note_url": "https://www.xiaohongshu.com/explore/67516b3f000000000201a34b",
+      "liked_count": 459,
+      "collected_count": 856,
+      "comment_count": 80,
+      "share_count": 156,
+      "publish_time": 1733393409000
+    },
+    {
+      "note_id": "691d1b9d000000001b030f0b",
+      "title": "小学生校内数学提前学内容框架规划小初一体",
+      "note_url": "https://www.xiaohongshu.com/explore/691d1b9d000000001b030f0b",
+      "liked_count": 443,
+      "collected_count": 671,
+      "comment_count": 83,
+      "share_count": 41,
+      "publish_time": 1763515293000
+    },
+    {
+      "note_id": "6937a45a000000001b020e03",
+      "title": "这才是真正高端的鸡娃局！",
+      "note_url": "https://www.xiaohongshu.com/explore/6937a45a000000001b020e03",
+      "liked_count": 407,
+      "collected_count": 486,
+      "comment_count": 32,
+      "share_count": 84,
+      "publish_time": 1765254234000
+    },
+    {
+      "note_id": "673efae300000000060140c5",
+      "title": "2年搞定小学数学，超前学实操方法",
+      "note_url": "https://www.xiaohongshu.com/explore/673efae300000000060140c5",
+      "liked_count": 387,
+      "collected_count": 593,
+      "comment_count": 20,
+      "share_count": 68,
+      "publish_time": 1732184342000
+    },
+    {
+      "note_id": "674433a700000000080068f0",
+      "title": "小学6年的计算如何提前学完？",
+      "note_url": "https://www.xiaohongshu.com/explore/674433a700000000080068f0",
+      "liked_count": 380,
+      "collected_count": 471,
+      "comment_count": 22,
+      "share_count": 38,
+      "publish_time": 1732522919000
+    },
+    {
+      "note_id": "67d97001000000001b03aa44",
+      "title": "先学小奥还是先学初中数学？",
+      "note_url": "https://www.xiaohongshu.com/explore/67d97001000000001b03aa44",
+      "liked_count": 360,
+      "collected_count": 620,
+      "comment_count": 131,
+      "share_count": 146,
+      "publish_time": 1742303233000
+    },
+    {
+      "note_id": "67e5730100000000060399b5",
+      "title": "超前自学用费曼学习法才是永远的神！",
+      "note_url": "https://www.xiaohongshu.com/explore/67e5730100000000060399b5",
+      "liked_count": 337,
+      "collected_count": 287,
+      "comment_count": 2,
+      "share_count": 59,
+      "publish_time": 1743116521000
+    },
+    {
+      "note_id": "69239044000000001e00eeff",
+      "title": "初中数学如何提前学（上）？给娃码住，转至钱眼太太\n\t\n初中数学大概在什么时候开始起步？\n答：在没学奥",
+      "note_url": "https://www.xiaohongshu.com/explore/69239044000000001e00eeff",
+      "liked_count": 334,
+      "collected_count": 662,
+      "comment_count": 20,
+      "share_count": 92,
+      "publish_time": 1763938372000
+    },
+    {
+      "note_id": "682499e200000000230125c7",
+      "title": "超前学➕奥数刷题\n你们都是怎么办到的？\n娃三年级，校内不用操心，奥数学的是深奥，一边夯实校内基础，一",
+      "note_url": "https://www.xiaohongshu.com/explore/682499e200000000230125c7",
+      "liked_count": 334,
+      "collected_count": 532,
+      "comment_count": 273,
+      "share_count": 108,
+      "publish_time": 1747229154000
+    },
+    {
+      "note_id": "66e0eb5400000000260301b2",
+      "title": "数学学习最大的坑是扎实",
+      "note_url": "https://www.xiaohongshu.com/explore/66e0eb5400000000260301b2",
+      "liked_count": 313,
+      "collected_count": 377,
+      "comment_count": 207,
+      "share_count": 118,
+      "publish_time": 1726016341000
+    },
+    {
+      "note_id": "68b2dc21000000001d018232",
+      "title": "哪位学霸家长帮忙指导一下数学到底怎么超前学呢？都说小学毕业就得学完初一或者初二的内容，我们四年级，应",
+      "note_url": "https://www.xiaohongshu.com/explore/68b2dc21000000001d018232",
+      "liked_count": 302,
+      "collected_count": 488,
+      "comment_count": 264,
+      "share_count": 42,
+      "publish_time": 1756552225000
+    },
+    {
+      "note_id": "6737272e000000001d03bb85",
+      "title": "数学超前学：总结我们这些年做对的三件事",
+      "note_url": "https://www.xiaohongshu.com/explore/6737272e000000001d03bb85",
+      "liked_count": 301,
+      "collected_count": 340,
+      "comment_count": 21,
+      "share_count": 93,
+      "publish_time": 1731667758000
+    },
+    {
+      "note_id": "685136ff0000000023010eb9",
+      "title": "现在六年级都提前学初一了吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/685136ff0000000023010eb9",
+      "liked_count": 290,
+      "collected_count": 217,
+      "comment_count": 617,
+      "share_count": 65,
+      "publish_time": 1750156318000
+    },
+    {
+      "note_id": "66236ba1000000001c00a47e",
+      "title": "初中数学怎么自学呢",
+      "note_url": "https://www.xiaohongshu.com/explore/66236ba1000000001c00a47e",
+      "liked_count": 287,
+      "collected_count": 321,
+      "comment_count": 44,
+      "share_count": 8,
+      "publish_time": 1713597345000
+    },
+    {
+      "note_id": "67371449000000003c014ba7",
+      "title": "超前学数学，每天怎么安排？",
+      "note_url": "https://www.xiaohongshu.com/explore/67371449000000003c014ba7",
+      "liked_count": 284,
+      "collected_count": 455,
+      "comment_count": 43,
+      "share_count": 80,
+      "publish_time": 1731662921000
+    },
+    {
+      "note_id": "662db89e000000000d03373a",
+      "title": "小学生想提前学初中数学，用什么教材好？",
+      "note_url": "https://www.xiaohongshu.com/explore/662db89e000000000d03373a",
+      "liked_count": 284,
+      "collected_count": 414,
+      "comment_count": 85,
+      "share_count": 27,
+      "publish_time": 1714272414000
+    },
+    {
+      "note_id": "685e89cc000000001203f78d",
+      "title": "已陪跑完整个高中，给准高二家长几点建议",
+      "note_url": "https://www.xiaohongshu.com/explore/685e89cc000000001203f78d",
+      "liked_count": 279,
+      "collected_count": 563,
+      "comment_count": 21,
+      "share_count": 237,
+      "publish_time": 1751026124000
+    },
+    {
+      "note_id": "696e0543000000000a02a0be",
+      "title": "寒假数学提前学指南（喂饭版）",
+      "note_url": "https://www.xiaohongshu.com/explore/696e0543000000000a02a0be",
+      "liked_count": 278,
+      "collected_count": 332,
+      "comment_count": 13,
+      "share_count": 65,
+      "publish_time": 1768817987000
+    },
+    {
+      "note_id": "6936822b000000001e0306f7",
+      "title": "数学超前学怎么规划，怎么学（2小学阶段）",
+      "note_url": "https://www.xiaohongshu.com/explore/6936822b000000001e0306f7",
+      "liked_count": 277,
+      "collected_count": 463,
+      "comment_count": 49,
+      "share_count": 68,
+      "publish_time": 1765179947000
+    },
+    {
+      "note_id": "695e23cf000000001a026654",
+      "title": "一二年级下学期数学预习建议方法",
+      "note_url": "https://www.xiaohongshu.com/explore/695e23cf000000001a026654",
+      "liked_count": 274,
+      "collected_count": 201,
+      "comment_count": 55,
+      "share_count": 35,
+      "publish_time": 1767777231000
+    },
+    {
+      "note_id": "6812282800000000070348ab",
+      "title": "XSC有感--数学篇（二）",
+      "note_url": "https://www.xiaohongshu.com/explore/6812282800000000070348ab",
+      "liked_count": 272,
+      "collected_count": 577,
+      "comment_count": 35,
+      "share_count": 51,
+      "publish_time": 1746020392000
+    },
+    {
+      "note_id": "669e04f0000000000d00d755",
+      "title": "数学超前学习的经验",
+      "note_url": "https://www.xiaohongshu.com/explore/669e04f0000000000d00d755",
+      "liked_count": 270,
+      "collected_count": 226,
+      "comment_count": 1263,
+      "share_count": 25,
+      "publish_time": 1721631984000
+    },
+    {
+      "note_id": "673b126000000000020286f6",
+      "title": "博士妈带娃超前学，自学搭配工具",
+      "note_url": "https://www.xiaohongshu.com/explore/673b126000000000020286f6",
+      "liked_count": 266,
+      "collected_count": 362,
+      "comment_count": 39,
+      "share_count": 39,
+      "publish_time": 1731928504000
+    },
+    {
+      "note_id": "6769359c000000000800f904",
+      "title": "为什么你的超前学，根本没有用？",
+      "note_url": "https://www.xiaohongshu.com/explore/6769359c000000000800f904",
+      "liked_count": 265,
+      "collected_count": 426,
+      "comment_count": 30,
+      "share_count": 43,
+      "publish_time": 1734948253000
+    },
+    {
+      "note_id": "67f07690000000000b01f776",
+      "title": "超前学才是王道",
+      "note_url": "https://www.xiaohongshu.com/explore/67f07690000000000b01f776",
+      "liked_count": 259,
+      "collected_count": 154,
+      "comment_count": 58,
+      "share_count": 111,
+      "publish_time": 1743812240000
+    },
+    {
+      "note_id": "67863818000000000100a27d",
+      "title": "假期看洋葱提前学，怎么让孩子会做难题？",
+      "note_url": "https://www.xiaohongshu.com/explore/67863818000000000100a27d",
+      "liked_count": 259,
+      "collected_count": 350,
+      "comment_count": 16,
+      "share_count": 47,
+      "publish_time": 1736849432000
+    },
+    {
+      "note_id": "66475afa00000000150087e3",
+      "title": "来自一位陪读妈妈——关于小学超前学，很多家长认识都不一致，我说一下自己的看法。\n我孩子现在8年级，成",
+      "note_url": "https://www.xiaohongshu.com/explore/66475afa00000000150087e3",
+      "liked_count": 257,
+      "collected_count": 405,
+      "comment_count": 26,
+      "share_count": 36,
+      "publish_time": 1715952378000
+    },
+    {
+      "note_id": "6746e213000000000601520d",
+      "title": "2年学完小学数学，教辅我都用了哪些？",
+      "note_url": "https://www.xiaohongshu.com/explore/6746e213000000000601520d",
+      "liked_count": 257,
+      "collected_count": 368,
+      "comment_count": 28,
+      "share_count": 29,
+      "publish_time": 1732702262000
+    },
+    {
+      "note_id": "67b1e3350000000018013275",
+      "title": "小升初提前学，小孩哥得上外挂了",
+      "note_url": "https://www.xiaohongshu.com/explore/67b1e3350000000018013275",
+      "liked_count": 257,
+      "collected_count": 207,
+      "comment_count": 31,
+      "share_count": 17,
+      "publish_time": 1739783411000
+    },
+    {
+      "note_id": "66129ad0000000001a01676c",
+      "title": "五年级娃说，数学超前学没用....",
+      "note_url": "https://www.xiaohongshu.com/explore/66129ad0000000001a01676c",
+      "liked_count": 257,
+      "collected_count": 229,
+      "comment_count": 982,
+      "share_count": 49,
+      "publish_time": 1712495312000
+    },
+    {
+      "note_id": "658c391a000000001d0309c9",
+      "title": "过度超前学习的弊端",
+      "note_url": "https://www.xiaohongshu.com/explore/658c391a000000001d0309c9",
+      "liked_count": 238,
+      "collected_count": 244,
+      "comment_count": 297,
+      "share_count": 42,
+      "publish_time": 1703688474000
+    },
+    {
+      "note_id": "67a21b920000000018005d60",
+      "title": "六年级提前学比我想象中的难很多😂",
+      "note_url": "https://www.xiaohongshu.com/explore/67a21b920000000018005d60",
+      "liked_count": 237,
+      "collected_count": 248,
+      "comment_count": 191,
+      "share_count": 39,
+      "publish_time": 1738677138000
+    },
+    {
+      "note_id": "68fb3e5d00000000030230bb",
+      "title": "普娃数学提前学，看看我们都做了什么。",
+      "note_url": "https://www.xiaohongshu.com/explore/68fb3e5d00000000030230bb",
+      "liked_count": 229,
+      "collected_count": 249,
+      "comment_count": 24,
+      "share_count": 12,
+      "publish_time": 1761299477000
+    },
+    {
+      "note_id": "674d696f000000000203a403",
+      "title": "超前学数学，孩子忘得快，怎么办？",
+      "note_url": "https://www.xiaohongshu.com/explore/674d696f000000000203a403",
+      "liked_count": 225,
+      "collected_count": 333,
+      "comment_count": 6,
+      "share_count": 34,
+      "publish_time": 1733134207000
+    },
+    {
+      "note_id": "673f079f0000000006016f11",
+      "title": "数学超前学2年多，为啥一直坚持用洋葱？",
+      "note_url": "https://www.xiaohongshu.com/explore/673f079f0000000006016f11",
+      "liked_count": 222,
+      "collected_count": 263,
+      "comment_count": 64,
+      "share_count": 54,
+      "publish_time": 1732233672000
+    },
+    {
+      "note_id": "66de6369000000001e01be36",
+      "title": "北师大数学超前学框架",
+      "note_url": "https://www.xiaohongshu.com/explore/66de6369000000001e01be36",
+      "liked_count": 221,
+      "collected_count": 282,
+      "comment_count": 26,
+      "share_count": 16,
+      "publish_time": 1725850473000
+    },
+    {
+      "note_id": "66e2d663000000001e018f41",
+      "title": "小学五年级，普遍提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/66e2d663000000001e018f41",
+      "liked_count": 220,
+      "collected_count": 198,
+      "comment_count": 158,
+      "share_count": 92,
+      "publish_time": 1726142051000
+    },
+    {
+      "note_id": "68f365a50000000003011090",
+      "title": "这才是数学超前学最大的坑！",
+      "note_url": "https://www.xiaohongshu.com/explore/68f365a50000000003011090",
+      "liked_count": 214,
+      "collected_count": 240,
+      "comment_count": 42,
+      "share_count": 69,
+      "publish_time": 1760781733000
+    },
+    {
+      "note_id": "663f6b66000000001e03849c",
+      "title": "超前学习到底有没有用？",
+      "note_url": "https://www.xiaohongshu.com/explore/663f6b66000000001e03849c",
+      "liked_count": 210,
+      "collected_count": 214,
+      "comment_count": 842,
+      "share_count": 36,
+      "publish_time": 1715432294000
+    },
+    {
+      "note_id": "67b213dd000000001902d24c",
+      "title": "数学超前学该注意的",
+      "note_url": "https://www.xiaohongshu.com/explore/67b213dd000000001902d24c",
+      "liked_count": 209,
+      "collected_count": 283,
+      "comment_count": 108,
+      "share_count": 86,
+      "publish_time": 1739723741000
+    },
+    {
+      "note_id": "67516fbb00000000060157c4",
+      "title": "超前学用洋葱，实操攻略来啦",
+      "note_url": "https://www.xiaohongshu.com/explore/67516fbb00000000060157c4",
+      "liked_count": 205,
+      "collected_count": 291,
+      "comment_count": 7,
+      "share_count": 43,
+      "publish_time": 1733390267000
+    },
+    {
+      "note_id": "6814e80500000000230127b3",
+      "title": "记录：一年级的超前学收获",
+      "note_url": "https://www.xiaohongshu.com/explore/6814e80500000000230127b3",
+      "liked_count": 204,
+      "collected_count": 276,
+      "comment_count": 156,
+      "share_count": 53,
+      "publish_time": 1746200581000
+    },
+    {
+      "note_id": "69328dcd000000001e0201d8",
+      "title": "五年级数学满分秘籍：三个方法➕一个工具",
+      "note_url": "https://www.xiaohongshu.com/explore/69328dcd000000001e0201d8",
+      "liked_count": 203,
+      "collected_count": 122,
+      "comment_count": 51,
+      "share_count": 44,
+      "publish_time": 1764922111000
+    },
+    {
+      "note_id": "68a57ac2000000001d02012b",
+      "title": "数学提前学用完的资料存起来还是扔了？",
+      "note_url": "https://www.xiaohongshu.com/explore/68a57ac2000000001d02012b",
+      "liked_count": 201,
+      "collected_count": 145,
+      "comment_count": 113,
+      "share_count": 6,
+      "publish_time": 1755675330000
+    },
+    {
+      "note_id": "68347ee1000000000f03161c",
+      "title": "6年级了，还算超前学吗?",
+      "note_url": "https://www.xiaohongshu.com/explore/68347ee1000000000f03161c",
+      "liked_count": 201,
+      "collected_count": 254,
+      "comment_count": 132,
+      "share_count": 38,
+      "publish_time": 1748270817000
+    },
+    {
+      "note_id": "667c0d38000000001e01179b",
+      "title": "关于学习高中数学，我儿子只用了一个月....",
+      "note_url": "https://www.xiaohongshu.com/explore/667c0d38000000001e01179b",
+      "liked_count": 196,
+      "collected_count": 289,
+      "comment_count": 61,
+      "share_count": 68,
+      "publish_time": 1719410477000
+    },
+    {
+      "note_id": "68f0a5770000000007034823",
+      "title": "小学生提前学初中数学攻略",
+      "note_url": "https://www.xiaohongshu.com/explore/68f0a5770000000007034823",
+      "liked_count": 195,
+      "collected_count": 338,
+      "comment_count": 21,
+      "share_count": 28,
+      "publish_time": 1760601463000
+    },
+    {
+      "note_id": "680791b9000000001c037af4",
+      "title": "数学超前学，带来难以估量的影响\n\t\n数学超前学，带来的变化有多大？单元测难，一样能出彩！\n数学超前学",
+      "note_url": "https://www.xiaohongshu.com/explore/680791b9000000001c037af4",
+      "liked_count": 194,
+      "collected_count": 263,
+      "comment_count": 87,
+      "share_count": 47,
+      "publish_time": 1745326521000
+    },
+    {
+      "note_id": "685176fa000000002301140e",
+      "title": "二年级自学完初中数学，回头看做对了5件事",
+      "note_url": "https://www.xiaohongshu.com/explore/685176fa000000002301140e",
+      "liked_count": 190,
+      "collected_count": 236,
+      "comment_count": 52,
+      "share_count": 63,
+      "publish_time": 1750177461000
+    },
+    {
+      "note_id": "6740547f000000000203adff",
+      "title": "数学超前学，用对工具，效率翻倍！",
+      "note_url": "https://www.xiaohongshu.com/explore/6740547f000000000203adff",
+      "liked_count": 184,
+      "collected_count": 274,
+      "comment_count": 50,
+      "share_count": 30,
+      "publish_time": 1732269183000
+    },
+    {
+      "note_id": "68e08cc4000000000301c788",
+      "title": "超前学数学真的会越学越差吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/68e08cc4000000000301c788",
+      "liked_count": 181,
+      "collected_count": 183,
+      "comment_count": 168,
+      "share_count": 110,
+      "publish_time": 1759546564000
+    },
+    {
+      "note_id": "681a00730000000023013234",
+      "title": "为什么很多人不敢让孩子超前学",
+      "note_url": "https://www.xiaohongshu.com/explore/681a00730000000023013234",
+      "liked_count": 174,
+      "collected_count": 174,
+      "comment_count": 113,
+      "share_count": 25,
+      "publish_time": 1746534515000
+    },
+    {
+      "note_id": "68c8ebb0000000001400a21b",
+      "title": "超前学别犯这三大禁忌！",
+      "note_url": "https://www.xiaohongshu.com/explore/68c8ebb0000000001400a21b",
+      "liked_count": 171,
+      "collected_count": 179,
+      "comment_count": 115,
+      "share_count": 33,
+      "publish_time": 1757998000000
+    },
+    {
+      "note_id": "67b8ca1d000000000e006100",
+      "title": "如何用deepseek帮助小学数学提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/67b8ca1d000000000e006100",
+      "liked_count": 170,
+      "collected_count": 269,
+      "comment_count": 9,
+      "share_count": 50,
+      "publish_time": 1740163614000
+    },
+    {
+      "note_id": "6927ef11000000001f00e625",
+      "title": "数学怎样超前学",
+      "note_url": "https://www.xiaohongshu.com/explore/6927ef11000000001f00e625",
+      "liked_count": 168,
+      "collected_count": 220,
+      "comment_count": 205,
+      "share_count": 24,
+      "publish_time": 1764224785000
+    },
+    {
+      "note_id": "680a07f7000000000900d50d",
+      "title": "报喜！粉丝的娃半年从问题生冲进班级前十",
+      "note_url": "https://www.xiaohongshu.com/explore/680a07f7000000000900d50d",
+      "liked_count": 29000,
+      "collected_count": 38000,
+      "comment_count": 249,
+      "share_count": 5267,
+      "publish_time": 1745492569000
+    }
+  ]
+}

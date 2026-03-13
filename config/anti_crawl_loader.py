@@ -167,6 +167,8 @@ def apply_anti_crawl_config(target_config) -> None:
                     target_config.KEYWORDS = crawl_settings.get("keywords")
         elif crawl_settings.get("keywords"):
             target_config.KEYWORDS = crawl_settings.get("keywords")
+        if "keywords_combine_mode" in crawl_settings:
+            target_config.KEYWORDS_COMBINE_MODE = bool(crawl_settings.get("keywords_combine_mode"))
         # 作者 ID 列表
         if crawl_settings.get("creator_ids"):
             # 支持字符串或列表格式
@@ -206,8 +208,10 @@ def apply_anti_crawl_config(target_config) -> None:
         target_config.BATCH_CRAWL_RESUME = batch_cfg.get("resume", True)
         target_config.ENABLE_STATS_UPDATE_FOR_CRAWLED = batch_cfg.get("stats_update_for_crawled", False)
         target_config.CRAWL_MODE = batch_cfg.get("crawl_mode", "full")
-        target_config.CRAWL_DATE_START = batch_cfg.get("date_start", "")
-        target_config.CRAWL_DATE_END = batch_cfg.get("date_end", "")
+        # 仅当「批量爬取」且「日期范围」模式时才从 JSON 写入全局日期，避免覆盖任务管理里单独任务的 --date_start/--date_end
+        if batch_cfg.get("crawl_mode") == "date_range":
+            target_config.CRAWL_DATE_START = batch_cfg.get("date_start", "")
+            target_config.CRAWL_DATE_END = batch_cfg.get("date_end", "")
 
     # ==================== 飞书多维表格配置 ====================
     feishu_cfg = config_data.get("feishu", {})

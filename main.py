@@ -17,6 +17,7 @@
 # 详细许可条款请参阅项目根目录下的LICENSE文件。
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
+import os
 import sys
 import io
 
@@ -30,7 +31,8 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 import asyncio
-from typing import Optional, Type
+import time
+from typing import Optional, Type, Tuple
 
 import cmd_arg
 import config
@@ -101,8 +103,8 @@ async def _generate_wordcloud_if_needed() -> None:
         print(f"[Main] Error generating wordcloud: {e}")
 
 
-def _push_search_results_to_feishu() -> None:
-    """搜索模式爬完后，读取本次生成的 JSON 数据，写入飞书多维表格"""
+def _push_search_results_to_feishu() -> Tuple[Optional[str], int]:
+    """搜索模式爬完后，读取本次生成的 JSON 数据，写入飞书多维表格。返回 (多维表格链接, 笔记数)。"""
     import json
     import os
 
@@ -115,8 +117,8 @@ def _push_search_results_to_feishu() -> None:
 
     feishu_cfg = acfg.get("feishu", {})
     if not feishu_cfg.get("enabled"):
-        print("[Main] 飞书未启用，跳过写入")
-        return
+        print("[Main] 飞书未启用，跳过写入", flush=True)
+        return (None, 0)
 
     app_id = feishu_cfg.get("app_id", "")
     app_secret = feishu_cfg.get("app_secret", "")
@@ -126,8 +128,8 @@ def _push_search_results_to_feishu() -> None:
         or feishu_cfg.get("folder_token", "")
     )
     if not app_id or not app_secret:
-        print("[Main] 飞书 app_id/app_secret 未配置，跳过写入")
-        return
+        print("[Main] 飞书 app_id/app_secret 未配置，跳过写入", flush=True)
+        return (None, 0)
 
     from tools.async_file_writer import AsyncFileWriter
     session_ts = AsyncFileWriter.get_session_timestamp()
@@ -142,8 +144,8 @@ def _push_search_results_to_feishu() -> None:
         with open(notes_file, "r", encoding="utf-8") as f:
             notes = json.load(f)
     if not notes:
-        print("[Main] 无笔记数据，跳过飞书写入")
-        return
+        print("[Main] 无笔记数据，跳过飞书写入", flush=True)
+        return (None, 0)
 
     comments_by_note = {}
     if os.path.exists(comments_file):
@@ -156,7 +158,7 @@ def _push_search_results_to_feishu() -> None:
                 comments_by_note[nid] = clist
 
     print(f"[Main] 开始写入飞书: {len(notes)} 条笔记, "
-          f"{sum(len(v) for v in comments_by_note.values())} 条评论")
+          f"{sum(len(v) for v in comments_by_note.values())} 条评论", flush=True)
 
     try:
         from tools.pipeline_feishu_writer import PipelineFeishuWriter
@@ -170,13 +172,19 @@ def _push_search_results_to_feishu() -> None:
                 notes=notes,
                 comments_by_note=comments_by_note,
             )
-        print(f"[Main] 飞书写入完成: {writer.bitable_url}")
+        bitable_url = getattr(writer, "bitable_url", None) or ""
+        print(f"[Main] 飞书写入完成: {bitable_url}", flush=True)
+        if bitable_url:
+            print(f"多维表格链接: {bitable_url}", flush=True)
+        return (bitable_url or None, len(notes))
     except Exception as e:
-        print(f"[Main] 飞书写入失败: {e}")
+        print(f"[Main] 飞书写入失败: {e}", flush=True)
+        return (None, 0)
 
 
 async def main() -> None:
     global crawler
+    _crawl_start_time = time.time()
 
     # 先加载配置文件作为默认值，再解析命令行参数（CLI 参数优先级更高）
     apply_anti_crawl_config(config)
@@ -236,7 +244,43 @@ async def main() -> None:
         await _generate_wordcloud_if_needed()
 
         if config.CRAWLER_TYPE in ("search", "search_top") and config.SAVE_DATA_OPTION == "json":
-            _push_search_results_to_feishu()
+            feishu_url, notes_count = _push_search_results_to_feishu()
+            # 任务完成飞书群通知（与批量爬取一致，读取 notification 配置）
+            try:
+                import json as _json
+                _notify_cfg_path = os.path.join("config", "anti_crawl_config.json")
+                if os.path.exists(_notify_cfg_path):
+                    with open(_notify_cfg_path, "r", encoding="utf-8") as _nf:
+                        _notify_cfg = dict(_json.load(_nf).get("notification", {}))
+                    # 任务级覆盖：单个任务可指定通知群聊 ID 或 Webhook，实现分任务管理
+                    _chat_override = getattr(config, "NOTIFICATION_CHAT_ID_OVERRIDE", "") or ""
+                    _webhook_override = getattr(config, "NOTIFICATION_WEBHOOK_URL_OVERRIDE", "") or ""
+                    if _chat_override:
+                        _notify_cfg["chat_id"] = _chat_override
+                    if _webhook_override:
+                        _notify_cfg["webhook_url"] = _webhook_override
+                    # 任务级填了群聊或 Webhook 时，视为本任务要发通知（即使全局未开启）
+                    _will_send = (_notify_cfg.get("webhook_url") or _notify_cfg.get("chat_id")) and (
+                        _notify_cfg.get("enabled", False) or _chat_override or _webhook_override
+                    )
+                    if _will_send:
+                        from tools.feishu_notify import send_notification
+                        _elapsed = int(time.time() - _crawl_start_time)
+                        send_notification(
+                            task_id="关键词搜索",
+                            crawl_mode="full",
+                            total=notes_count,
+                            success=notes_count,
+                            failed=0,
+                            skipped=0,
+                            reused=0,
+                            elapsed_seconds=_elapsed,
+                            bitable_url=feishu_url or "",
+                            extra_info=f"平台={config.PLATFORM}，共 {notes_count} 条笔记",
+                            notify_config=_notify_cfg,
+                        )
+            except Exception as _ne:
+                print(f"[Main] 飞书通知发送失败: {_ne}", flush=True)
 
         try:
             stats = get_statistics()

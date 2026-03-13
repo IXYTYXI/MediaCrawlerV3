@@ -51,7 +51,8 @@ class AsyncFileWriter:
         self.wordcloud_generator = AsyncWordCloudGenerator() if config.ENABLE_GET_WORDCLOUD else None
 
     def _get_file_path(self, file_type: str, item_type: str) -> str:
-        base_path = f"data/{self.platform}/{file_type}"
+        data_root = os.environ.get("MC_DATA_DIR", "data")
+        base_path = f"{data_root}/{self.platform}/{file_type}"
         pathlib.Path(base_path).mkdir(parents=True, exist_ok=True)
         # 使用会话时间戳，确保每次运行生成新文件
         session_ts = self.get_session_timestamp()
@@ -184,7 +185,8 @@ class AsyncFileWriter:
                 return
 
             # Generate wordcloud
-            words_base_path = f"data/{self.platform}/words"
+            data_root = os.environ.get("MC_DATA_DIR", "data")
+            words_base_path = f"{data_root}/{self.platform}/words"
             pathlib.Path(words_base_path).mkdir(parents=True, exist_ok=True)
             words_file_prefix = f"{words_base_path}/{self.crawler_type}_comments_{utils.get_current_date()}"
 

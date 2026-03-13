@@ -365,6 +365,22 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Date Filter",
             ),
         ] = getattr(config, "CRAWL_DATE_END", ""),
+        notification_chat_id: Annotated[
+            str,
+            typer.Option(
+                "--notification_chat_id",
+                help="飞书通知群聊 ID（任务完成后发消息到此群，留空则用全局配置）",
+                rich_help_panel="Notification",
+            ),
+        ] = getattr(config, "NOTIFICATION_CHAT_ID_OVERRIDE", ""),
+        notification_webhook_url: Annotated[
+            str,
+            typer.Option(
+                "--notification_webhook_url",
+                help="飞书通知 Webhook URL（任务完成后发消息，留空则用全局配置）",
+                rich_help_panel="Notification",
+            ),
+        ] = getattr(config, "NOTIFICATION_WEBHOOK_URL_OVERRIDE", ""),
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
@@ -406,6 +422,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.CRAWLER_MAX_NOTES_COUNT = max_notes
         config.CRAWL_DATE_START = date_start
         config.CRAWL_DATE_END = date_end
+        setattr(config, "NOTIFICATION_CHAT_ID_OVERRIDE", notification_chat_id or "")
+        setattr(config, "NOTIFICATION_WEBHOOK_URL_OVERRIDE", notification_webhook_url or "")
 
         # Set platform-specific ID lists for detail/creator mode
         if specified_id_list:

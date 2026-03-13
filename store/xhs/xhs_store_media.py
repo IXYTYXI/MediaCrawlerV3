@@ -21,6 +21,7 @@
 # @Author  : helloteemo
 # @Time    : 2024/7/11 22:35
 # @Desc    : Xiaohongshu media storage
+import os
 import pathlib
 from typing import Dict
 
@@ -29,9 +30,11 @@ import aiofiles
 from base.base_crawler import AbstractStoreImage, AbstractStoreVideo
 from tools import utils
 
+_data_root = os.environ.get("MC_DATA_DIR", "data")
+
 
 class XiaoHongShuImage(AbstractStoreImage):
-    image_store_path: str = "data/xhs/images"
+    image_store_path: str = f"{_data_root}/xhs/images"
 
     async def store_image(self, image_content_item: Dict):
         """
@@ -78,7 +81,7 @@ class XiaoHongShuImage(AbstractStoreImage):
 
 
 class XiaoHongShuVideo(AbstractStoreVideo):
-    video_store_path: str = "data/xhs/videos"
+    video_store_path: str = f"{_data_root}/xhs/videos"
 
     async def store_video(self, video_content_item: Dict):
         """

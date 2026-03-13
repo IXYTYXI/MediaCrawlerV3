@@ -1,0 +1,32 @@
+2026-03-03 02:23:19 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:04:36 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:04:51 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:04:51 MediaCrawler INFO (excel_reader.py:128) - [ExcelReader] 从 '需要的结果字段' 读取到 9 个字段定义
+2026-03-03 10:04:51 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:08:18 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:08:18 MediaCrawler INFO (excel_reader.py:128) - [ExcelReader] 从 '需要的结果字段' 读取到 9 个字段定义
+2026-03-03 10:08:18 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:08:54 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:08:54 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Spark Math线上教育': 443 条
+2026-03-03 10:08:54 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '平行线名师大课堂': 144 条
+2026-03-03 10:08:55 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1特训营': 2282 条
+2026-03-03 10:08:56 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Spark Math线上课程': 394 条
+2026-03-03 10:08:56 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Spark Math 数学课程': 333 条
+2026-03-03 10:08:56 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Mathplore线上数学': 463 条
+2026-03-03 10:08:56 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Mathplore数学思维': 526 条
+2026-03-03 10:08:56 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Mathplore数学在线': 579 条
+2026-03-03 10:08:57 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Mathplore国际数学咨询': 152 条
+2026-03-03 10:08:57 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet 'Mathplore数学开窍': 706 条
+2026-03-03 10:08:57 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '平行线根源在线数学': 305 条
+2026-03-03 10:08:57 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1素养': 326 条
+2026-03-03 10:08:58 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1学习中心': 2945 条
+2026-03-03 10:08:59 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1学习规划': 1295 条
+2026-03-03 10:08:59 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1规划': 794 条
+2026-03-03 10:09:00 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1知识分享': 1969 条
+2026-03-03 10:09:00 MediaCrawler INFO (batch_crawler.py:871) - [Export] Sheet '掌门1对1逆袭': 831 条
+2026-03-03 10:09:06 MediaCrawler INFO (batch_crawler.py:765) - [Export] 导出完成: data/xiaohongshu/excel/batch_crawl_20260303_100854.xlsx (14487 条, 17 个作者)
+2026-03-03 10:09:07 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 10:09:07 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 17:39:47 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者
+2026-03-03 17:39:47 MediaCrawler INFO (excel_reader.py:128) - [ExcelReader] 从 '需要的结果字段' 读取到 9 个字段定义
+2026-03-03 17:39:47 MediaCrawler INFO (excel_reader.py:75) - [ExcelReader] 从 '小红书账号' 读取到 18 个作者

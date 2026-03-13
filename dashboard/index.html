@@ -1010,6 +1010,18 @@ window.onerror = function(msg, url, line, col, err) {
               <input v-model="taskForm.feishu_folder_token" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="留空则使用全局配置的文件夹">
               <p class="text-[10px] text-gray-600 mt-0.5">从飞书文件夹 URL 获取，如 https://xxx.feishu.cn/drive/folder/<b>XxxFolderToken</b>，不同任务可指定不同文件夹</p>
             </div>
+            <div class="grid grid-cols-1 gap-3 pt-2 border-t border-gray-700/50">
+              <div>
+                <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知群聊 ID（可选）</label>
+                <input v-model="taskForm.notification_chat_id" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="如 oc_xxx，留空用全局配置">
+                <p class="text-[10px] text-gray-600 mt-0.5">任务完成后飞书消息发到此群，分任务可指定不同群，实现分任务管理</p>
+              </div>
+              <div>
+                <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知 Webhook URL（可选）</label>
+                <input v-model="taskForm.notification_webhook_url" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空则用全局或群聊 ID">
+                <p class="text-[10px] text-gray-600 mt-0.5">自定义机器人 Webhook，填后优先用此 URL 发完成通知</p>
+              </div>
+            </div>
           </div>
 
           <!-- Cookie & 备注 -->
@@ -1066,6 +1078,7 @@ window.onerror = function(msg, url, line, col, err) {
           <div v-if="t.keywords" class="mt-2 text-xs text-gray-500 truncate">关键词: {{ t.keywords }}</div>
           <div v-if="t.max_notes_per_keyword && t.max_notes_per_keyword !== 80" class="mt-1 text-[10px] text-gray-600">每词上限: {{ t.max_notes_per_keyword }} 条</div>
           <div v-if="t.feishu_folder_token" class="mt-1 text-[10px] text-gray-600">📊 飞书文件夹: <span class="text-gray-400 font-mono">{{ t.feishu_folder_token }}</span></div>
+          <div v-if="t.notification_chat_id" class="mt-1 text-[10px] text-gray-600">📢 通知群: <span class="text-gray-400 font-mono">{{ t.notification_chat_id }}</span></div>
           <div v-if="t.last_run_at" class="mt-1 text-[10px] text-gray-600">上次运行: {{ t.last_run_at }}</div>
           <div v-if="t.notes" class="mt-1 text-[10px] text-gray-600 italic">{{ t.notes }}</div>
 
@@ -1612,6 +1625,7 @@ window._mcApp = createApp({
       cookies: '', headless: true, notes: '',
       top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
       feishu_folder_token: '',
+      notification_chat_id: '', notification_webhook_url: '',
       filter_keywords: '', filter_scope: 'title,desc,tags',
     })
     const taskLogView = reactive({ visible: false, task_id: '', status: '', logs: [] })
@@ -1642,6 +1656,7 @@ window._mcApp = createApp({
         cookies: '', headless: true, notes: '',
         top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
         feishu_folder_token: '',
+        notification_chat_id: '', notification_webhook_url: '',
         filter_keywords: '', filter_scope: 'title,desc,tags',
       })
     }
@@ -1689,6 +1704,8 @@ window._mcApp = createApp({
         top_comment_notes_count: t.top_comment_notes_count || 20,
         comment_page_count: t.comment_page_count || 2,
         feishu_folder_token: t.feishu_folder_token || '',
+        notification_chat_id: t.notification_chat_id || '',
+        notification_webhook_url: t.notification_webhook_url || '',
       })
       taskShowForm.value = true
     }

@@ -1,0 +1,2297 @@
+{
+  "crawl_time": "2026-03-09 23:14:22",
+  "platform": "xhs",
+  "creator_nickname": "柠溪同学",
+  "creator_id": "5be0ec9773b00b000167a76c",
+  "total_notes": 220,
+  "total_comments": 7335,
+  "total_likes": 318649,
+  "total_collects": 283405,
+  "total_shares": 52722,
+  "avg_likes": 1448.4,
+  "avg_collects": 1288.2,
+  "avg_comments": 202.39,
+  "avg_shares": 239.65,
+  "most_liked": {
+    "note_id": "684c17b8000000002202e0c1",
+    "title": "妈妈，我会学数学了！！！",
+    "note_url": "https://www.xiaohongshu.com/explore/684c17b8000000002202e0c1",
+    "liked_count": 40000,
+    "collected_count": 30000,
+    "comment_count": 51,
+    "share_count": 1162,
+    "publish_time": 1749817273000
+  },
+  "least_liked": {
+    "note_id": "67aab95b000000001902cacd",
+    "title": "家人们谁懂！小学数学计算终于有救了",
+    "note_url": "https://www.xiaohongshu.com/explore/67aab95b000000001902cacd",
+    "liked_count": 0,
+    "collected_count": 1,
+    "comment_count": 2,
+    "share_count": 0,
+    "publish_time": 1739241819000
+  },
+  "most_collected": {
+    "note_id": "684c17b8000000002202e0c1",
+    "title": "妈妈，我会学数学了！！！",
+    "note_url": "https://www.xiaohongshu.com/explore/684c17b8000000002202e0c1",
+    "liked_count": 40000,
+    "collected_count": 30000,
+    "comment_count": 51,
+    "share_count": 1162,
+    "publish_time": 1749817273000
+  },
+  "least_collected": {
+    "note_id": "67d42a01000000001d0213d2",
+    "title": "堪称天花板！这几位小学数学老师太牛啦",
+    "note_url": "https://www.xiaohongshu.com/explore/67d42a01000000001d0213d2",
+    "liked_count": 3,
+    "collected_count": 0,
+    "comment_count": 3,
+    "share_count": 0,
+    "publish_time": 1741957633000
+  },
+  "most_commented": {
+    "note_id": "699d799f0000000015039f75",
+    "title": "小学数学题",
+    "note_url": "https://www.xiaohongshu.com/explore/699d799f0000000015039f75",
+    "liked_count": 2832,
+    "collected_count": 1073,
+    "comment_count": 9043,
+    "share_count": 27,
+    "publish_time": 1771927967000
+  },
+  "least_commented": {
+    "note_id": "6892c080000000002203a33c",
+    "title": "小学数学怎么超前学",
+    "note_url": "https://www.xiaohongshu.com/explore/6892c080000000002203a33c",
+    "liked_count": 47,
+    "collected_count": 96,
+    "comment_count": 0,
+    "share_count": 16,
+    "publish_time": 1754448000000
+  },
+  "most_shared": {
+    "note_id": "693abe93000000001e030fa0",
+    "title": "这不是梗，是我好大儿",
+    "note_url": "https://www.xiaohongshu.com/explore/693abe93000000001e030fa0",
+    "liked_count": 17000,
+    "collected_count": 3950,
+    "comment_count": 8615,
+    "share_count": 15000,
+    "publish_time": 1765457555000
+  },
+  "least_shared": {
+    "note_id": "678df93d000000001c00c042",
+    "title": "超前学数学，分模块学习的目录🔥🔥",
+    "note_url": "https://www.xiaohongshu.com/explore/678df93d000000001c00c042",
+    "liked_count": 6,
+    "collected_count": 7,
+    "comment_count": 5,
+    "share_count": 0,
+    "publish_time": 1737357629000
+  },
+  "all_notes": [
+    {
+      "note_id": "6842901b000000002202ce3c",
+      "title": "幼小衔接好帮手！30天搞定幼小衔接数学",
+      "note_url": "https://www.xiaohongshu.com/explore/6842901b000000002202ce3c",
+      "liked_count": 11000,
+      "collected_count": 5815,
+      "comment_count": 109,
+      "share_count": 65,
+      "publish_time": 1749204315000
+    },
+    {
+      "note_id": "684fd22b000000002202c74c",
+      "title": "从“怕数学”到“盼上课”，三年级现象拜拜",
+      "note_url": "https://www.xiaohongshu.com/explore/684fd22b000000002202c74c",
+      "liked_count": 10000,
+      "collected_count": 6078,
+      "comment_count": 96,
+      "share_count": 83,
+      "publish_time": 1750664174000
+    },
+    {
+      "note_id": "681dcfe3000000002100ef07",
+      "title": "小学生跟着B站变学霸",
+      "note_url": "https://www.xiaohongshu.com/explore/681dcfe3000000002100ef07",
+      "liked_count": 3767,
+      "collected_count": 6663,
+      "comment_count": 15,
+      "share_count": 748,
+      "publish_time": 1746784227000
+    },
+    {
+      "note_id": "663d7a3e000000001e022716",
+      "title": "数学如何超前学？",
+      "note_url": "https://www.xiaohongshu.com/explore/663d7a3e000000001e022716",
+      "liked_count": 3213,
+      "collected_count": 4846,
+      "comment_count": 434,
+      "share_count": 994,
+      "publish_time": 1715305022000
+    },
+    {
+      "note_id": "674949b4000000000202d7ac",
+      "title": "🎈 学好数学的方法｜悄悄惊艳所有人",
+      "note_url": "https://www.xiaohongshu.com/explore/674949b4000000000202d7ac",
+      "liked_count": 2899,
+      "collected_count": 3036,
+      "comment_count": 25,
+      "share_count": 31,
+      "publish_time": 1732870427000
+    },
+    {
+      "note_id": "6964c6790000000022032587",
+      "title": "寒假数学提前学，洋葱保姆级实操教程",
+      "note_url": "https://www.xiaohongshu.com/explore/6964c6790000000022032587",
+      "liked_count": 2767,
+      "collected_count": 4560,
+      "comment_count": 29,
+      "share_count": 673,
+      "publish_time": 1768212089000
+    },
+    {
+      "note_id": "69185bb4000000000701577e",
+      "title": "B站非常厉害的数学网课老师，小初高都有！#数学[话题]# #升学[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/69185bb4000000000701577e",
+      "liked_count": 1351,
+      "collected_count": 3276,
+      "comment_count": 7,
+      "share_count": 224,
+      "publish_time": 1763204020000
+    },
+    {
+      "note_id": "686f62d4000000002203d739",
+      "title": "1年纪开学做学霸，0基础搞定计算有套路",
+      "note_url": "https://www.xiaohongshu.com/explore/686f62d4000000002203d739",
+      "liked_count": 610,
+      "collected_count": 331,
+      "comment_count": 14,
+      "share_count": 7,
+      "publish_time": 1752292138000
+    },
+    {
+      "note_id": "6970a4bf000000000a02dc18",
+      "title": "寒假数学提前学，洋葱保姆级实操教程",
+      "note_url": "https://www.xiaohongshu.com/explore/6970a4bf000000000a02dc18",
+      "liked_count": 597,
+      "collected_count": 945,
+      "comment_count": 15,
+      "share_count": 152,
+      "publish_time": 1768989887000
+    },
+    {
+      "note_id": "67516b3f000000000201a34b",
+      "title": "庆幸自己的坚持：带孩子超前学数学，真香",
+      "note_url": "https://www.xiaohongshu.com/explore/67516b3f000000000201a34b",
+      "liked_count": 459,
+      "collected_count": 856,
+      "comment_count": 80,
+      "share_count": 156,
+      "publish_time": 1733393409000
+    },
+    {
+      "note_id": "698487f5000000001a034e7f",
+      "title": "四年级超前学完小学数学，分享实操经验",
+      "note_url": "https://www.xiaohongshu.com/explore/698487f5000000001a034e7f",
+      "liked_count": 357,
+      "collected_count": 597,
+      "comment_count": 75,
+      "share_count": 102,
+      "publish_time": 1770293237000
+    },
+    {
+      "note_id": "66986aca000000000d00f476",
+      "title": "一条视频讲清楚，#小学数学[话题]# 如何#提前学[话题]# #学霸[话题]# #干货分享[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/66986aca000000000d00f476",
+      "liked_count": 353,
+      "collected_count": 489,
+      "comment_count": 26,
+      "share_count": 56,
+      "publish_time": 1721264842000
+    },
+    {
+      "note_id": "6737272e000000001d03bb85",
+      "title": "数学超前学：总结我们这些年做对的三件事",
+      "note_url": "https://www.xiaohongshu.com/explore/6737272e000000001d03bb85",
+      "liked_count": 301,
+      "collected_count": 340,
+      "comment_count": 21,
+      "share_count": 93,
+      "publish_time": 1731667758000
+    },
+    {
+      "note_id": "6936822b000000001e0306f7",
+      "title": "数学超前学怎么规划，怎么学（2小学阶段）",
+      "note_url": "https://www.xiaohongshu.com/explore/6936822b000000001e0306f7",
+      "liked_count": 276,
+      "collected_count": 463,
+      "comment_count": 49,
+      "share_count": 68,
+      "publish_time": 1765179947000
+    },
+    {
+      "note_id": "68fb3e5d00000000030230bb",
+      "title": "普娃数学提前学，看看我们都做了什么。",
+      "note_url": "https://www.xiaohongshu.com/explore/68fb3e5d00000000030230bb",
+      "liked_count": 229,
+      "collected_count": 249,
+      "comment_count": 24,
+      "share_count": 12,
+      "publish_time": 1761299477000
+    },
+    {
+      "note_id": "6911c38d0000000004002cc8",
+      "title": "🔥小学超前学规划之计算篇",
+      "note_url": "https://www.xiaohongshu.com/explore/6911c38d0000000004002cc8",
+      "liked_count": 189,
+      "collected_count": 291,
+      "comment_count": 13,
+      "share_count": 25,
+      "publish_time": 1762771853000
+    },
+    {
+      "note_id": "691577f0000000001b023246",
+      "title": "3年结束小学数学，小初一体数理化提前学规划",
+      "note_url": "https://www.xiaohongshu.com/explore/691577f0000000001b023246",
+      "liked_count": 122,
+      "collected_count": 160,
+      "comment_count": 54,
+      "share_count": 8,
+      "publish_time": 1763014641000
+    },
+    {
+      "note_id": "664752290000000015010c5e",
+      "title": "数学提前学之计算哪个年级都不能停",
+      "note_url": "https://www.xiaohongshu.com/explore/664752290000000015010c5e",
+      "liked_count": 116,
+      "collected_count": 132,
+      "comment_count": 9,
+      "share_count": 25,
+      "publish_time": 1716117398000
+    },
+    {
+      "note_id": "672c51db000000001b029729",
+      "title": "数学| 小学计算超前学~~~",
+      "note_url": "https://www.xiaohongshu.com/explore/672c51db000000001b029729",
+      "liked_count": 102,
+      "collected_count": 120,
+      "comment_count": 20,
+      "share_count": 5,
+      "publish_time": 1730957787000
+    },
+    {
+      "note_id": "67f7f460000000001c028636",
+      "title": "小学数学提前学挖到宝啦！",
+      "note_url": "https://www.xiaohongshu.com/explore/67f7f460000000001c028636",
+      "liked_count": 79,
+      "collected_count": 100,
+      "comment_count": 20,
+      "share_count": 13,
+      "publish_time": 1744303200000
+    },
+    {
+      "note_id": "66435d1d000000001e0310f0",
+      "title": "睿爸|小学数学鸡娃路线5. 提前校内的示范",
+      "note_url": "https://www.xiaohongshu.com/explore/66435d1d000000001e0310f0",
+      "liked_count": 245,
+      "collected_count": 539,
+      "comment_count": 27,
+      "share_count": 103,
+      "publish_time": 1715731290000
+    },
+    {
+      "note_id": "68fb3e5d00000000030230bb",
+      "title": "普娃数学提前学，看看我们都做了什么。",
+      "note_url": "https://www.xiaohongshu.com/explore/68fb3e5d00000000030230bb",
+      "liked_count": 229,
+      "collected_count": 249,
+      "comment_count": 24,
+      "share_count": 12,
+      "publish_time": 1761299477000
+    },
+    {
+      "note_id": "6901a85800000000070233ce",
+      "title": "真心建议大家去b站学小学数学，半个月速通",
+      "note_url": "https://www.xiaohongshu.com/explore/6901a85800000000070233ce",
+      "liked_count": 228,
+      "collected_count": 353,
+      "comment_count": 17,
+      "share_count": 55,
+      "publish_time": 1761716312000
+    },
+    {
+      "note_id": "6911c38d0000000004002cc8",
+      "title": "🔥小学超前学规划之计算篇",
+      "note_url": "https://www.xiaohongshu.com/explore/6911c38d0000000004002cc8",
+      "liked_count": 189,
+      "collected_count": 291,
+      "comment_count": 13,
+      "share_count": 25,
+      "publish_time": 1762771853000
+    },
+    {
+      "note_id": "64c875fd000000001700f672",
+      "title": "超前学的孩子会不会上课就不听讲了？",
+      "note_url": "https://www.xiaohongshu.com/explore/64c875fd000000001700f672",
+      "liked_count": 127,
+      "collected_count": 163,
+      "comment_count": 37,
+      "share_count": 12,
+      "publish_time": 1690859005000
+    },
+    {
+      "note_id": "691577f0000000001b023246",
+      "title": "3年结束小学数学，小初一体数理化提前学规划",
+      "note_url": "https://www.xiaohongshu.com/explore/691577f0000000001b023246",
+      "liked_count": 122,
+      "collected_count": 160,
+      "comment_count": 54,
+      "share_count": 8,
+      "publish_time": 1763014641000
+    },
+    {
+      "note_id": "664752290000000015010c5e",
+      "title": "数学提前学之计算哪个年级都不能停",
+      "note_url": "https://www.xiaohongshu.com/explore/664752290000000015010c5e",
+      "liked_count": 116,
+      "collected_count": 132,
+      "comment_count": 9,
+      "share_count": 25,
+      "publish_time": 1716117398000
+    },
+    {
+      "note_id": "68775b000000000023005ee9",
+      "title": "小学数学超前学！普娃逆袭！四年级学完初二",
+      "note_url": "https://www.xiaohongshu.com/explore/68775b000000000023005ee9",
+      "liked_count": 106,
+      "collected_count": 141,
+      "comment_count": 18,
+      "share_count": 12,
+      "publish_time": 1752739745000
+    },
+    {
+      "note_id": "672c51db000000001b029729",
+      "title": "数学| 小学计算超前学~~~",
+      "note_url": "https://www.xiaohongshu.com/explore/672c51db000000001b029729",
+      "liked_count": 102,
+      "collected_count": 120,
+      "comment_count": 20,
+      "share_count": 5,
+      "publish_time": 1730957787000
+    },
+    {
+      "note_id": "67f7f460000000001c028636",
+      "title": "小学数学提前学挖到宝啦！",
+      "note_url": "https://www.xiaohongshu.com/explore/67f7f460000000001c028636",
+      "liked_count": 79,
+      "collected_count": 100,
+      "comment_count": 20,
+      "share_count": 13,
+      "publish_time": 1744303200000
+    },
+    {
+      "note_id": "68b98d3f000000001d03b3e6",
+      "title": "三年级数学课内同步动画预习-三位数连加",
+      "note_url": "https://www.xiaohongshu.com/explore/68b98d3f000000001d03b3e6",
+      "liked_count": 69,
+      "collected_count": 56,
+      "comment_count": 5,
+      "share_count": 6,
+      "publish_time": 1756990784000
+    },
+    {
+      "note_id": "66b57a77000000001e01906b",
+      "title": "数学超前学，我是这样做的",
+      "note_url": "https://www.xiaohongshu.com/explore/66b57a77000000001e01906b",
+      "liked_count": 59,
+      "collected_count": 94,
+      "comment_count": 7,
+      "share_count": 11,
+      "publish_time": 1723169400000
+    },
+    {
+      "note_id": "6974da80000000000a02f434",
+      "title": "真心建议大家去b站学小学数学，半个月速通",
+      "note_url": "https://www.xiaohongshu.com/explore/6974da80000000000a02f434",
+      "liked_count": 54,
+      "collected_count": 71,
+      "comment_count": 5,
+      "share_count": 24,
+      "publish_time": 1769265792000
+    },
+    {
+      "note_id": "6892c080000000002203a33c",
+      "title": "小学数学怎么超前学",
+      "note_url": "https://www.xiaohongshu.com/explore/6892c080000000002203a33c",
+      "liked_count": 47,
+      "collected_count": 96,
+      "comment_count": 0,
+      "share_count": 16,
+      "publish_time": 1754448000000
+    },
+    {
+      "note_id": "690af4ec000000000302c040",
+      "title": "个人认为B站最厉害的数学老师，真的太香了",
+      "note_url": "https://www.xiaohongshu.com/explore/690af4ec000000000302c040",
+      "liked_count": 47,
+      "collected_count": 101,
+      "comment_count": 12,
+      "share_count": 12,
+      "publish_time": 1762325740000
+    },
+    {
+      "note_id": "6999ce3b000000001a01c8c1",
+      "title": "我宣布！B站就是普通家庭小学数学的天堂！",
+      "note_url": "https://www.xiaohongshu.com/explore/6999ce3b000000001a01c8c1",
+      "liked_count": 38,
+      "collected_count": 66,
+      "comment_count": 9,
+      "share_count": 16,
+      "publish_time": 1771687483000
+    },
+    {
+      "note_id": "699ef3af000000001a03685a",
+      "title": "真心建议大家去b站学小学数学，半个月速通",
+      "note_url": "https://www.xiaohongshu.com/explore/699ef3af000000001a03685a",
+      "liked_count": 38,
+      "collected_count": 38,
+      "comment_count": 5,
+      "share_count": 10,
+      "publish_time": 1772024751000
+    },
+    {
+      "note_id": "6774978b000000000800d8b5",
+      "title": "小学数学提前学，学什么？怎么学？",
+      "note_url": "https://www.xiaohongshu.com/explore/6774978b000000000800d8b5",
+      "liked_count": 37,
+      "collected_count": 71,
+      "comment_count": 10,
+      "share_count": 20,
+      "publish_time": 1735694219000
+    },
+    {
+      "note_id": "68b66871000000001d0080cd",
+      "title": "数学提前学保姆级指南，想要的都有答案",
+      "note_url": "https://www.xiaohongshu.com/explore/68b66871000000001d0080cd",
+      "liked_count": 27,
+      "collected_count": 54,
+      "comment_count": 0,
+      "share_count": 3,
+      "publish_time": 1756784753000
+    },
+    {
+      "note_id": "690ca80b0000000005033661",
+      "title": "我宣布！B站就是普通家庭学小学数学的天堂",
+      "note_url": "https://www.xiaohongshu.com/explore/690ca80b0000000005033661",
+      "liked_count": 25,
+      "collected_count": 55,
+      "comment_count": 10,
+      "share_count": 11,
+      "publish_time": 1762437131000
+    },
+    {
+      "note_id": "67a5ae18000000001902de04",
+      "title": "关于小学数学超前学的方法总结（上）",
+      "note_url": "https://www.xiaohongshu.com/explore/67a5ae18000000001902de04",
+      "liked_count": 24,
+      "collected_count": 35,
+      "comment_count": 0,
+      "share_count": 2,
+      "publish_time": 1738911256000
+    },
+    {
+      "note_id": "6911bf01000000000700a9bb",
+      "title": "建议大家都去小破站学小学数学，很卷但很绝",
+      "note_url": "https://www.xiaohongshu.com/explore/6911bf01000000000700a9bb",
+      "liked_count": 17,
+      "collected_count": 25,
+      "comment_count": 4,
+      "share_count": 2,
+      "publish_time": 1762777204000
+    },
+    {
+      "note_id": "69a651c1000000000e03db6e",
+      "title": "真心建议大家去b站学小学数学，半个月速通",
+      "note_url": "https://www.xiaohongshu.com/explore/69a651c1000000000e03db6e",
+      "liked_count": 16,
+      "collected_count": 18,
+      "comment_count": 3,
+      "share_count": 1,
+      "publish_time": 1772507585000
+    },
+    {
+      "note_id": "69a4027b000000002303a35d",
+      "title": "我宣布！B站就是普通家庭小学数学的天堂！",
+      "note_url": "https://www.xiaohongshu.com/explore/69a4027b000000002303a35d",
+      "liked_count": 12,
+      "collected_count": 16,
+      "comment_count": 10,
+      "share_count": 8,
+      "publish_time": 1772356219000
+    },
+    {
+      "note_id": "699b004c000000000a02e9eb",
+      "title": "宣布！B站就是普通家庭小学数学的天堂！",
+      "note_url": "https://www.xiaohongshu.com/explore/699b004c000000000a02e9eb",
+      "liked_count": 12,
+      "collected_count": 31,
+      "comment_count": 7,
+      "share_count": 9,
+      "publish_time": 1771765836000
+    },
+    {
+      "note_id": "6815866700000000230119d2",
+      "title": "2025最新版小学数学速算巧算技巧动画！",
+      "note_url": "https://www.xiaohongshu.com/explore/6815866700000000230119d2",
+      "liked_count": 8,
+      "collected_count": 11,
+      "comment_count": 1,
+      "share_count": 2,
+      "publish_time": 1746241127000
+    },
+    {
+      "note_id": "699d809a000000000e03d80e",
+      "title": "我宣布！B站就是普通家庭小学数学的天堂！",
+      "note_url": "https://www.xiaohongshu.com/explore/699d809a000000000e03d80e",
+      "liked_count": 7,
+      "collected_count": 8,
+      "comment_count": 1,
+      "share_count": 2,
+      "publish_time": 1771929754000
+    },
+    {
+      "note_id": "678df93d000000001c00c042",
+      "title": "超前学数学，分模块学习的目录🔥🔥",
+      "note_url": "https://www.xiaohongshu.com/explore/678df93d000000001c00c042",
+      "liked_count": 6,
+      "collected_count": 7,
+      "comment_count": 5,
+      "share_count": 0,
+      "publish_time": 1737357629000
+    },
+    {
+      "note_id": "668c8f7f00000000050062b1",
+      "title": "用费曼学习法进行小学数学超前学👈",
+      "note_url": "https://www.xiaohongshu.com/explore/668c8f7f00000000050062b1",
+      "liked_count": 5,
+      "collected_count": 6,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1720487807000
+    },
+    {
+      "note_id": "67d42a01000000001d0213d2",
+      "title": "堪称天花板！这几位小学数学老师太牛啦",
+      "note_url": "https://www.xiaohongshu.com/explore/67d42a01000000001d0213d2",
+      "liked_count": 3,
+      "collected_count": 0,
+      "comment_count": 3,
+      "share_count": 0,
+      "publish_time": 1741957633000
+    },
+    {
+      "note_id": "6651437f0000000016012ace",
+      "title": "小学数学提前学，真的越早越好吗",
+      "note_url": "https://www.xiaohongshu.com/explore/6651437f0000000016012ace",
+      "liked_count": 2,
+      "collected_count": 1,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1716601727000
+    },
+    {
+      "note_id": "68b65483000000001b01ed51",
+      "title": "小学数学超前学是怎么个框架？",
+      "note_url": "https://www.xiaohongshu.com/explore/68b65483000000001b01ed51",
+      "liked_count": 1,
+      "collected_count": 0,
+      "comment_count": 1,
+      "share_count": 0,
+      "publish_time": 1756779651000
+    },
+    {
+      "note_id": "67dc08710000000009015bdc",
+      "title": "小学生数学提前学真是太有用了！",
+      "note_url": "https://www.xiaohongshu.com/explore/67dc08710000000009015bdc",
+      "liked_count": 1,
+      "collected_count": 5,
+      "comment_count": 2,
+      "share_count": 0,
+      "publish_time": 1742473329000
+    },
+    {
+      "note_id": "67aab95b000000001902cacd",
+      "title": "家人们谁懂！小学数学计算终于有救了",
+      "note_url": "https://www.xiaohongshu.com/explore/67aab95b000000001902cacd",
+      "liked_count": 0,
+      "collected_count": 1,
+      "comment_count": 2,
+      "share_count": 0,
+      "publish_time": 1739241819000
+    },
+    {
+      "note_id": "684c17b8000000002202e0c1",
+      "title": "妈妈，我会学数学了！！！",
+      "note_url": "https://www.xiaohongshu.com/explore/684c17b8000000002202e0c1",
+      "liked_count": 40000,
+      "collected_count": 30000,
+      "comment_count": 51,
+      "share_count": 1162,
+      "publish_time": 1749817273000
+    },
+    {
+      "note_id": "6560562a000000001b03630f",
+      "title": "有趣的数学",
+      "note_url": "https://www.xiaohongshu.com/explore/6560562a000000001b03630f",
+      "liked_count": 35000,
+      "collected_count": 17000,
+      "comment_count": 811,
+      "share_count": 323,
+      "publish_time": 1700812330000
+    },
+    {
+      "note_id": "695e45a00000000022020c91",
+      "title": "看着一眼懵，找到突破口是关键！",
+      "note_url": "https://www.xiaohongshu.com/explore/695e45a00000000022020c91",
+      "liked_count": 27000,
+      "collected_count": 12000,
+      "comment_count": 427,
+      "share_count": 973,
+      "publish_time": 1767826823000
+    },
+    {
+      "note_id": "686b59d4000000002201e8d7",
+      "title": "从不爱学➡停不下✌数学渣娃如何逆袭",
+      "note_url": "https://www.xiaohongshu.com/explore/686b59d4000000002201e8d7",
+      "liked_count": 19000,
+      "collected_count": 14000,
+      "comment_count": 332,
+      "share_count": 853,
+      "publish_time": 1751876991000
+    },
+    {
+      "note_id": "693abe93000000001e030fa0",
+      "title": "这不是梗，是我好大儿",
+      "note_url": "https://www.xiaohongshu.com/explore/693abe93000000001e030fa0",
+      "liked_count": 17000,
+      "collected_count": 3950,
+      "comment_count": 8615,
+      "share_count": 15000,
+      "publish_time": 1765457555000
+    },
+    {
+      "note_id": "69797d88000000001a02ef50",
+      "title": "全班同学都做错，学会就是顶呱呱#易错题 #小学数学 #知识分享 #学霸秘籍 #妈妈和宝贝",
+      "note_url": "https://www.xiaohongshu.com/explore/69797d88000000001a02ef50",
+      "liked_count": 9680,
+      "collected_count": 6152,
+      "comment_count": 1191,
+      "share_count": 614,
+      "publish_time": 1769569672000
+    },
+    {
+      "note_id": "6852d929000000002201d8db",
+      "title": "陪读12年，终于明白小学到底该不该超前学",
+      "note_url": "https://www.xiaohongshu.com/explore/6852d929000000002201d8db",
+      "liked_count": 6009,
+      "collected_count": 9420,
+      "comment_count": 1007,
+      "share_count": 3768,
+      "publish_time": 1750260009000
+    },
+    {
+      "note_id": "695bb53c000000000e03d054",
+      "title": "一年级计算竞赛一等奖，我们这样玩转数学‼️",
+      "note_url": "https://www.xiaohongshu.com/explore/695bb53c000000000e03d054",
+      "liked_count": 5623,
+      "collected_count": 5626,
+      "comment_count": 61,
+      "share_count": 948,
+      "publish_time": 1767617852000
+    },
+    {
+      "note_id": "68527ea4000000000b02e3b3",
+      "title": "月考满分，看来数学思维这块我是抓对了！",
+      "note_url": "https://www.xiaohongshu.com/explore/68527ea4000000000b02e3b3",
+      "liked_count": 5304,
+      "collected_count": 3221,
+      "comment_count": 19,
+      "share_count": 13,
+      "publish_time": 1750239765000
+    },
+    {
+      "note_id": "682a09240000000023011a77",
+      "title": "四下从5.19开始\"三轮复习法\"，期末稳进前三",
+      "note_url": "https://www.xiaohongshu.com/explore/682a09240000000023011a77",
+      "liked_count": 5157,
+      "collected_count": 7262,
+      "comment_count": 3078,
+      "share_count": 2223,
+      "publish_time": 1747585316000
+    },
+    {
+      "note_id": "699d6d0a0000000028020083",
+      "title": "五年级下册全册数学知识点🔥三天摸透98+",
+      "note_url": "https://www.xiaohongshu.com/explore/699d6d0a0000000028020083",
+      "liked_count": 4899,
+      "collected_count": 5472,
+      "comment_count": 366,
+      "share_count": 248,
+      "publish_time": 1771924746000
+    },
+    {
+      "note_id": "6821d8f5000000000303a851",
+      "title": "数学超前学入门思路规划",
+      "note_url": "https://www.xiaohongshu.com/explore/6821d8f5000000000303a851",
+      "liked_count": 4801,
+      "collected_count": 8086,
+      "comment_count": 234,
+      "share_count": 998,
+      "publish_time": 1747048693000
+    },
+    {
+      "note_id": "68c0b7c5000000001c0319e2",
+      "title": "#小学数学思维训练[话题]# #数学其实很简单[话题]# #小学奥数[话题]# #逻辑思维[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/68c0b7c5000000001c0319e2",
+      "liked_count": 3828,
+      "collected_count": 4867,
+      "comment_count": 43,
+      "share_count": 876,
+      "publish_time": 1757460421000
+    },
+    {
+      "note_id": "699e3a88000000002303a5b2",
+      "title": "26春一年级下册数学|全册核心知识点清单",
+      "note_url": "https://www.xiaohongshu.com/explore/699e3a88000000002303a5b2",
+      "liked_count": 3649,
+      "collected_count": 5449,
+      "comment_count": 87,
+      "share_count": 722,
+      "publish_time": 1771977352000
+    },
+    {
+      "note_id": "67e0981e000000000302a8f2",
+      "title": "哔哩哔哩（B站）适合小学生观看的10部宝藏数学动画片，感谢博友整理，让孩子们看一看！\n1. 高斯小学",
+      "note_url": "https://www.xiaohongshu.com/explore/67e0981e000000000302a8f2",
+      "liked_count": 3157,
+      "collected_count": 5533,
+      "comment_count": 345,
+      "share_count": 604,
+      "publish_time": 1742772254000
+    },
+    {
+      "note_id": "68e1ba76000000000700dace",
+      "title": "数学怎样才能把“会的”都“做对”！",
+      "note_url": "https://www.xiaohongshu.com/explore/68e1ba76000000000700dace",
+      "liked_count": 3014,
+      "collected_count": 5129,
+      "comment_count": 114,
+      "share_count": 2526,
+      "publish_time": 1759629806000
+    },
+    {
+      "note_id": "695fcb8b000000002102936f",
+      "title": "小学数学《数正方体》，一起学习吧",
+      "note_url": "https://www.xiaohongshu.com/explore/695fcb8b000000002102936f",
+      "liked_count": 2976,
+      "collected_count": 4883,
+      "comment_count": 82,
+      "share_count": 587,
+      "publish_time": 1767927720000
+    },
+    {
+      "note_id": "699d799f0000000015039f75",
+      "title": "小学数学题",
+      "note_url": "https://www.xiaohongshu.com/explore/699d799f0000000015039f75",
+      "liked_count": 2832,
+      "collected_count": 1073,
+      "comment_count": 9043,
+      "share_count": 27,
+      "publish_time": 1771927967000
+    },
+    {
+      "note_id": "6825d602000000002203799f",
+      "title": "人教版五下数学异分母分数加减法",
+      "note_url": "https://www.xiaohongshu.com/explore/6825d602000000002203799f",
+      "liked_count": 2752,
+      "collected_count": 2358,
+      "comment_count": 19,
+      "share_count": 159,
+      "publish_time": 1747310082000
+    },
+    {
+      "note_id": "696bb2ec000000002202c7b5",
+      "title": "你不知道的天才速算技巧！",
+      "note_url": "https://www.xiaohongshu.com/explore/696bb2ec000000002202c7b5",
+      "liked_count": 2681,
+      "collected_count": 3536,
+      "comment_count": 125,
+      "share_count": 372,
+      "publish_time": 1768733581000
+    },
+    {
+      "note_id": "67b15f58000000002901d9cd",
+      "title": "建议大家都去DeepSeek学数学，不用请家教了",
+      "note_url": "https://www.xiaohongshu.com/explore/67b15f58000000002901d9cd",
+      "liked_count": 2627,
+      "collected_count": 4681,
+      "comment_count": 129,
+      "share_count": 2114,
+      "publish_time": 1739677528000
+    },
+    {
+      "note_id": "69a37547000000001b01ee2e",
+      "title": "老师偷偷整理！一年级下册数学重点就这13页",
+      "note_url": "https://www.xiaohongshu.com/explore/69a37547000000001b01ee2e",
+      "liked_count": 2530,
+      "collected_count": 3496,
+      "comment_count": 121,
+      "share_count": 528,
+      "publish_time": 1772320071000
+    },
+    {
+      "note_id": "6928fbef000000001f00f806",
+      "title": "含泪分享：数学辅导终于不费妈了",
+      "note_url": "https://www.xiaohongshu.com/explore/6928fbef000000001f00f806",
+      "liked_count": 2420,
+      "collected_count": 2109,
+      "comment_count": 34,
+      "share_count": 222,
+      "publish_time": 1764300511000
+    },
+    {
+      "note_id": "685262fd000000002400f478",
+      "title": "一年级数学启蒙这么教！孩子主动上课～",
+      "note_url": "https://www.xiaohongshu.com/explore/685262fd000000002400f478",
+      "liked_count": 2214,
+      "collected_count": 1482,
+      "comment_count": 52,
+      "share_count": 11,
+      "publish_time": 1751253923000
+    },
+    {
+      "note_id": "68c6839b000000001d034700",
+      "title": "小学数学：简便计算 倍数关系",
+      "note_url": "https://www.xiaohongshu.com/explore/68c6839b000000001d034700",
+      "liked_count": 2204,
+      "collected_count": 2636,
+      "comment_count": 71,
+      "share_count": 555,
+      "publish_time": 1757840283000
+    },
+    {
+      "note_id": "699d8f31000000001b017e0e",
+      "title": "三下数学北师大版第一单元课本备课",
+      "note_url": "https://www.xiaohongshu.com/explore/699d8f31000000001b017e0e",
+      "liked_count": 2182,
+      "collected_count": 1718,
+      "comment_count": 34,
+      "share_count": 287,
+      "publish_time": 1771933489000
+    },
+    {
+      "note_id": "66606f49000000000d00e3d6",
+      "title": "小学四年级每天如何安排数学提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/66606f49000000000d00e3d6",
+      "liked_count": 2036,
+      "collected_count": 3209,
+      "comment_count": 500,
+      "share_count": 825,
+      "publish_time": 1717595977000
+    },
+    {
+      "note_id": "654dd138000000003202c76d",
+      "title": "无痛🐔数学",
+      "note_url": "https://www.xiaohongshu.com/explore/654dd138000000003202c76d",
+      "liked_count": 1999,
+      "collected_count": 2829,
+      "comment_count": 400,
+      "share_count": 248,
+      "publish_time": 1699598648000
+    },
+    {
+      "note_id": "690555c0000000000700c13d",
+      "title": "一年级数学填相同数",
+      "note_url": "https://www.xiaohongshu.com/explore/690555c0000000000700c13d",
+      "liked_count": 1913,
+      "collected_count": 3226,
+      "comment_count": 10,
+      "share_count": 319,
+      "publish_time": 1761957312000
+    },
+    {
+      "note_id": "69acdfc2000000000e00d911",
+      "title": "❗数学提分干货✅",
+      "note_url": "https://www.xiaohongshu.com/explore/69acdfc2000000000e00d911",
+      "liked_count": 1762,
+      "collected_count": 1162,
+      "comment_count": 132,
+      "share_count": 54,
+      "publish_time": 1772937154000
+    },
+    {
+      "note_id": "66ec1a3b000000000c019183",
+      "title": "快存‼️四年级上册数学重点竖式计算500题",
+      "note_url": "https://www.xiaohongshu.com/explore/66ec1a3b000000000c019183",
+      "liked_count": 1737,
+      "collected_count": 1202,
+      "comment_count": 114,
+      "share_count": 557,
+      "publish_time": 1726749243000
+    },
+    {
+      "note_id": "6715c800000000001b03c467",
+      "title": "四年级普娃，数学不刷题，照样可以全班第一",
+      "note_url": "https://www.xiaohongshu.com/explore/6715c800000000001b03c467",
+      "liked_count": 1695,
+      "collected_count": 2129,
+      "comment_count": 431,
+      "share_count": 303,
+      "publish_time": 1729480704000
+    },
+    {
+      "note_id": "61ca5e86000000002103e9c9",
+      "title": "小学数学必背的16大知识要点（一）",
+      "note_url": "https://www.xiaohongshu.com/explore/61ca5e86000000002103e9c9",
+      "liked_count": 1687,
+      "collected_count": 1749,
+      "comment_count": 14,
+      "share_count": 223,
+      "publish_time": 1640652422000
+    },
+    {
+      "note_id": "69a9565d000000001d010c5d",
+      "title": "三下｜数线段、射线、直线",
+      "note_url": "https://www.xiaohongshu.com/explore/69a9565d000000001d010c5d",
+      "liked_count": 1625,
+      "collected_count": 1721,
+      "comment_count": 45,
+      "share_count": 422,
+      "publish_time": 1772705373000
+    },
+    {
+      "note_id": "699cee05000000001b014f42",
+      "title": "今天给三年级学生演示一下，春节过后，如何利用6天速通三年级下册数学\n#三年级[话题]##三年级数学[",
+      "note_url": "https://www.xiaohongshu.com/explore/699cee05000000001b014f42",
+      "liked_count": 1595,
+      "collected_count": 2466,
+      "comment_count": 1067,
+      "share_count": 363,
+      "publish_time": 1771892229000
+    },
+    {
+      "note_id": "68064f84000000001d0054f5",
+      "title": "三年级全班第一🥇的野路子：去bilibili学",
+      "note_url": "https://www.xiaohongshu.com/explore/68064f84000000001d0054f5",
+      "liked_count": 1551,
+      "collected_count": 2528,
+      "comment_count": 494,
+      "share_count": 169,
+      "publish_time": 1745244036000
+    },
+    {
+      "note_id": "69246d60000000001e005046",
+      "title": "小学数学计算方法",
+      "note_url": "https://www.xiaohongshu.com/explore/69246d60000000001e005046",
+      "liked_count": 1509,
+      "collected_count": 1080,
+      "comment_count": 24,
+      "share_count": 96,
+      "publish_time": 1763994976000
+    },
+    {
+      "note_id": "67bf106b000000002901a324",
+      "title": "教不开窍的学生，尤其是小学数学是很有讲究",
+      "note_url": "https://www.xiaohongshu.com/explore/67bf106b000000002901a324",
+      "liked_count": 1487,
+      "collected_count": 1339,
+      "comment_count": 46,
+      "share_count": 114,
+      "publish_time": 1740574827000
+    },
+    {
+      "note_id": "69a61fa2000000001a036cc1",
+      "title": "二年级下册数学有难度，晨读晚默，寒假必练",
+      "note_url": "https://www.xiaohongshu.com/explore/69a61fa2000000001a036cc1",
+      "liked_count": 1497,
+      "collected_count": 2257,
+      "comment_count": 102,
+      "share_count": 488,
+      "publish_time": 1772494754000
+    },
+    {
+      "note_id": "699bd3d7000000000b00b472",
+      "title": "二下数学必背公式，寒假背熟开学就是黑马!",
+      "note_url": "https://www.xiaohongshu.com/explore/699bd3d7000000000b00b472",
+      "liked_count": 1421,
+      "collected_count": 1990,
+      "comment_count": 152,
+      "share_count": 283,
+      "publish_time": 1771819991000
+    },
+    {
+      "note_id": "687836dc0000000012017d3a",
+      "title": "分数问题 小学数学分数怎么学 分数计算",
+      "note_url": "https://www.xiaohongshu.com/explore/687836dc0000000012017d3a",
+      "liked_count": 1374,
+      "collected_count": 1770,
+      "comment_count": 31,
+      "share_count": 382,
+      "publish_time": 1752708828000
+    },
+    {
+      "note_id": "67764f4a000000000b0217dc",
+      "title": "两年搞定小学数学超前学框架",
+      "note_url": "https://www.xiaohongshu.com/explore/67764f4a000000000b0217dc",
+      "liked_count": 1339,
+      "collected_count": 2339,
+      "comment_count": 61,
+      "share_count": 206,
+      "publish_time": 1735806794000
+    },
+    {
+      "note_id": "68490e680000000003038239",
+      "title": "轻松拿捏小学数学",
+      "note_url": "https://www.xiaohongshu.com/explore/68490e680000000003038239",
+      "liked_count": 1235,
+      "collected_count": 336,
+      "comment_count": 84,
+      "share_count": 306,
+      "publish_time": 1749618280000
+    },
+    {
+      "note_id": "676eb7960000000014024b39",
+      "title": "洋葱➕高思，数学学习的王炸，洋葱用来预习，超前学，复习该怎么用？#洋葱学园[话题]# #高思[话题]",
+      "note_url": "https://www.xiaohongshu.com/explore/676eb7960000000014024b39",
+      "liked_count": 1142,
+      "collected_count": 1167,
+      "comment_count": 138,
+      "share_count": 280,
+      "publish_time": 1735309206000
+    },
+    {
+      "note_id": "696ce622000000001a036cf9",
+      "title": "数学秒算的魅力！",
+      "note_url": "https://www.xiaohongshu.com/explore/696ce622000000001a036cf9",
+      "liked_count": 1106,
+      "collected_count": 1187,
+      "comment_count": 204,
+      "share_count": 51,
+      "publish_time": 1768776780000
+    },
+    {
+      "note_id": "693062bf000000000d03fe09",
+      "title": "这题我讲了999遍，就为了你听懂，你信么？",
+      "note_url": "https://www.xiaohongshu.com/explore/693062bf000000000d03fe09",
+      "liked_count": 999,
+      "collected_count": 1102,
+      "comment_count": 143,
+      "share_count": 315,
+      "publish_time": 1764778687000
+    },
+    {
+      "note_id": "68f73b310000000003037b9b",
+      "title": "害怕数学的孩子有救了！小学数学自救计划",
+      "note_url": "https://www.xiaohongshu.com/explore/68f73b310000000003037b9b",
+      "liked_count": 961,
+      "collected_count": 501,
+      "comment_count": 51,
+      "share_count": 25,
+      "publish_time": 1761124122000
+    },
+    {
+      "note_id": "69aaa541000000001b0157b1",
+      "title": "三下｜数线段、射线、直线（2）",
+      "note_url": "https://www.xiaohongshu.com/explore/69aaa541000000001b0157b1",
+      "liked_count": 892,
+      "collected_count": 876,
+      "comment_count": 17,
+      "share_count": 192,
+      "publish_time": 1772791105000
+    },
+    {
+      "note_id": "680104a8000000001c01574c",
+      "title": "分数问题 分数计算 小学数学分数怎么学",
+      "note_url": "https://www.xiaohongshu.com/explore/680104a8000000001c01574c",
+      "liked_count": 845,
+      "collected_count": 1117,
+      "comment_count": 12,
+      "share_count": 210,
+      "publish_time": 1744930869000
+    },
+    {
+      "note_id": "664e110100000000160129d8",
+      "title": "小学数学课本，是我们自学的第一步",
+      "note_url": "https://www.xiaohongshu.com/explore/664e110100000000160129d8",
+      "liked_count": 814,
+      "collected_count": 1159,
+      "comment_count": 178,
+      "share_count": 185,
+      "publish_time": 1716392193000
+    },
+    {
+      "note_id": "699e4c1d000000001d013a83",
+      "title": "五下数学有难度反反复复就这12页纸，直接背",
+      "note_url": "https://www.xiaohongshu.com/explore/699e4c1d000000001d013a83",
+      "liked_count": 807,
+      "collected_count": 1018,
+      "comment_count": 258,
+      "share_count": 152,
+      "publish_time": 1771981853000
+    },
+    {
+      "note_id": "697b47c4000000000a03f6f8",
+      "title": "数学突然变好，大部分时候都不是靠刷题",
+      "note_url": "https://www.xiaohongshu.com/explore/697b47c4000000000a03f6f8",
+      "liked_count": 798,
+      "collected_count": 1382,
+      "comment_count": 44,
+      "share_count": 862,
+      "publish_time": 1769686980000
+    },
+    {
+      "note_id": "69aa71dc000000001b0165d2",
+      "title": "五年级下册数学计算一课一练（人教版50页）",
+      "note_url": "https://www.xiaohongshu.com/explore/69aa71dc000000001b0165d2",
+      "liked_count": 779,
+      "collected_count": 700,
+      "comment_count": 653,
+      "share_count": 145,
+      "publish_time": 1772777948000
+    },
+    {
+      "note_id": "68d9290100000000120154bd",
+      "title": "小学数学知识归纳总结（打印版）",
+      "note_url": "https://www.xiaohongshu.com/explore/68d9290100000000120154bd",
+      "liked_count": 770,
+      "collected_count": 566,
+      "comment_count": 53,
+      "share_count": 80,
+      "publish_time": 1759104184000
+    },
+    {
+      "note_id": "69804f0f000000000e03c096",
+      "title": "🔥原来《年月日》是这么教的啊😭",
+      "note_url": "https://www.xiaohongshu.com/explore/69804f0f000000000e03c096",
+      "liked_count": 741,
+      "collected_count": 1146,
+      "comment_count": 2,
+      "share_count": 109,
+      "publish_time": 1770028222000
+    },
+    {
+      "note_id": "69a831280000000028021976",
+      "title": "二年级下册数学《认识钟表》",
+      "note_url": "https://www.xiaohongshu.com/explore/69a831280000000028021976",
+      "liked_count": 727,
+      "collected_count": 747,
+      "comment_count": 5,
+      "share_count": 94,
+      "publish_time": 1772630312000
+    },
+    {
+      "note_id": "696f657400000000210324ea",
+      "title": "数学速算的魅力",
+      "note_url": "https://www.xiaohongshu.com/explore/696f657400000000210324ea",
+      "liked_count": 684,
+      "collected_count": 1136,
+      "comment_count": 19,
+      "share_count": 29,
+      "publish_time": 1768908148000
+    },
+    {
+      "note_id": "68e67c660000000003022aca",
+      "title": "建议四年级娃都去b站学习🔥打破信息差❗",
+      "note_url": "https://www.xiaohongshu.com/explore/68e67c660000000003022aca",
+      "liked_count": 623,
+      "collected_count": 1020,
+      "comment_count": 70,
+      "share_count": 99,
+      "publish_time": 1759935590000
+    },
+    {
+      "note_id": "695cb5ef000000000a02ef6f",
+      "title": "坚持“拆题”，孩子数学就开窍了！",
+      "note_url": "https://www.xiaohongshu.com/explore/695cb5ef000000000a02ef6f",
+      "liked_count": 622,
+      "collected_count": 1195,
+      "comment_count": 138,
+      "share_count": 375,
+      "publish_time": 1767683568000
+    },
+    {
+      "note_id": "69ac2dce00000000220226d3",
+      "title": "15分钟速通6下数学不会的问。",
+      "note_url": "https://www.xiaohongshu.com/explore/69ac2dce00000000220226d3",
+      "liked_count": 622,
+      "collected_count": 508,
+      "comment_count": 21,
+      "share_count": 36,
+      "publish_time": 1772891599000
+    },
+    {
+      "note_id": "698c7e42000000000b011ffd",
+      "title": "个人认为bilibili讲课贼厉害的小学数学老师",
+      "note_url": "https://www.xiaohongshu.com/explore/698c7e42000000000b011ffd",
+      "liked_count": 579,
+      "collected_count": 724,
+      "comment_count": 3,
+      "share_count": 25,
+      "publish_time": 1770815042000
+    },
+    {
+      "note_id": "69586e05000000001e01565f",
+      "title": "#小学数学[话题]# #小学数学思维[话题]# #速算技巧[话题]# #小学数学思维训练[话题]# ",
+      "note_url": "https://www.xiaohongshu.com/explore/69586e05000000001e01565f",
+      "liked_count": 567,
+      "collected_count": 162,
+      "comment_count": 1075,
+      "share_count": 17,
+      "publish_time": 1767403013000
+    },
+    {
+      "note_id": "69717a1c000000001a03596a",
+      "title": "一年级寒假弯道超车指南🧭",
+      "note_url": "https://www.xiaohongshu.com/explore/69717a1c000000001a03596a",
+      "liked_count": 560,
+      "collected_count": 622,
+      "comment_count": 2,
+      "share_count": 50,
+      "publish_time": 1769044508000
+    },
+    {
+      "note_id": "69ab856c000000001b01feec",
+      "title": "#五下数学易错题[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/69ab856c000000001b01feec",
+      "liked_count": 547,
+      "collected_count": 1457,
+      "comment_count": 1,
+      "share_count": 235,
+      "publish_time": 1772848492000
+    },
+    {
+      "note_id": "68c93434000000000e030066",
+      "title": "小学数学学习方法分享",
+      "note_url": "https://www.xiaohongshu.com/explore/68c93434000000000e030066",
+      "liked_count": 531,
+      "collected_count": 557,
+      "comment_count": 0,
+      "share_count": 47,
+      "publish_time": 1758017347000
+    },
+    {
+      "note_id": "697b2f33000000000a03e869",
+      "title": "三下数学重难点周长和面积专项",
+      "note_url": "https://www.xiaohongshu.com/explore/697b2f33000000000a03e869",
+      "liked_count": 502,
+      "collected_count": 763,
+      "comment_count": 11,
+      "share_count": 99,
+      "publish_time": 1769680692000
+    },
+    {
+      "note_id": "65badd75000000001100311f",
+      "title": "📖经验分享：计算在小学数学的重要性",
+      "note_url": "https://www.xiaohongshu.com/explore/65badd75000000001100311f",
+      "liked_count": 484,
+      "collected_count": 458,
+      "comment_count": 8,
+      "share_count": 74,
+      "publish_time": 1706745205000
+    },
+    {
+      "note_id": "698ed207000000000a032e8a",
+      "title": "二年级下册数学全册必背公式，寒假全部背熟",
+      "note_url": "https://www.xiaohongshu.com/explore/698ed207000000000a032e8a",
+      "liked_count": 473,
+      "collected_count": 674,
+      "comment_count": 102,
+      "share_count": 150,
+      "publish_time": 1771569003000
+    },
+    {
+      "note_id": "691d1cac000000001e023195",
+      "title": "逻辑思维拉满！数学难题娃能举一反三！",
+      "note_url": "https://www.xiaohongshu.com/explore/691d1cac000000001e023195",
+      "liked_count": 466,
+      "collected_count": 465,
+      "comment_count": 14,
+      "share_count": 4,
+      "publish_time": 1764299980000
+    },
+    {
+      "note_id": "697b47e2000000001a020aa2",
+      "title": "四下数学《四则运算》必背知识点➕练习🔥",
+      "note_url": "https://www.xiaohongshu.com/explore/697b47e2000000001a020aa2",
+      "liked_count": 456,
+      "collected_count": 657,
+      "comment_count": 14,
+      "share_count": 130,
+      "publish_time": 1769687010000
+    },
+    {
+      "note_id": "6916c987000000000402896e",
+      "title": "数学只要把计算抓好，考试高分简简单单！",
+      "note_url": "https://www.xiaohongshu.com/explore/6916c987000000000402896e",
+      "liked_count": 439,
+      "collected_count": 505,
+      "comment_count": 11,
+      "share_count": 105,
+      "publish_time": 1763251238000
+    },
+    {
+      "note_id": "696de87b000000002200b6e9",
+      "title": "不服不行！后悔没早上Mathplore新加坡数学",
+      "note_url": "https://www.xiaohongshu.com/explore/696de87b000000002200b6e9",
+      "liked_count": 435,
+      "collected_count": 236,
+      "comment_count": 30,
+      "share_count": 20,
+      "publish_time": 1768816526000
+    },
+    {
+      "note_id": "6746e203000000000702b099",
+      "title": "找超前学数学的学习搭子",
+      "note_url": "https://www.xiaohongshu.com/explore/6746e203000000000702b099",
+      "liked_count": 426,
+      "collected_count": 513,
+      "comment_count": 815,
+      "share_count": 35,
+      "publish_time": 1732698627000
+    },
+    {
+      "note_id": "6821c3ad000000002100f442",
+      "title": "大家上了胡小群的数学课感觉怎么样？我买了低年段的课，更多讲数学底层逻辑，孩子还是看不懂，讲课有点枯燥",
+      "note_url": "https://www.xiaohongshu.com/explore/6821c3ad000000002100f442",
+      "liked_count": 408,
+      "collected_count": 600,
+      "comment_count": 431,
+      "share_count": 151,
+      "publish_time": 1747043245000
+    },
+    {
+      "note_id": "698c5cea000000001a01f5ae",
+      "title": "❗老师发的预习要求，一下数学课课贴超省心✨",
+      "note_url": "https://www.xiaohongshu.com/explore/698c5cea000000001a01f5ae",
+      "liked_count": 392,
+      "collected_count": 377,
+      "comment_count": 3,
+      "share_count": 35,
+      "publish_time": 1770806506000
+    },
+    {
+      "note_id": "68b5db7c000000001d01a550",
+      "title": "小学怎么提前学初中数学",
+      "note_url": "https://www.xiaohongshu.com/explore/68b5db7c000000001d01a550",
+      "liked_count": 392,
+      "collected_count": 646,
+      "comment_count": 66,
+      "share_count": 73,
+      "publish_time": 1756748668000
+    },
+    {
+      "note_id": "6869fd55000000002001be3c",
+      "title": "提前学完小学数学主线后，一切都变得从容",
+      "note_url": "https://www.xiaohongshu.com/explore/6869fd55000000002001be3c",
+      "liked_count": 370,
+      "collected_count": 359,
+      "comment_count": 27,
+      "share_count": 37,
+      "publish_time": 1751776597000
+    },
+    {
+      "note_id": "69a03a20000000001b015bde",
+      "title": "四下 数学 好课堂堂练 北师大版",
+      "note_url": "https://www.xiaohongshu.com/explore/69a03a20000000001b015bde",
+      "liked_count": 366,
+      "collected_count": 566,
+      "comment_count": 13,
+      "share_count": 62,
+      "publish_time": 1772108320000
+    },
+    {
+      "note_id": "68a2f892000000001d0003a3",
+      "title": "后悔没早发现这个数理网课，娃的数学有救了",
+      "note_url": "https://www.xiaohongshu.com/explore/68a2f892000000001d0003a3",
+      "liked_count": 326,
+      "collected_count": 244,
+      "comment_count": 11,
+      "share_count": 15,
+      "publish_time": 1755512190000
+    },
+    {
+      "note_id": "69aba8ab000000002603138a",
+      "title": "“人民叫师”讲小学数学",
+      "note_url": "https://www.xiaohongshu.com/explore/69aba8ab000000002603138a",
+      "liked_count": 319,
+      "collected_count": 50,
+      "comment_count": 24,
+      "share_count": 27,
+      "publish_time": 1772857515000
+    },
+    {
+      "note_id": "69159ec9000000001b030bcf",
+      "title": "不知不觉，孩子听bilibili全班第一",
+      "note_url": "https://www.xiaohongshu.com/explore/69159ec9000000001b030bcf",
+      "liked_count": 317,
+      "collected_count": 554,
+      "comment_count": 2,
+      "share_count": 49,
+      "publish_time": 1763024586000
+    },
+    {
+      "note_id": "6979d73f00000000220239a4",
+      "title": "五下数学｜第一单元 因数和倍数",
+      "note_url": "https://www.xiaohongshu.com/explore/6979d73f00000000220239a4",
+      "liked_count": 315,
+      "collected_count": 388,
+      "comment_count": 7,
+      "share_count": 40,
+      "publish_time": 1769592639000
+    },
+    {
+      "note_id": "699183a1000000001503948d",
+      "title": "三年级开学数学再不怕！从懵圈到拿捏全靠它",
+      "note_url": "https://www.xiaohongshu.com/explore/699183a1000000001503948d",
+      "liked_count": 300,
+      "collected_count": 281,
+      "comment_count": 7,
+      "share_count": 5,
+      "publish_time": 1771725484000
+    },
+    {
+      "note_id": "69661960000000001a02fc22",
+      "title": "数学突然变好，很多时候并不是因为刷的多",
+      "note_url": "https://www.xiaohongshu.com/explore/69661960000000001a02fc22",
+      "liked_count": 297,
+      "collected_count": 534,
+      "comment_count": 18,
+      "share_count": 252,
+      "publish_time": 1768298848000
+    },
+    {
+      "note_id": "6960556f000000000a03eb27",
+      "title": "一下数学有点难 不会预习的直接抄 开学98+",
+      "note_url": "https://www.xiaohongshu.com/explore/6960556f000000000a03eb27",
+      "liked_count": 267,
+      "collected_count": 251,
+      "comment_count": 78,
+      "share_count": 44,
+      "publish_time": 1767921007000
+    },
+    {
+      "note_id": "67e280ad000000001d03b6e4",
+      "title": "别让这些网课毁了娃的数学",
+      "note_url": "https://www.xiaohongshu.com/explore/67e280ad000000001d03b6e4",
+      "liked_count": 278,
+      "collected_count": 167,
+      "comment_count": 2068,
+      "share_count": 70,
+      "publish_time": 1742897325000
+    },
+    {
+      "note_id": "67e280ad000000001d03b6e4",
+      "title": "别让这些网课毁了娃的数学",
+      "note_url": "https://www.xiaohongshu.com/explore/67e280ad000000001d03b6e4",
+      "liked_count": 278,
+      "collected_count": 167,
+      "comment_count": 2068,
+      "share_count": 70,
+      "publish_time": 1742897325000
+    },
+    {
+      "note_id": "68e8d148000000000703447f",
+      "title": "数学提前学到底有没有意义，这是最好的答案",
+      "note_url": "https://www.xiaohongshu.com/explore/68e8d148000000000703447f",
+      "liked_count": 258,
+      "collected_count": 253,
+      "comment_count": 128,
+      "share_count": 46,
+      "publish_time": 1760088392000
+    },
+    {
+      "note_id": "6689e44b000000001c025027",
+      "title": "五（上）人教版数学",
+      "note_url": "https://www.xiaohongshu.com/explore/6689e44b000000001c025027",
+      "liked_count": 245,
+      "collected_count": 179,
+      "comment_count": 18,
+      "share_count": 79,
+      "publish_time": 1720312907000
+    },
+    {
+      "note_id": "69a100440000000015030845",
+      "title": "数学老师发的❗北师大版四下数学知识点总结",
+      "note_url": "https://www.xiaohongshu.com/explore/69a100440000000015030845",
+      "liked_count": 235,
+      "collected_count": 278,
+      "comment_count": 30,
+      "share_count": 28,
+      "publish_time": 1772159044000
+    },
+    {
+      "note_id": "69ae248c0000000015032747",
+      "title": "五下数学《因数和倍数》的重点练习题➕答案",
+      "note_url": "https://www.xiaohongshu.com/explore/69ae248c0000000015032747",
+      "liked_count": 226,
+      "collected_count": 258,
+      "comment_count": 2,
+      "share_count": 17,
+      "publish_time": 1773020300000
+    },
+    {
+      "note_id": "69a91c94000000001a036f57",
+      "title": "三年级下册数学思维计算 | 应用题每日练习",
+      "note_url": "https://www.xiaohongshu.com/explore/69a91c94000000001a036f57",
+      "liked_count": 206,
+      "collected_count": 283,
+      "comment_count": 108,
+      "share_count": 119,
+      "publish_time": 1772690580000
+    },
+    {
+      "note_id": "67eb6541000000001d03a72e",
+      "title": "课上老师不教的计算技巧",
+      "note_url": "https://www.xiaohongshu.com/explore/67eb6541000000001d03a72e",
+      "liked_count": 198,
+      "collected_count": 231,
+      "comment_count": 6,
+      "share_count": 60,
+      "publish_time": 1743480130000
+    },
+    {
+      "note_id": "67ea054d000000000b02ee8d",
+      "title": "简便计算，一个视频学会。#数学老师 #小学数学 #数学思维 #家长必学 ﻿#公益直播[话题]#﻿",
+      "note_url": "https://www.xiaohongshu.com/explore/67ea054d000000000b02ee8d",
+      "liked_count": 194,
+      "collected_count": 92,
+      "comment_count": 17,
+      "share_count": 18,
+      "publish_time": 1744452225000
+    },
+    {
+      "note_id": "68e08cc4000000000301c788",
+      "title": "超前学数学真的会越学越差吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/68e08cc4000000000301c788",
+      "liked_count": 181,
+      "collected_count": 183,
+      "comment_count": 168,
+      "share_count": 110,
+      "publish_time": 1759546564000
+    },
+    {
+      "note_id": "699c4391000000001a035402",
+      "title": "一年级下册数学八大专项练习合集✔",
+      "note_url": "https://www.xiaohongshu.com/explore/699c4391000000001a035402",
+      "liked_count": 177,
+      "collected_count": 226,
+      "comment_count": 28,
+      "share_count": 29,
+      "publish_time": 1771848593000
+    },
+    {
+      "note_id": "69a3d5ac000000001a02b598",
+      "title": "开学第一周，彻底把数学搞上来",
+      "note_url": "https://www.xiaohongshu.com/explore/69a3d5ac000000001a02b598",
+      "liked_count": 170,
+      "collected_count": 230,
+      "comment_count": 27,
+      "share_count": 72,
+      "publish_time": 1772344748000
+    },
+    {
+      "note_id": "69a67a2600000000220337b6",
+      "title": "火花新数学上了48节课，想说点大实话！",
+      "note_url": "https://www.xiaohongshu.com/explore/69a67a2600000000220337b6",
+      "liked_count": 167,
+      "collected_count": 50,
+      "comment_count": 24,
+      "share_count": 1,
+      "publish_time": 1772518902000
+    },
+    {
+      "note_id": "69a7fc6f000000001503bec7",
+      "title": "2026春季学期最新三（下）数学《伴你学》答案",
+      "note_url": "https://www.xiaohongshu.com/explore/69a7fc6f000000001503bec7",
+      "liked_count": 159,
+      "collected_count": 348,
+      "comment_count": 26,
+      "share_count": 52,
+      "publish_time": 1772616815000
+    },
+    {
+      "note_id": "685006350000000021002980",
+      "title": "四年级数学连拿两次100，1v1真的选对了✅",
+      "note_url": "https://www.xiaohongshu.com/explore/685006350000000021002980",
+      "liked_count": 142,
+      "collected_count": 110,
+      "comment_count": 924,
+      "share_count": 113,
+      "publish_time": 1750074933000
+    },
+    {
+      "note_id": "69a17e900000000022031b0c",
+      "title": "好课堂堂练",
+      "note_url": "https://www.xiaohongshu.com/explore/69a17e900000000022031b0c",
+      "liked_count": 140,
+      "collected_count": 226,
+      "comment_count": 2,
+      "share_count": 24,
+      "publish_time": 1772191376000
+    },
+    {
+      "note_id": "68fbe5d40000000003023422",
+      "title": "小学计算可不简单，这题你会不会",
+      "note_url": "https://www.xiaohongshu.com/explore/68fbe5d40000000003023422",
+      "liked_count": 136,
+      "collected_count": 94,
+      "comment_count": 47,
+      "share_count": 45,
+      "publish_time": 1761338836000
+    },
+    {
+      "note_id": "69a91dec000000002800a518",
+      "title": "一年级数学晨读课件直接拿来用就行啦",
+      "note_url": "https://www.xiaohongshu.com/explore/69a91dec000000002800a518",
+      "liked_count": 126,
+      "collected_count": 136,
+      "comment_count": 54,
+      "share_count": 10,
+      "publish_time": 1772690924000
+    },
+    {
+      "note_id": "699d632a000000001a01f5a9",
+      "title": "一年级小学生自用教辅，提优训练上大分",
+      "note_url": "https://www.xiaohongshu.com/explore/699d632a000000001a01f5a9",
+      "liked_count": 123,
+      "collected_count": 54,
+      "comment_count": 8,
+      "share_count": 0,
+      "publish_time": 1771923556000
+    },
+    {
+      "note_id": "69439563000000000d03473d",
+      "title": "#小学数学[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/69439563000000000d03473d",
+      "liked_count": 116,
+      "collected_count": 67,
+      "comment_count": 201,
+      "share_count": 11,
+      "publish_time": 1766036835000
+    },
+    {
+      "note_id": "6878c70f000000001d00f60a",
+      "title": "小学数学到底要不要超前学习",
+      "note_url": "https://www.xiaohongshu.com/explore/6878c70f000000001d00f60a",
+      "liked_count": 108,
+      "collected_count": 61,
+      "comment_count": 201,
+      "share_count": 21,
+      "publish_time": 1752745743000
+    },
+    {
+      "note_id": "699d632a000000001a01f5a9",
+      "title": "一年级小学生自用教辅，提优训练上大分",
+      "note_url": "https://www.xiaohongshu.com/explore/699d632a000000001a01f5a9",
+      "liked_count": 123,
+      "collected_count": 54,
+      "comment_count": 8,
+      "share_count": 0,
+      "publish_time": 1771923556000
+    },
+    {
+      "note_id": "69439563000000000d03473d",
+      "title": "#小学数学[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/69439563000000000d03473d",
+      "liked_count": 116,
+      "collected_count": 67,
+      "comment_count": 201,
+      "share_count": 11,
+      "publish_time": 1766036835000
+    },
+    {
+      "note_id": "6878c70f000000001d00f60a",
+      "title": "小学数学到底要不要超前学习",
+      "note_url": "https://www.xiaohongshu.com/explore/6878c70f000000001d00f60a",
+      "liked_count": 108,
+      "collected_count": 61,
+      "comment_count": 201,
+      "share_count": 21,
+      "publish_time": 1752745743000
+    },
+    {
+      "note_id": "677e3992000000000203d869",
+      "title": "小学数学超前学一点心得",
+      "note_url": "https://www.xiaohongshu.com/explore/677e3992000000000203d869",
+      "liked_count": 104,
+      "collected_count": 108,
+      "comment_count": 21,
+      "share_count": 13,
+      "publish_time": 1736325522000
+    },
+    {
+      "note_id": "6909a9c900000000030377b0",
+      "title": "超前学了，在学校是不是就没兴趣学？",
+      "note_url": "https://www.xiaohongshu.com/explore/6909a9c900000000030377b0",
+      "liked_count": 102,
+      "collected_count": 104,
+      "comment_count": 286,
+      "share_count": 3,
+      "publish_time": 1762240969000
+    },
+    {
+      "note_id": "69a501320000000015039f4a",
+      "title": "小学必错题，看看你做对了吗？#数学思维[话题]# #数学老师[话题]# #数学思维[话题]# #数学",
+      "note_url": "https://www.xiaohongshu.com/explore/69a501320000000015039f4a",
+      "liked_count": 95,
+      "collected_count": 55,
+      "comment_count": 4,
+      "share_count": 6,
+      "publish_time": 1772445670000
+    },
+    {
+      "note_id": "69abecc5000000002603fbb9",
+      "title": "三下数学剪纸思维题",
+      "note_url": "https://www.xiaohongshu.com/explore/69abecc5000000002603fbb9",
+      "liked_count": 97,
+      "collected_count": 165,
+      "comment_count": 0,
+      "share_count": 47,
+      "publish_time": 1772874949000
+    },
+    {
+      "note_id": "69abe8f6000000000d00a3d0",
+      "title": "二年级下册数学晨读ppt,老师们可以直接用",
+      "note_url": "https://www.xiaohongshu.com/explore/69abe8f6000000000d00a3d0",
+      "liked_count": 89,
+      "collected_count": 91,
+      "comment_count": 28,
+      "share_count": 10,
+      "publish_time": 1772873974000
+    },
+    {
+      "note_id": "697b4180000000000903855c",
+      "title": "一年级下册数学《百数表》🔥🔥",
+      "note_url": "https://www.xiaohongshu.com/explore/697b4180000000000903855c",
+      "liked_count": 84,
+      "collected_count": 191,
+      "comment_count": 2,
+      "share_count": 30,
+      "publish_time": 1769688077000
+    },
+    {
+      "note_id": "6833e57400000000210002d2",
+      "title": "关于数学提前学",
+      "note_url": "https://www.xiaohongshu.com/explore/6833e57400000000210002d2",
+      "liked_count": 83,
+      "collected_count": 98,
+      "comment_count": 16,
+      "share_count": 6,
+      "publish_time": 1748231540000
+    },
+    {
+      "note_id": "69ae1b7c000000000e00fe34",
+      "title": "二年级下册数学——跨中午的时间的计算",
+      "note_url": "https://www.xiaohongshu.com/explore/69ae1b7c000000000e00fe34",
+      "liked_count": 100,
+      "collected_count": 89,
+      "comment_count": 1,
+      "share_count": 17,
+      "publish_time": 1773017980000
+    },
+    {
+      "note_id": "69ad19ff0000000026031f75",
+      "title": "小学数学：整体思维，巧求方程",
+      "note_url": "https://www.xiaohongshu.com/explore/69ad19ff0000000026031f75",
+      "liked_count": 79,
+      "collected_count": 56,
+      "comment_count": 2,
+      "share_count": 6,
+      "publish_time": 1772952063000
+    },
+    {
+      "note_id": "67eba95d000000000b0172c4",
+      "title": "🚀小学数学6年逆袭指南！",
+      "note_url": "https://www.xiaohongshu.com/explore/67eba95d000000000b0172c4",
+      "liked_count": 78,
+      "collected_count": 68,
+      "comment_count": 2,
+      "share_count": 1,
+      "publish_time": 1743497565000
+    },
+    {
+      "note_id": "687ec21e000000002400f925",
+      "title": "小学数学计算怎么抓",
+      "note_url": "https://www.xiaohongshu.com/explore/687ec21e000000002400f925",
+      "liked_count": 75,
+      "collected_count": 156,
+      "comment_count": 17,
+      "share_count": 18,
+      "publish_time": 1753137694000
+    },
+    {
+      "note_id": "69aa2e2f0000000022022bf2",
+      "title": "一年级数学20以内退位减法✅计算打卡60天",
+      "note_url": "https://www.xiaohongshu.com/explore/69aa2e2f0000000022022bf2",
+      "liked_count": 82,
+      "collected_count": 64,
+      "comment_count": 18,
+      "share_count": 15,
+      "publish_time": 1772760623000
+    },
+    {
+      "note_id": "67f64788000000001d005b15",
+      "title": "分享一个学霸的计算技巧",
+      "note_url": "https://www.xiaohongshu.com/explore/67f64788000000001d005b15",
+      "liked_count": 75,
+      "collected_count": 72,
+      "comment_count": 4,
+      "share_count": 15,
+      "publish_time": 1744193416000
+    },
+    {
+      "note_id": "6969acd0000000002200a343",
+      "title": "甩掉题海战术🚀CPA让孩子迷上思考",
+      "note_url": "https://www.xiaohongshu.com/explore/6969acd0000000002200a343",
+      "liked_count": 74,
+      "collected_count": 112,
+      "comment_count": 2,
+      "share_count": 33,
+      "publish_time": 1768533200000
+    },
+    {
+      "note_id": "69ae282e000000001503b595",
+      "title": "二年级下册数学计算一课一练（人教版50页）",
+      "note_url": "https://www.xiaohongshu.com/explore/69ae282e000000001503b595",
+      "liked_count": 100,
+      "collected_count": 99,
+      "comment_count": 69,
+      "share_count": 28,
+      "publish_time": 1773021230000
+    },
+    {
+      "note_id": "697b52b0000000002801ed48",
+      "title": "数学老师发的，四年级下册同步每课一练‼️",
+      "note_url": "https://www.xiaohongshu.com/explore/697b52b0000000002801ed48",
+      "liked_count": 69,
+      "collected_count": 115,
+      "comment_count": 28,
+      "share_count": 19,
+      "publish_time": 1769689776000
+    },
+    {
+      "note_id": "69ae4e72000000002602e599",
+      "title": "小学数学：商不变原理的妙用。",
+      "note_url": "https://www.xiaohongshu.com/explore/69ae4e72000000002602e599",
+      "liked_count": 75,
+      "collected_count": 70,
+      "comment_count": 2,
+      "share_count": 11,
+      "publish_time": 1773031026000
+    },
+    {
+      "note_id": "67ea8cb10000000009017450",
+      "title": "如何两年学完小学计算？",
+      "note_url": "https://www.xiaohongshu.com/explore/67ea8cb10000000009017450",
+      "liked_count": 63,
+      "collected_count": 104,
+      "comment_count": 2,
+      "share_count": 10,
+      "publish_time": 1743424689000
+    },
+    {
+      "note_id": "699ecf3a0000000026032a40",
+      "title": "二下数学同步练 第一单元 有余数的除法",
+      "note_url": "https://www.xiaohongshu.com/explore/699ecf3a0000000026032a40",
+      "liked_count": 64,
+      "collected_count": 76,
+      "comment_count": 1,
+      "share_count": 9,
+      "publish_time": 1772015418000
+    },
+    {
+      "note_id": "69abde0b000000001d010072",
+      "title": "【苏教版三年级数学｜第一单元每日一练】",
+      "note_url": "https://www.xiaohongshu.com/explore/69abde0b000000001d010072",
+      "liked_count": 62,
+      "collected_count": 73,
+      "comment_count": 3,
+      "share_count": 4,
+      "publish_time": 1772871179000
+    },
+    {
+      "note_id": "6747005c0000000007032ff3",
+      "title": "数学想考95分以上，做这五件事💯",
+      "note_url": "https://www.xiaohongshu.com/explore/6747005c0000000007032ff3",
+      "liked_count": 59,
+      "collected_count": 98,
+      "comment_count": 3,
+      "share_count": 34,
+      "publish_time": 1732706396000
+    },
+    {
+      "note_id": "6728797e000000003c014977",
+      "title": "二年级数学要超前到多少？",
+      "note_url": "https://www.xiaohongshu.com/explore/6728797e000000003c014977",
+      "liked_count": 59,
+      "collected_count": 37,
+      "comment_count": 313,
+      "share_count": 26,
+      "publish_time": 1730705790000
+    },
+    {
+      "note_id": "68b5c46c000000001d02092e",
+      "title": "小学简便计算",
+      "note_url": "https://www.xiaohongshu.com/explore/68b5c46c000000001d02092e",
+      "liked_count": 59,
+      "collected_count": 1,
+      "comment_count": 15,
+      "share_count": 0,
+      "publish_time": 1756742764000
+    },
+    {
+      "note_id": "671486eb000000001600f666",
+      "title": "五年级数学线上1对1授课，靠谱吗❓",
+      "note_url": "https://www.xiaohongshu.com/explore/671486eb000000001600f666",
+      "liked_count": 65,
+      "collected_count": 41,
+      "comment_count": 108,
+      "share_count": 36,
+      "publish_time": 1729405698000
+    },
+    {
+      "note_id": "69acd3bc000000001d0240e5",
+      "title": "二年级数学时间换算#小学二年级数学[话题]##数学思维方法[话题]##二年级思维题[话题]##数学知",
+      "note_url": "https://www.xiaohongshu.com/explore/69acd3bc000000001d0240e5",
+      "liked_count": 55,
+      "collected_count": 81,
+      "comment_count": 0,
+      "share_count": 6,
+      "publish_time": 1772934076000
+    },
+    {
+      "note_id": "699d2a3a000000001a030671",
+      "title": "新三下数学《除数是一位数的除法》每日一练",
+      "note_url": "https://www.xiaohongshu.com/explore/699d2a3a000000001a030671",
+      "liked_count": 55,
+      "collected_count": 73,
+      "comment_count": 0,
+      "share_count": 10,
+      "publish_time": 1771907643000
+    },
+    {
+      "note_id": "69a98070000000002802083f",
+      "title": "小学数学-巧数正方体",
+      "note_url": "https://www.xiaohongshu.com/explore/69a98070000000002802083f",
+      "liked_count": 54,
+      "collected_count": 119,
+      "comment_count": 0,
+      "share_count": 22,
+      "publish_time": 1772716144000
+    },
+    {
+      "note_id": "697f5d490000000022039d42",
+      "title": "人教版数学三下数学新版内容讲解7",
+      "note_url": "https://www.xiaohongshu.com/explore/697f5d490000000022039d42",
+      "liked_count": 55,
+      "collected_count": 44,
+      "comment_count": 5,
+      "share_count": 22,
+      "publish_time": 1769994027000
+    },
+    {
+      "note_id": "668fa8e6000000000a006bad",
+      "title": "如何提高计算能力",
+      "note_url": "https://www.xiaohongshu.com/explore/668fa8e6000000000a006bad",
+      "liked_count": 52,
+      "collected_count": 16,
+      "comment_count": 0,
+      "share_count": 8,
+      "publish_time": 1720690918000
+    },
+    {
+      "note_id": "69abd080000000000e00dc99",
+      "title": "阴影部分面积#小学数学[话题]# #小学数学思维训练[话题]# #小学奥数[话题]# #数学题[话题",
+      "note_url": "https://www.xiaohongshu.com/explore/69abd080000000000e00dc99",
+      "liked_count": 52,
+      "collected_count": 58,
+      "comment_count": 24,
+      "share_count": 6,
+      "publish_time": 1772867712000
+    },
+    {
+      "note_id": "69719b1a000000002103ce39",
+      "title": "人教版新三年级下册计算每日一练｜电子版",
+      "note_url": "https://www.xiaohongshu.com/explore/69719b1a000000002103ce39",
+      "liked_count": 51,
+      "collected_count": 59,
+      "comment_count": 8,
+      "share_count": 6,
+      "publish_time": 1769056501000
+    },
+    {
+      "note_id": "69ac4a56000000002b00d762",
+      "title": "#小学奥数[话题]# #思维训练[话题]# #趣味数学[话题]# #锻炼思维能力[话题]# #小学数",
+      "note_url": "https://www.xiaohongshu.com/explore/69ac4a56000000002b00d762",
+      "liked_count": 44,
+      "collected_count": 16,
+      "comment_count": 71,
+      "share_count": 3,
+      "publish_time": 1772898902000
+    },
+    {
+      "note_id": "67a9bf0a000000001800d0bc",
+      "title": "作为数学老师，谈谈补课和超前学的意义",
+      "note_url": "https://www.xiaohongshu.com/explore/67a9bf0a000000001800d0bc",
+      "liked_count": 44,
+      "collected_count": 55,
+      "comment_count": 14,
+      "share_count": 12,
+      "publish_time": 1739177738000
+    },
+    {
+      "note_id": "69481dca000000001e00efff",
+      "title": "数学老师是怎么帮自己孩子选网课的（无广告",
+      "note_url": "https://www.xiaohongshu.com/explore/69481dca000000001e00efff",
+      "liked_count": 41,
+      "collected_count": 52,
+      "comment_count": 23,
+      "share_count": 7,
+      "publish_time": 1766362681000
+    },
+    {
+      "note_id": "676429b4000000000900c7ec",
+      "title": "独立老师||数学其实很简单",
+      "note_url": "https://www.xiaohongshu.com/explore/676429b4000000000900c7ec",
+      "liked_count": 38,
+      "collected_count": 41,
+      "comment_count": 29,
+      "share_count": 10,
+      "publish_time": 1734617524000
+    },
+    {
+      "note_id": "686a3e18000000002203e829",
+      "title": "第一天丨计算（一）",
+      "note_url": "https://www.xiaohongshu.com/explore/686a3e18000000002203e829",
+      "liked_count": 37,
+      "collected_count": 40,
+      "comment_count": 12,
+      "share_count": 12,
+      "publish_time": 1751793176000
+    },
+    {
+      "note_id": "67aecdbf00000000290187db",
+      "title": "四年级下册数学计算开始练习啦",
+      "note_url": "https://www.xiaohongshu.com/explore/67aecdbf00000000290187db",
+      "liked_count": 37,
+      "collected_count": 33,
+      "comment_count": 6,
+      "share_count": 1,
+      "publish_time": 1739509183000
+    },
+    {
+      "note_id": "69a90813000000001a027a81",
+      "title": "人教版小学数学三年级下册",
+      "note_url": "https://www.xiaohongshu.com/explore/69a90813000000001a027a81",
+      "liked_count": 37,
+      "collected_count": 25,
+      "comment_count": 1,
+      "share_count": 3,
+      "publish_time": 1772685331000
+    },
+    {
+      "note_id": "69a840b200000000220317ec",
+      "title": "数学小结",
+      "note_url": "https://www.xiaohongshu.com/explore/69a840b200000000220317ec",
+      "liked_count": 38,
+      "collected_count": 32,
+      "comment_count": 2,
+      "share_count": 0,
+      "publish_time": 1772634290000
+    },
+    {
+      "note_id": "6962f781000000000d008f09",
+      "title": "四年级数学下册北师大版知识点易错点早读晚",
+      "note_url": "https://www.xiaohongshu.com/explore/6962f781000000000d008f09",
+      "liked_count": 35,
+      "collected_count": 26,
+      "comment_count": 1,
+      "share_count": 3,
+      "publish_time": 1768093569000
+    },
+    {
+      "note_id": "69aae4c7000000002303862d",
+      "title": "小学数学三下1.5《饮品店》",
+      "note_url": "https://www.xiaohongshu.com/explore/69aae4c7000000002303862d",
+      "liked_count": 41,
+      "collected_count": 32,
+      "comment_count": 1,
+      "share_count": 7,
+      "publish_time": 1772807367000
+    },
+    {
+      "note_id": "68be2548000000001d00b242",
+      "title": "谈谈超前学",
+      "note_url": "https://www.xiaohongshu.com/explore/68be2548000000001d00b242",
+      "liked_count": 33,
+      "collected_count": 35,
+      "comment_count": 57,
+      "share_count": 54,
+      "publish_time": 1757291848000
+    },
+    {
+      "note_id": "69ac040c000000001a01f32e",
+      "title": "小学毕业的家长们，这道小学奥数题你会吗 #小学数学[话题]#  #小学家长[话题]#  #家长难题[",
+      "note_url": "https://www.xiaohongshu.com/explore/69ac040c000000001a01f32e",
+      "liked_count": 36,
+      "collected_count": 41,
+      "comment_count": 15,
+      "share_count": 1,
+      "publish_time": 1772880908000
+    },
+    {
+      "note_id": "69aa7f050000000022023836",
+      "title": "小学数学低年级常考附加题，画图法解题",
+      "note_url": "https://www.xiaohongshu.com/explore/69aa7f050000000022023836",
+      "liked_count": 32,
+      "collected_count": 58,
+      "comment_count": 1,
+      "share_count": 5,
+      "publish_time": 1772946900000
+    },
+    {
+      "note_id": "6819d824000000002101974c",
+      "title": "小学数学从40分到98分，我家娃怎么做的",
+      "note_url": "https://www.xiaohongshu.com/explore/6819d824000000002101974c",
+      "liked_count": 30,
+      "collected_count": 32,
+      "comment_count": 203,
+      "share_count": 11,
+      "publish_time": 1746524196000
+    },
+    {
+      "note_id": "6757fd4e000000000600f290",
+      "title": "95%家长不知道，超前学第一步是什么？",
+      "note_url": "https://www.xiaohongshu.com/explore/6757fd4e000000000600f290",
+      "liked_count": 30,
+      "collected_count": 41,
+      "comment_count": 11,
+      "share_count": 5,
+      "publish_time": 1733819727000
+    },
+    {
+      "note_id": "696b7ff300000000210295f2",
+      "title": "数学老师推荐的寒假预习视频课真不错‼️",
+      "note_url": "https://www.xiaohongshu.com/explore/696b7ff300000000210295f2",
+      "liked_count": 28,
+      "collected_count": 32,
+      "comment_count": 1,
+      "share_count": 1,
+      "publish_time": 1768652787000
+    },
+    {
+      "note_id": "69827253000000002203014f",
+      "title": "我为什么分享和推荐智慧中小学视频课",
+      "note_url": "https://www.xiaohongshu.com/explore/69827253000000002203014f",
+      "liked_count": 27,
+      "collected_count": 20,
+      "comment_count": 1,
+      "share_count": 3,
+      "publish_time": 1770156627000
+    },
+    {
+      "note_id": "69a2488e000000001600803b",
+      "title": "经过上学期经验，二下校内教辅只有三本了",
+      "note_url": "https://www.xiaohongshu.com/explore/69a2488e000000001600803b",
+      "liked_count": 27,
+      "collected_count": 25,
+      "comment_count": 23,
+      "share_count": 0,
+      "publish_time": 1772243086000
+    },
+    {
+      "note_id": "69ad647a0000000022021c00",
+      "title": "小学数学思维",
+      "note_url": "https://www.xiaohongshu.com/explore/69ad647a0000000022021c00",
+      "liked_count": 27,
+      "collected_count": 45,
+      "comment_count": 0,
+      "share_count": 3,
+      "publish_time": 1772971130000
+    },
+    {
+      "note_id": "69a8c50b0000000015030812",
+      "title": "26新版🔥三年级下册数学综合计算每日一练",
+      "note_url": "https://www.xiaohongshu.com/explore/69a8c50b0000000015030812",
+      "liked_count": 23,
+      "collected_count": 15,
+      "comment_count": 0,
+      "share_count": 6,
+      "publish_time": 1772668171000
+    },
+    {
+      "note_id": "67b703bf000000000e005cdc",
+      "title": "普娃两个月拉完小学数学，爆改全班第一",
+      "note_url": "https://www.xiaohongshu.com/explore/67b703bf000000000e005cdc",
+      "liked_count": 24,
+      "collected_count": 27,
+      "comment_count": 6,
+      "share_count": 2,
+      "publish_time": 1740047295000
+    },
+    {
+      "note_id": "69ad6aca000000001a028f93",
+      "title": "幼小衔接数学计算/口算练习题/可打印",
+      "note_url": "https://www.xiaohongshu.com/explore/69ad6aca000000001a028f93",
+      "liked_count": 24,
+      "collected_count": 18,
+      "comment_count": 4,
+      "share_count": 1,
+      "publish_time": 1772972746000
+    },
+    {
+      "note_id": "66da7879000000001e01b23a",
+      "title": "我关注的小学数学博主！！！",
+      "note_url": "https://www.xiaohongshu.com/explore/66da7879000000001e01b23a",
+      "liked_count": 22,
+      "collected_count": 17,
+      "comment_count": 1,
+      "share_count": 1,
+      "publish_time": 1725593721000
+    },
+    {
+      "note_id": "688ddf3e000000000403d98a",
+      "title": "1-6年级 小学奥数 视频讲解",
+      "note_url": "https://www.xiaohongshu.com/explore/688ddf3e000000000403d98a",
+      "liked_count": 21,
+      "collected_count": 12,
+      "comment_count": 38,
+      "share_count": 1,
+      "publish_time": 1754128190000
+    },
+    {
+      "note_id": "69a014e4000000001b01fb68",
+      "title": "除数是一位数除法｜第3课时（估算）专项",
+      "note_url": "https://www.xiaohongshu.com/explore/69a014e4000000001b01fb68",
+      "liked_count": 22,
+      "collected_count": 36,
+      "comment_count": 1,
+      "share_count": 4,
+      "publish_time": 1772098788000
+    },
+    {
+      "note_id": "69ae2dab000000002303aefe",
+      "title": "小升初数学计算，13种简便计算巧算方法",
+      "note_url": "https://www.xiaohongshu.com/explore/69ae2dab000000002303aefe",
+      "liked_count": 23,
+      "collected_count": 29,
+      "comment_count": 1,
+      "share_count": 6,
+      "publish_time": 1773022635000
+    }
+  ]
+}

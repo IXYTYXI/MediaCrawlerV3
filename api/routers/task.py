@@ -78,6 +78,8 @@ class TaskConfig(BaseModel):
     top_comment_notes_count: int = 20
     comment_page_count: int = 2
     feishu_folder_token: str = ""
+    notification_chat_id: str = ""
+    notification_webhook_url: str = ""
     filter_keywords: str = ""
     filter_scope: str = "title,desc,tags"
 
@@ -106,6 +108,8 @@ class TaskConfigUpdate(BaseModel):
     top_comment_notes_count: Optional[int] = None
     comment_page_count: Optional[int] = None
     feishu_folder_token: Optional[str] = None
+    notification_chat_id: Optional[str] = None
+    notification_webhook_url: Optional[str] = None
     filter_keywords: Optional[str] = None
     filter_scope: Optional[str] = None
 
@@ -214,6 +218,10 @@ def _build_cmd(data: dict) -> List[str]:
 
     if data.get("feishu_folder_token"):
         cmd.extend(["--feishu_folder", data["feishu_folder_token"]])
+    if data.get("notification_chat_id"):
+        cmd.extend(["--notification_chat_id", data["notification_chat_id"]])
+    if data.get("notification_webhook_url"):
+        cmd.extend(["--notification_webhook_url", data["notification_webhook_url"]])
 
     return cmd
 

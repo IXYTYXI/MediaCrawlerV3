@@ -1,0 +1,196 @@
+{
+  "checkpoint_id": "task_20260210_20260310_203351",
+  "created_at": "2026-03-10 20:33:51",
+  "task_id": "task_20260210",
+  "authors": {
+    "5ff43d2b0000000001001995": {
+      "url": "https://www.xiaohongshu.com/user/profile/5ff43d2b0000000001001995?xsec_token=AByizwCWrT0j9ZFadOJIHNUN2WGVEqO2X9fzCpLg6qtYw%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 506,
+      "crawled_count": 506,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "61b2c64e0000000010007500": {
+      "url": "https://www.xiaohongshu.com/user/profile/61b2c64e0000000010007500?xsec_token=ABQbA2jfbtHRkm9ZR9qrHBXz7vppg8mr_xgD-HMLJluBY%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 194,
+      "crawled_count": 194,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "61b2fc7e000000001000f059": {
+      "url": "https://www.xiaohongshu.com/user/profile/61b2fc7e000000001000f059?xsec_token=ABQbA2jfbtHRkm9ZR9qrHBX82eEF9XrpDAaSfKyQ7GJwE%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-04",
+      "contents_count": 422,
+      "crawled_count": 422,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "62b16791000000001501b2ca": {
+      "url": "https://www.xiaohongshu.com/user/profile/62b16791000000001501b2ca?xsec_token=ABcuAQdC6Rl_JEnJBu4zyKSt2rWnqOGZziFsERDZ75E34%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-04",
+      "contents_count": 580,
+      "crawled_count": 550,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "636b58ff000000001f01a10d": {
+      "url": "https://www.xiaohongshu.com/user/profile/636b58ff000000001f01a10d?xsec_token=ABfdrt_O7s1QqiR7bsfFJo8JMGhL40VY-MlyF3MKNrIck%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-04",
+      "contents_count": 825,
+      "crawled_count": 825,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "642a3b7f000000001102347e": {
+      "url": "https://www.xiaohongshu.com/user/profile/642a3b7f000000001102347e?xsec_token=ABQYAZcJFqLSVNO7sPgqg1MAjLCcqtCHFmHfhU7fg5mro%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-01",
+      "contents_count": 314,
+      "crawled_count": 314,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "642ba9780000000012011a80": {
+      "url": "https://www.xiaohongshu.com/user/profile/642ba9780000000012011a80?xsec_token=ABdM_4WwX6A2aWcBGvarVBatEbJ_qWS2j_gQnWFhqMy44%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 171,
+      "crawled_count": 171,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "64740b96000000000f006adf": {
+      "url": "https://www.xiaohongshu.com/user/profile/64740b96000000000f006adf?xsec_token=ABCs_kSHJnIumJb8ljNZdvgTLxYBd3dJJEmKunc4S3avI%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-02-28",
+      "contents_count": 354,
+      "crawled_count": 354,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "649a70220000000010036bfc": {
+      "url": "https://www.xiaohongshu.com/user/profile/649a70220000000010036bfc?xsec_token=AB_qIAhR5BD9jBu8CMyQrnnpibKag82SYNPUD6MYF5K_E%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-04",
+      "contents_count": 2982,
+      "crawled_count": 2982,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "649a8e5f000000001001c410": {
+      "url": "https://www.xiaohongshu.com/user/profile/649a8e5f000000001001c410?xsec_token=AB_qIAhR5BD9jBu8CMyQrnnt-yYvcj9ZQWyCHgZ4O4Lto%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-02-24",
+      "contents_count": 1969,
+      "crawled_count": 1969,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "649a8fdf000000001f0060ff": {
+      "url": "https://www.xiaohongshu.com/user/profile/649a8fdf000000001f0060ff?xsec_token=AB_qIAhR5BD9jBu8CMyQrnnpz7Tqc1QpD29k3gjr_-ZfA%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 335,
+      "crawled_count": 335,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "649e933900000000140344d9": {
+      "url": "https://www.xiaohongshu.com/user/profile/649e933900000000140344d9?xsec_token=ABE7IMTH_dsTUPE7nS4I0X9V45tyBMDjl5bns295kNBXw%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-04",
+      "contents_count": 2340,
+      "crawled_count": 2340,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "6504601f0000000017021a03": {
+      "url": "https://www.xiaohongshu.com/user/profile/6504601f0000000017021a03?xsec_token=ABC4Vv622sP46BO2rIcQnhgqe3qa69-dXTyi34EGyy_7o%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 564,
+      "crawled_count": 564,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "669f40a3000000001e00b482": {
+      "url": "https://www.xiaohongshu.com/user/profile/669f40a3000000001e00b482?xsec_token=AB0Dg1lCKW-goumU5eGwNUGVqVJVzJ3-N6CyRW7KEwofo%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-04",
+      "contents_count": 848,
+      "crawled_count": 848,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "66c8466d000000001d02328b": {
+      "url": "https://www.xiaohongshu.com/user/profile/66c8466d000000001d02328b?xsec_token=AB3fFtBtFfy31iC5R2VyPBnmZxZZNhwvy0iRS4APcvvA0%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-02-27",
+      "contents_count": 588,
+      "crawled_count": 588,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "66c854d2000000001d022cac": {
+      "url": "https://www.xiaohongshu.com/user/profile/66c854d2000000001d022cac?xsec_token=AB3fFtBtFfy31iC5R2VyPBngZ7jc4MKnWSvVJCQAun8r8%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 734,
+      "crawled_count": 734,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "66dea45e000000000d026777": {
+      "url": "https://www.xiaohongshu.com/user/profile/66dea45e000000000d026777?xsec_token=AB9bVijV-V2KufmqZfN14BbvrWmHmgnTcoD0LXF6mlLAc%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "",
+      "contents_count": 0,
+      "crawled_count": 0,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    },
+    "6735499c000000001600b1b9": {
+      "url": "https://www.xiaohongshu.com/user/profile/6735499c000000001600b1b9?xsec_token=ABpQZMVSjkTk5dn-0UHKi84HnZZCUk8uvGqqUpRPjDasw%3D&xsec_source=pc_search",
+      "status": "completed",
+      "last_crawl_date": "2026-03-04",
+      "latest_note_date": "2026-03-03",
+      "contents_count": 1312,
+      "crawled_count": 1312,
+      "failed_count": 0,
+      "comment_crawled_count": 0
+    }
+  },
+  "summary": {
+    "total_authors": 18,
+    "completed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "total_notes": 15038
+  },
+  "feishu_url": "",
+  "note": "恢复后基线快照 - 3月4日数据"
+}

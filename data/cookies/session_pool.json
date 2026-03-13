@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": "s_9dc247704ef4",
+    "web_session": "040069b8083b3cc3b8d6bc48853b4b7f1a69fb",
+    "label": "",
+    "status": "expired",
+    "added_at": "2026-03-10T19:30:42",
+    "last_used": "",
+    "last_verified": "2026-03-10T19:30:46",
+    "fail_count": 0,
+    "success_count": 0,
+    "cooldown_until": null
+  },
+  {
+    "id": "s_6ef0f6ad0498",
+    "web_session": "040069b8083b3cc3b8d62a4a853b4bb7113874",
+    "label": "",
+    "status": "active",
+    "added_at": "2026-03-10T19:37:12",
+    "last_used": "2026-03-13T18:18:25",
+    "last_verified": "",
+    "fail_count": 0,
+    "success_count": 103,
+    "cooldown_until": null
+  }
+]
