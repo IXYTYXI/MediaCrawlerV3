@@ -365,6 +365,38 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Date Filter",
             ),
         ] = getattr(config, "CRAWL_DATE_END", ""),
+        transfer_owner: Annotated[
+            str,
+            typer.Option(
+                "--transfer_owner",
+                help="是否转移多维表格所有者（true/false/空=跟随全局）",
+                rich_help_panel="Feishu Configuration",
+            ),
+        ] = "",
+        owner_open_id: Annotated[
+            str,
+            typer.Option(
+                "--owner_open_id",
+                help="转移所有者的 Open ID（留空则用全局配置）",
+                rich_help_panel="Feishu Configuration",
+            ),
+        ] = "",
+        collaborator_open_id: Annotated[
+            Optional[list[str]],
+            typer.Option(
+                "--collaborator_open_id",
+                help="协作者 Open ID（可多次指定，留空则用全局配置）",
+                rich_help_panel="Feishu Configuration",
+            ),
+        ] = None,
+        collaborator_user_id: Annotated[
+            Optional[list[str]],
+            typer.Option(
+                "--collaborator_user_id",
+                help="协作者 User ID（可多次指定，留空则用全局配置）",
+                rich_help_panel="Feishu Configuration",
+            ),
+        ] = None,
         notification_chat_id: Annotated[
             str,
             typer.Option(
@@ -422,6 +454,16 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.CRAWLER_MAX_NOTES_COUNT = max_notes
         config.CRAWL_DATE_START = date_start
         config.CRAWL_DATE_END = date_end
+        if transfer_owner.lower() in ("true", "1", "yes"):
+            setattr(config, "TRANSFER_OWNER_OVERRIDE", True)
+        elif transfer_owner.lower() in ("false", "0", "no"):
+            setattr(config, "TRANSFER_OWNER_OVERRIDE", False)
+        if owner_open_id:
+            setattr(config, "OWNER_OPEN_ID_OVERRIDE", owner_open_id)
+        if collaborator_open_id:
+            setattr(config, "COLLABORATOR_OPEN_IDS_OVERRIDE", [x for x in collaborator_open_id if x.strip()])
+        if collaborator_user_id:
+            setattr(config, "COLLABORATOR_USER_IDS_OVERRIDE", [x for x in collaborator_user_id if x.strip()])
         setattr(config, "NOTIFICATION_CHAT_ID_OVERRIDE", notification_chat_id or "")
         setattr(config, "NOTIFICATION_WEBHOOK_URL_OVERRIDE", notification_webhook_url or "")
 

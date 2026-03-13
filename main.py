@@ -257,8 +257,15 @@ async def main() -> None:
                     _webhook_override = getattr(config, "NOTIFICATION_WEBHOOK_URL_OVERRIDE", "") or ""
                     if _chat_override:
                         _notify_cfg["chat_id"] = _chat_override
+                        print(f"[Main] 使用任务指定群聊: {_chat_override[:20]}...", flush=True)
                     if _webhook_override:
                         _notify_cfg["webhook_url"] = _webhook_override
+                        print(f"[Main] 使用任务指定 Webhook 发送通知", flush=True)
+                    # 任务指定了群聊但未指定 Webhook 时，清空全局 Webhook，确保发到任务群
+                    if _chat_override and not _webhook_override:
+                        _notify_cfg["webhook_url"] = ""
+                    if not _chat_override and not _webhook_override and _notify_cfg.get("chat_id"):
+                        print(f"[Main] 使用全局配置群聊: {_notify_cfg.get('chat_id', '')[:20]}...", flush=True)
                     # 任务级填了群聊或 Webhook 时，视为本任务要发通知（即使全局未开启）
                     _will_send = (_notify_cfg.get("webhook_url") or _notify_cfg.get("chat_id")) and (
                         _notify_cfg.get("enabled", False) or _chat_override or _webhook_override

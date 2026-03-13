@@ -78,6 +78,10 @@ class TaskConfig(BaseModel):
     top_comment_notes_count: int = 20
     comment_page_count: int = 2
     feishu_folder_token: str = ""
+    transfer_owner: Optional[bool] = None
+    owner_open_id: str = ""
+    collaborator_open_ids: List[str] = []
+    collaborator_user_ids: List[str] = []
     notification_chat_id: str = ""
     notification_webhook_url: str = ""
     filter_keywords: str = ""
@@ -108,6 +112,10 @@ class TaskConfigUpdate(BaseModel):
     top_comment_notes_count: Optional[int] = None
     comment_page_count: Optional[int] = None
     feishu_folder_token: Optional[str] = None
+    transfer_owner: Optional[bool] = None
+    owner_open_id: Optional[str] = None
+    collaborator_open_ids: Optional[List[str]] = None
+    collaborator_user_ids: Optional[List[str]] = None
     notification_chat_id: Optional[str] = None
     notification_webhook_url: Optional[str] = None
     filter_keywords: Optional[str] = None
@@ -218,6 +226,18 @@ def _build_cmd(data: dict) -> List[str]:
 
     if data.get("feishu_folder_token"):
         cmd.extend(["--feishu_folder", data["feishu_folder_token"]])
+    if data.get("transfer_owner") is True:
+        cmd.extend(["--transfer_owner", "true"])
+    elif data.get("transfer_owner") is False:
+        cmd.extend(["--transfer_owner", "false"])
+    if data.get("owner_open_id"):
+        cmd.extend(["--owner_open_id", data["owner_open_id"]])
+    for oid in (data.get("collaborator_open_ids") or []):
+        if oid.strip():
+            cmd.extend(["--collaborator_open_id", oid.strip()])
+    for uid in (data.get("collaborator_user_ids") or []):
+        if uid.strip():
+            cmd.extend(["--collaborator_user_id", uid.strip()])
     if data.get("notification_chat_id"):
         cmd.extend(["--notification_chat_id", data["notification_chat_id"]])
     if data.get("notification_webhook_url"):

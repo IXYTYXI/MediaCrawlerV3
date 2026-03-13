@@ -1931,36 +1931,22 @@ def push_to_feishu(notes: List[Dict], field_defs: List[Dict],
             for field_name in ordered_fields:
                 all_table_fields.append({"field_name": field_name, "type": _resolve_field_type(field_name)})
 
-            # 7. 逐作者创建数据表并写入记录
-            first_creator = True
+            # 7. 逐作者创建数据表并写入记录（先建第一张业务表，再删除默认表，保证所有表结构一致）
+            tables = client.list_tables(app_token)
+            default_table_id = tables[0]["table_id"] if tables else None
             for creator_name, records in all_grouped_records.items():
                 safe_name = creator_name[:100]
                 utils.logger.info(f"[飞书] 创建数据表: {safe_name} ({len(records)} 条)")
 
-                if first_creator:
-                    # 用默认表（已有默认字段，需要逐个添加自定义字段）
-                    tables = client.list_tables(app_token)
-                    table_id = tables[0]["table_id"] if tables else client.create_table(app_token, safe_name, all_table_fields)
-                    first_creator = False
-                    
-                    if tables:
-                        # 重命名默认表为第一个作者名称
-                        try:
-                            client.rename_table(app_token, table_id, safe_name)
-                            utils.logger.info(f"[飞书] 默认表已重命名为: {safe_name}")
-                        except Exception as e:
-                            utils.logger.warning(f"[飞书] 重命名默认表失败: {e}")
-                        # 默认表需要逐个添加字段
-                        for field_name in ordered_fields:
-                            if field_name == seq_name:
-                                continue
-                            try:
-                                client.add_field(app_token, table_id, field_name, _resolve_field_type(field_name))
-                            except Exception:
-                                pass
-                else:
-                    # 创建新数据表，一次性传入所有字段
-                    table_id = client.create_table(app_token, safe_name, all_table_fields)
+                # 统一用 create_table 建表，不再复用默认表
+                table_id = client.create_table(app_token, safe_name, all_table_fields)
+                if default_table_id:
+                    try:
+                        client.delete_table(app_token, default_table_id)
+                        utils.logger.info("[飞书] 已删除多维表格默认数据表")
+                    except Exception as e:
+                        utils.logger.warning(f"[飞书] 删除默认表失败（不影响写入）: {e}")
+                    default_table_id = None
 
                 # 清理默认字段和空记录
                 client.cleanup_default_fields_and_records(app_token, table_id, ordered_with_serial)

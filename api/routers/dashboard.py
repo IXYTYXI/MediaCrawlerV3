@@ -59,6 +59,58 @@ async def update_config(config: dict):
         raise HTTPException(status_code=500, detail=f"保存配置失败: {e}")
 
 
+@router.get("/feishu-bitable-fields")
+async def get_feishu_bitable_fields(app_token: Optional[str] = None, url: Optional[str] = None):
+    """
+    拉取参考多维表格的字段列表，用于关键词爬取字段对照/确认。
+    app_token: 多维表格 token（如 CcGGb8ejdacDXIsrrDGc5YNen7b）
+    url: 或多维表格完整 URL，从中解析 app_token（如 https://guanghe.feishu.cn/base/CcGGb8ejdacDXIsrrDGc5YNen7b）
+    """
+    token = (app_token or "").strip()
+    if not token and url:
+        import re as re_mod
+        m = re_mod.search(r"/base/([A-Za-z0-9]+)", (url or "").strip())
+        if m:
+            token = m.group(1)
+    if not token:
+        raise HTTPException(status_code=400, detail="请提供 app_token 或 url 参数")
+    if not CONFIG_PATH.exists():
+        raise HTTPException(status_code=404, detail="配置文件不存在")
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取配置失败: {e}")
+    feishu = cfg.get("feishu", {}) or {}
+    app_id = feishu.get("app_id", "")
+    app_secret = feishu.get("app_secret", "")
+    if not app_id or not app_secret:
+        raise HTTPException(status_code=400, detail="请先在配置中填写飞书 app_id 和 app_secret")
+    try:
+        from tools.feishu_bitable import FeishuBitableClient
+        client = FeishuBitableClient(app_id, app_secret)
+        tables = client.list_tables(token)
+        result = []
+        for t in (tables or []):
+            name = t.get("name", "")
+            tid = t.get("table_id", "")
+            if not tid:
+                continue
+            try:
+                fields = client.list_fields(token, tid)
+            except Exception:
+                fields = []
+            result.append({
+                "name": name,
+                "table_id": tid,
+                "fields": [{"field_name": f.get("field_name", ""), "type": f.get("type")} for f in (fields or [])],
+            })
+        client.close()
+        return {"success": True, "app_token": token, "tables": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"拉取多维表格字段失败: {e}")
+
+
 # 导出/导入必须放在 PATCH /config/{section} 之前，否则 /config/export-full 会被 {section} 匹配，只允许 PATCH 导致 405
 @router.get("/config/export")
 @router.post("/config/export")

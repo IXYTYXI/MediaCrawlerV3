@@ -95,7 +95,16 @@ class PipelineFeishuWriter:
         self._image_text_summary_note_map: Dict[str, str] = {}
         self._summary_lock = threading.Lock()
 
-        self._owner_open_id: str = ""
+        self._owner_open_id: str = (self._feishu_cfg.get("owner_open_id") or "").strip()
+        self._transfer_owner: bool = self._feishu_cfg.get("transfer_owner", True) is not False
+        # 任务级覆盖（CLI --transfer_owner / --owner_open_id / --collaborator_*）
+        import config as _cfg
+        if hasattr(_cfg, "TRANSFER_OWNER_OVERRIDE"):
+            self._transfer_owner = _cfg.TRANSFER_OWNER_OVERRIDE
+        if hasattr(_cfg, "OWNER_OPEN_ID_OVERRIDE") and _cfg.OWNER_OPEN_ID_OVERRIDE:
+            self._owner_open_id = _cfg.OWNER_OPEN_ID_OVERRIDE
+        self._collaborator_open_ids_override = getattr(_cfg, "COLLABORATOR_OPEN_IDS_OVERRIDE", None)
+        self._collaborator_user_ids_override = getattr(_cfg, "COLLABORATOR_USER_IDS_OVERRIDE", None)
 
         self._existing_tables: Dict[str, str] = {}
         self._table_name_to_id: Dict[str, str] = {}
@@ -179,7 +188,7 @@ class PipelineFeishuWriter:
 
     def _add_bitable_collaborators(self, app_token: str) -> None:
         """创建表格后，将配置中的协作者加入多维表格，便于查看/编辑"""
-        open_ids = self._feishu_cfg.get("collaborator_open_ids") or []
+        open_ids = self._collaborator_open_ids_override if self._collaborator_open_ids_override is not None else (self._feishu_cfg.get("collaborator_open_ids") or [])
         if not isinstance(open_ids, list):
             open_ids = [open_ids] if open_ids else []
         for open_id in open_ids:
@@ -192,7 +201,7 @@ class PipelineFeishuWriter:
                 perm="edit",
                 node_type="bitable",
             )
-        user_ids = self._feishu_cfg.get("collaborator_user_ids") or []
+        user_ids = self._collaborator_user_ids_override if self._collaborator_user_ids_override is not None else (self._feishu_cfg.get("collaborator_user_ids") or [])
         if not isinstance(user_ids, list):
             user_ids = [user_ids] if user_ids else []
         for uid in user_ids:
@@ -626,29 +635,21 @@ class PipelineFeishuWriter:
                     except Exception:
                         pass
             elif self._first_creator:
+                # 先建第一张业务表，再删除多维表格默认数据表，保证所有表结构一致
+                table_id = self.client.create_table(
+                    self.app_token, safe_name, self._all_table_fields
+                )
                 tables = self.client.list_tables(self.app_token)
-                if tables:
-                    table_id = tables[0]["table_id"]
+                default_table_id = next(
+                    (t["table_id"] for t in tables if t.get("table_id") != table_id),
+                    None,
+                )
+                if default_table_id:
                     try:
-                        self.client.rename_table(
-                            self.app_token, table_id, safe_name
-                        )
-                    except Exception:
-                        pass
-                    for fn in self._ordered_fields:
-                        if fn == note_seq:
-                            continue
-                        try:
-                            self.client.add_field(
-                                self.app_token, table_id, fn,
-                                self._resolve_field_type(fn),
-                            )
-                        except Exception:
-                            pass
-                else:
-                    table_id = self.client.create_table(
-                        self.app_token, safe_name, self._all_table_fields
-                    )
+                        self.client.delete_table(self.app_token, default_table_id)
+                        utils.logger.info("[Feishu] 已删除多维表格默认数据表")
+                    except Exception as e:
+                        utils.logger.warning(f"[Feishu] 删除默认表失败（不影响写入）: {e}")
                 self._first_creator = False
             else:
                 utils.logger.info(
@@ -772,6 +773,7 @@ class PipelineFeishuWriter:
     # ==================== 搜索模式写入（笔记 + 评论两张表） ====================
 
     _SEARCH_NOTE_TYPES = [
+        FIELD_TYPE_TEXT,  # seq 序号
         FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_SELECT,
         FIELD_TYPE_TEXT, FIELD_TYPE_TEXT, FIELD_TYPE_DATE, FIELD_TYPE_NUMBER,
         FIELD_TYPE_NUMBER, FIELD_TYPE_NUMBER, FIELD_TYPE_NUMBER, FIELD_TYPE_TEXT,
@@ -785,7 +787,7 @@ class PipelineFeishuWriter:
     ]
 
     _SEARCH_NOTE_KEY_ORDER = [
-        "keyword", "title", "desc", "content_type", "nickname", "user_id", "time",
+        "seq", "keyword", "title", "desc", "content_type", "nickname", "user_id", "time",
         "liked_count", "collected_count", "comment_count", "share_count", "tag_list",
         "ip_location", "link", "comment_summary",
     ]
@@ -882,7 +884,7 @@ class PipelineFeishuWriter:
                     map_comment_to_feishu_record(comment_with_title, field_names=self._fn_comment)
                 )
 
-        # --- 创建/复用笔记表 ---
+        # --- 创建/复用笔记表（关键词搜索专用：只用 search_note 字段，不复用创作者模式表）---
         all_note_fields = search_note_fields + search_image_fields
         note_table_id = self._table_name_to_id.get(note_table_name)
         if note_table_id:
@@ -890,35 +892,18 @@ class PipelineFeishuWriter:
                 f"[Pipeline] 复用已有笔记表: {note_table_name}"
             )
         else:
-            tables = self.client.list_tables(self.app_token)
-            if tables and self._first_creator:
-                note_table_id = tables[0]["table_id"]
-                try:
-                    self.client.rename_table(
-                        self.app_token, note_table_id, note_table_name
-                    )
-                except Exception:
-                    pass
-                for fd in all_note_fields:
-                    try:
-                        self.client.add_field(
-                            self.app_token, note_table_id,
-                            fd["field_name"], fd["type"],
-                        )
-                    except Exception:
-                        pass
-                self._first_creator = False
-            else:
-                note_table_id = self.client.create_table(
-                    self.app_token, note_table_name,
-                    all_note_fields,
-                )
-
+            # 搜索模式始终新建「笔记数据」表，使用 search_note 字段（序号、搜索关键词、作者昵称等），
+            # 不复用 tables[0]，避免与创作者模式的「账号名称」等字段混用
+            note_table_id = self.client.create_table(
+                self.app_token, note_table_name,
+                all_note_fields,
+            )
             note_keep = {note_seq_name} | {fd["field_name"] for fd in all_note_fields}
             self.client.cleanup_default_fields_and_records(
                 self.app_token, note_table_id, note_keep,
             )
             self._table_name_to_id[note_table_name] = note_table_id
+            utils.logger.info(f"[Pipeline] 已创建搜索模式笔记表: {note_table_name}（字段: 序号、搜索关键词、标题、作者昵称等）")
 
         for i, rec in enumerate(note_records, 1):
             rec["fields"][note_seq_name] = str(i)
@@ -1516,7 +1501,7 @@ class PipelineFeishuWriter:
                     f"[Pipeline] 最终脚本校验失败: {e}"
                 )
 
-        if self._owner_open_id and self.app_token:
+        if self._transfer_owner and self._owner_open_id and self.app_token:
             try:
                 self.client.transfer_owner(
                     self.app_token, self._owner_open_id,
@@ -1641,4 +1626,12 @@ class PipelineFeishuWriter:
         return self
 
     def __exit__(self, *args):
+        # 默认转移所有者给 owner_open_id；仅当 transfer_owner=false 时不转移
+        if self._transfer_owner and self.app_token and self._owner_open_id:
+            try:
+                self.client.transfer_owner(
+                    self.app_token, self._owner_open_id,
+                )
+            except Exception as e:
+                utils.logger.warning(f"[Pipeline] 转移所有者失败: {e}")
         self.close()

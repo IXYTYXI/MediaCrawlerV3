@@ -22,11 +22,18 @@
   "top_notes_count": 100,
   "top_comment_notes_count": 20,
   "comment_page_count": 2,
-  "feishu_folder_token": "Y4hZfRwBZlHpO7dZL28cqIKYnTb",
+  "feishu_folder_token": "MXABfosp7lYuU0d86yEcGUSXnnc",
   "filter_keywords": "",
   "filter_scope": "title,desc,tags",
   "created_at": "2026-03-13 18:19:10",
-  "updated_at": "2026-03-13 18:19:10",
-  "status": "idle",
-  "last_run_at": ""
+  "updated_at": "2026-03-13 20:50:49",
+  "status": "completed",
+  "last_run_at": "2026-03-13 20:50:49",
+  "owner_open_id": "",
+  "collaborator_open_ids": [],
+  "collaborator_user_ids": [],
+  "notification_chat_id": "oc_494a21f1dbbe6d5948e9068e1ba17d84",
+  "notification_webhook_url": "",
+  "feishu_status": "success",
+  "feishu_url": "https://guanghe.feishu.cn/base/WQuxbIlKKaDuohsxbODcPYNZn9c"
 }

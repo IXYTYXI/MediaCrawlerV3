@@ -1,76 +1,76 @@
 {
-  "crawl_time": "2026-03-13 17:44:58",
+  "crawl_time": "2026-03-13 20:59:47",
   "platform": "xhs",
-  "creator_nickname": "小橙子🍊",
-  "creator_id": "5f2a59610000000001003a19",
-  "total_notes": 40,
-  "total_comments": 583,
-  "total_likes": 37728,
-  "total_collects": 10906,
-  "total_shares": 3651,
-  "avg_likes": 943.2,
-  "avg_collects": 272.65,
-  "avg_comments": 68.65,
-  "avg_shares": 91.28,
+  "creator_nickname": "陪读五哥",
+  "creator_id": "62b7d5a60000000015019024",
+  "total_notes": 80,
+  "total_comments": 669,
+  "total_likes": 62707,
+  "total_collects": 34209,
+  "total_shares": 6834,
+  "avg_likes": 783.84,
+  "avg_collects": 427.61,
+  "avg_comments": 38.7,
+  "avg_shares": 85.42,
   "most_liked": {
     "note_id": "689c57b9000000001d017456",
     "title": "打破信息差",
     "note_url": "https://www.xiaohongshu.com/explore/689c57b9000000001d017456",
     "liked_count": 19000,
-    "collected_count": 371,
+    "collected_count": 372,
     "comment_count": 1143,
     "share_count": 399,
     "publish_time": 1755076537000
   },
   "least_liked": {
-    "note_id": "67b4732b000000000302b835",
-    "title": "用AI搜题，妈妈再也不用担心我的学习啦",
-    "note_url": "https://www.xiaohongshu.com/explore/67b4732b000000000302b835",
+    "note_id": "69b29018000000002602c3d0",
+    "title": "🔥 “搜题机器”还是“解题高手”！",
+    "note_url": "https://www.xiaohongshu.com/explore/69b29018000000002602c3d0",
     "liked_count": 0,
     "collected_count": 0,
     "comment_count": 0,
     "share_count": 0,
-    "publish_time": 1739879211000
+    "publish_time": 1773309976000
   },
   "most_collected": {
-    "note_id": "6975ce92000000000b012bbc",
-    "title": "微信长按2秒钟，隐藏了9大实用功能",
-    "note_url": "https://www.xiaohongshu.com/explore/6975ce92000000000b012bbc",
-    "liked_count": 1655,
-    "collected_count": 2809,
-    "comment_count": 54,
-    "share_count": 2249,
-    "publish_time": 1769328274000
+    "note_id": "6678267a000000001c02176a",
+    "title": "托管老师经验贴",
+    "note_url": "https://www.xiaohongshu.com/explore/6678267a000000001c02176a",
+    "liked_count": 18000,
+    "collected_count": 18000,
+    "comment_count": 486,
+    "share_count": 1397,
+    "publish_time": 1719150202000
   },
   "least_collected": {
-    "note_id": "689b46b5000000001d00f63f",
-    "title": "#上大学就用搜题酱[话题]#  准大学生们，是时候带你们认识一下未来的老朋友了",
-    "note_url": "https://www.xiaohongshu.com/explore/689b46b5000000001d00f63f",
-    "liked_count": 5,
+    "note_id": "69b29018000000002602c3d0",
+    "title": "🔥 “搜题机器”还是“解题高手”！",
+    "note_url": "https://www.xiaohongshu.com/explore/69b29018000000002602c3d0",
+    "liked_count": 0,
     "collected_count": 0,
     "comment_count": 0,
     "share_count": 0,
-    "publish_time": 1755006645000
+    "publish_time": 1773309976000
   },
   "most_commented": {
     "note_id": "689c57b9000000001d017456",
     "title": "打破信息差",
     "note_url": "https://www.xiaohongshu.com/explore/689c57b9000000001d017456",
     "liked_count": 19000,
-    "collected_count": 371,
+    "collected_count": 372,
     "comment_count": 1143,
     "share_count": 399,
     "publish_time": 1755076537000
   },
   "least_commented": {
-    "note_id": "689b46b5000000001d00f63f",
-    "title": "#上大学就用搜题酱[话题]#  准大学生们，是时候带你们认识一下未来的老朋友了",
-    "note_url": "https://www.xiaohongshu.com/explore/689b46b5000000001d00f63f",
-    "liked_count": 5,
+    "note_id": "69b29018000000002602c3d0",
+    "title": "🔥 “搜题机器”还是“解题高手”！",
+    "note_url": "https://www.xiaohongshu.com/explore/69b29018000000002602c3d0",
+    "liked_count": 0,
     "collected_count": 0,
     "comment_count": 0,
     "share_count": 0,
-    "publish_time": 1755006645000
+    "publish_time": 1773309976000
   },
   "most_shared": {
     "note_id": "6975ce92000000000b012bbc",
@@ -79,29 +79,79 @@
     "liked_count": 1655,
     "collected_count": 2809,
     "comment_count": 54,
-    "share_count": 2249,
+    "share_count": 2250,
     "publish_time": 1769328274000
   },
   "least_shared": {
-    "note_id": "689b46b5000000001d00f63f",
-    "title": "#上大学就用搜题酱[话题]#  准大学生们，是时候带你们认识一下未来的老朋友了",
-    "note_url": "https://www.xiaohongshu.com/explore/689b46b5000000001d00f63f",
-    "liked_count": 5,
+    "note_id": "69b29018000000002602c3d0",
+    "title": "🔥 “搜题机器”还是“解题高手”！",
+    "note_url": "https://www.xiaohongshu.com/explore/69b29018000000002602c3d0",
+    "liked_count": 0,
     "collected_count": 0,
     "comment_count": 0,
     "share_count": 0,
-    "publish_time": 1755006645000
+    "publish_time": 1773309976000
   },
   "all_notes": [
     {
-      "note_id": "694bbc42000000001e010ed5",
-      "title": "期末复习用夸克，这个搜题软件被夸爆了！",
-      "note_url": "https://www.xiaohongshu.com/explore/694bbc42000000001e010ed5",
-      "liked_count": 329,
-      "collected_count": 272,
-      "comment_count": 49,
-      "share_count": 9,
-      "publish_time": 1766573924000
+      "note_id": "69b280c9000000001d011e75",
+      "title": "如何快速寻找同类型的题目？？？",
+      "note_url": "https://www.xiaohongshu.com/explore/69b280c9000000001d011e75",
+      "liked_count": 221,
+      "collected_count": 510,
+      "comment_count": 15,
+      "share_count": 31,
+      "publish_time": 1773306057000
+    },
+    {
+      "note_id": "69b29018000000002602c3d0",
+      "title": "🔥 “搜题机器”还是“解题高手”！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b29018000000002602c3d0",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773309976000
+    },
+    {
+      "note_id": "6678267a000000001c02176a",
+      "title": "托管老师经验贴",
+      "note_url": "https://www.xiaohongshu.com/explore/6678267a000000001c02176a",
+      "liked_count": 18000,
+      "collected_count": 18000,
+      "comment_count": 486,
+      "share_count": 1397,
+      "publish_time": 1719150202000
+    },
+    {
+      "note_id": "69b3d301000000001a02f81c",
+      "title": "我为啥反对孩子用手机搜题",
+      "note_url": "https://www.xiaohongshu.com/explore/69b3d301000000001a02f81c",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 2,
+      "publish_time": 1773392641000
+    },
+    {
+      "note_id": "69b01520000000002602c4fd",
+      "title": "初中生依赖搜题软件怎么办？",
+      "note_url": "https://www.xiaohongshu.com/explore/69b01520000000002602c4fd",
+      "liked_count": 13,
+      "collected_count": 5,
+      "comment_count": 15,
+      "share_count": 3,
+      "publish_time": 1773154469000
+    },
+    {
+      "note_id": "69b3b13100000000230137db",
+      "title": "搜题软件",
+      "note_url": "https://www.xiaohongshu.com/explore/69b3b13100000000230137db",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773383985000
     },
     {
       "note_id": "689b46b5000000001d00f63f",
@@ -114,14 +164,104 @@
       "publish_time": 1755006645000
     },
     {
-      "note_id": "6921c312000000001e002f5c",
-      "title": "Alevel拍照搜题",
-      "note_url": "https://www.xiaohongshu.com/explore/6921c312000000001e002f5c",
-      "liked_count": 26,
-      "collected_count": 17,
-      "comment_count": 3,
-      "share_count": 6,
-      "publish_time": 1763820306000
+      "note_id": "69b38400000000002602c31c",
+      "title": "搜题酱你是不是穷疯了",
+      "note_url": "https://www.xiaohongshu.com/explore/69b38400000000002602c31c",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773372416000
+    },
+    {
+      "note_id": "694bbc42000000001e010ed5",
+      "title": "期末复习用夸克，这个搜题软件被夸爆了！",
+      "note_url": "https://www.xiaohongshu.com/explore/694bbc42000000001e010ed5",
+      "liked_count": 331,
+      "collected_count": 272,
+      "comment_count": 49,
+      "share_count": 9,
+      "publish_time": 1766573924000
+    },
+    {
+      "note_id": "69af8f30000000001503976c",
+      "title": "也是体验过纯手写—搜题—ai的时代进步了 #00后[话题]# #学生[话题]# #作业[话题]# #",
+      "note_url": "https://www.xiaohongshu.com/explore/69af8f30000000001503976c",
+      "liked_count": 147,
+      "collected_count": 8,
+      "comment_count": 2,
+      "share_count": 5,
+      "publish_time": 1773113136000
+    },
+    {
+      "note_id": "69a2a157000000001d012bd3",
+      "title": "为什么豆包和小猿搜题给的答案不一样啊",
+      "note_url": "https://www.xiaohongshu.com/explore/69a2a157000000001d012bd3",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 2,
+      "share_count": 0,
+      "publish_time": 1772265815000
+    },
+    {
+      "note_id": "69919958000000000a03c18d",
+      "title": "依赖作业帮搜题，看似省力，其实正在悄悄废",
+      "note_url": "https://www.xiaohongshu.com/explore/69919958000000000a03c18d",
+      "liked_count": 1,
+      "collected_count": 4,
+      "comment_count": 0,
+      "share_count": 1,
+      "publish_time": 1771149656000
+    },
+    {
+      "note_id": "69a08121000000001a0311d1",
+      "title": "有没有能拍照搜题的手表有没有能拍照搜题的手表\n本人#理科生[话题]# #考试[话题]# 因为挂科 寒",
+      "note_url": "https://www.xiaohongshu.com/explore/69a08121000000001a0311d1",
+      "liked_count": 1,
+      "collected_count": 0,
+      "comment_count": 1,
+      "share_count": 0,
+      "publish_time": 1772126497000
+    },
+    {
+      "note_id": "699536f20000000028022f7f",
+      "title": "（四）孩子不会解题怎么办？",
+      "note_url": "https://www.xiaohongshu.com/explore/699536f20000000028022f7f",
+      "liked_count": 2,
+      "collected_count": 1,
+      "comment_count": 0,
+      "share_count": 1,
+      "publish_time": 1771386610000
+    },
+    {
+      "note_id": "69086ff0000000000301f30e",
+      "title": "年级第一直接拿下",
+      "note_url": "https://www.xiaohongshu.com/explore/69086ff0000000000301f30e",
+      "liked_count": 897,
+      "collected_count": 139,
+      "comment_count": 5,
+      "share_count": 22,
+      "publish_time": 1762160624000
+    },
+    {
+      "note_id": "6755b47d000000000603e796",
+      "title": "AI辅导作业：寻找作业解题的大模型",
+      "note_url": "https://www.xiaohongshu.com/explore/6755b47d000000000603e796",
+      "liked_count": 25,
+      "collected_count": 26,
+      "comment_count": 0,
+      "share_count": 11,
+      "publish_time": 1733670013000
+    },
+    {
+      "note_id": "69a962bf000000002203a5f0",
+      "title": "当你认为这是最好用的搜题工具时...#开学[话题]##作业[话题]##人工智能[话题]# #搞笑[话",
+      "note_url": "https://www.xiaohongshu.com/explore/69a962bf000000002203a5f0",
+      "liked_count": 1,
+      "collected_count": 1,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1772708543000
     },
     {
       "note_id": "67c9b41b000000002a00e30a",
@@ -134,64 +274,44 @@
       "publish_time": 1741272091000
     },
     {
-      "note_id": "67c32824000000000901447f",
-      "title": "遇到不会的就搜一下？",
-      "note_url": "https://www.xiaohongshu.com/explore/67c32824000000000901447f",
-      "liked_count": 2,
-      "collected_count": 3,
+      "note_id": "698bfb36000000001d025b87",
+      "title": "今日话题：写作业能用手机搜答案吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/698bfb36000000001d025b87",
+      "liked_count": 32,
+      "collected_count": 65,
       "comment_count": 0,
-      "share_count": 1,
-      "publish_time": 1740843044000
+      "share_count": 22,
+      "publish_time": 1771552836000
     },
     {
-      "note_id": "689068050000000003030a7b",
-      "title": "被狠狠拿捏！拍照搜题+AI解析，强得可怕",
-      "note_url": "https://www.xiaohongshu.com/explore/689068050000000003030a7b",
-      "liked_count": 273,
-      "collected_count": 54,
-      "comment_count": 80,
-      "share_count": 7,
-      "publish_time": 1754295019000
+      "note_id": "699f4522000000001a02ed33",
+      "title": "🦍小猿搜题( ̀⌄ ́)",
+      "note_url": "https://www.xiaohongshu.com/explore/699f4522000000001a02ed33",
+      "liked_count": 125,
+      "collected_count": 4,
+      "comment_count": 9,
+      "share_count": 10,
+      "publish_time": 1772045602000
     },
     {
-      "note_id": "683e6171000000000303c92c",
-      "title": "🤏法学生（搜题软件版）｜精神状态良好的五月",
-      "note_url": "https://www.xiaohongshu.com/explore/683e6171000000000303c92c",
-      "liked_count": 49,
-      "collected_count": 6,
-      "comment_count": 6,
-      "share_count": 1,
-      "publish_time": 1749121020000
+      "note_id": "67fb1ea8000000000d0175a9",
+      "title": "不会做的题，拍一拍就有答案！🔍📖",
+      "note_url": "https://www.xiaohongshu.com/explore/67fb1ea8000000000d0175a9",
+      "liked_count": 5,
+      "collected_count": 3,
+      "comment_count": 3,
+      "share_count": 0,
+      "publish_time": 1744510632000
     },
     {
-      "note_id": "694bbc42000000001e010ed5",
-      "title": "期末复习用夸克，这个搜题软件被夸爆了！",
-      "note_url": "https://www.xiaohongshu.com/explore/694bbc42000000001e010ed5",
-      "liked_count": 329,
-      "collected_count": 272,
-      "comment_count": 49,
-      "share_count": 9,
-      "publish_time": 1766573924000
-    },
-    {
-      "note_id": "68ef7744000000000700c9d4",
-      "title": "作业辅导省时不费妈｜这个搜题软件被夸爆了",
-      "note_url": "https://www.xiaohongshu.com/explore/68ef7744000000000700c9d4",
-      "liked_count": 3713,
-      "collected_count": 2606,
-      "comment_count": 367,
-      "share_count": 36,
-      "publish_time": 1760526606000
-    },
-    {
-      "note_id": "67fa6139000000001c0286ee",
-      "title": "当我用手机搜答案后",
-      "note_url": "https://www.xiaohongshu.com/explore/67fa6139000000001c0286ee",
-      "liked_count": 2851,
-      "collected_count": 397,
-      "comment_count": 81,
-      "share_count": 30,
-      "publish_time": 1744507817000
+      "note_id": "69a08121000000001a0311d1",
+      "title": "有没有能拍照搜题的手表有没有能拍照搜题的手表\n本人#理科生[话题]# #考试[话题]# 因为挂科 寒",
+      "note_url": "https://www.xiaohongshu.com/explore/69a08121000000001a0311d1",
+      "liked_count": 1,
+      "collected_count": 0,
+      "comment_count": 1,
+      "share_count": 0,
+      "publish_time": 1772126497000
     },
     {
       "note_id": "6831752e000000002100f109",
@@ -204,14 +324,44 @@
       "publish_time": 1748071726000
     },
     {
-      "note_id": "6921c312000000001e002f5c",
-      "title": "Alevel拍照搜题",
-      "note_url": "https://www.xiaohongshu.com/explore/6921c312000000001e002f5c",
-      "liked_count": 26,
-      "collected_count": 17,
-      "comment_count": 3,
-      "share_count": 6,
-      "publish_time": 1763820306000
+      "note_id": "67fce04a000000001c02aa77",
+      "title": "告别题海迷茫，拍照搜题做你的智能学伴。详细解析步步引导，挖掘知识盲点，学习蜕变就现在。##学习通考试",
+      "note_url": "https://www.xiaohongshu.com/explore/67fce04a000000001c02aa77",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1744625738000
+    },
+    {
+      "note_id": "69aecabe000000001d013522",
+      "title": "搜答案时的压迫感be like....",
+      "note_url": "https://www.xiaohongshu.com/explore/69aecabe000000001d013522",
+      "liked_count": 1064,
+      "collected_count": 101,
+      "comment_count": 137,
+      "share_count": 38,
+      "publish_time": 1773062846000
+    },
+    {
+      "note_id": "69afcb9a000000001d024586",
+      "title": "灯塔通答案 不完全统计",
+      "note_url": "https://www.xiaohongshu.com/explore/69afcb9a000000001d024586",
+      "liked_count": 320,
+      "collected_count": 300,
+      "comment_count": 32,
+      "share_count": 152,
+      "publish_time": 1773128602000
+    },
+    {
+      "note_id": "68e3c2890000000007017194",
+      "title": "快对 ai好用还是豆包或 DeepSeek好用",
+      "note_url": "https://www.xiaohongshu.com/explore/68e3c2890000000007017194",
+      "liked_count": 90,
+      "collected_count": 22,
+      "comment_count": 5,
+      "share_count": 3,
+      "publish_time": 1759756937000
     },
     {
       "note_id": "696d611b000000000a030edf",
@@ -224,34 +374,24 @@
       "publish_time": 1768775963000
     },
     {
-      "note_id": "67e298380000000007034713",
-      "title": "🌱AI陪娃写作业-数学作业检查🌱",
-      "note_url": "https://www.xiaohongshu.com/explore/67e298380000000007034713",
-      "liked_count": 54,
-      "collected_count": 36,
-      "comment_count": 1,
-      "share_count": 29,
-      "publish_time": 1742903352000
+      "note_id": "69b280c9000000001d011e75",
+      "title": "如何快速寻找同类型的题目？？？",
+      "note_url": "https://www.xiaohongshu.com/explore/69b280c9000000001d011e75",
+      "liked_count": 221,
+      "collected_count": 512,
+      "comment_count": 15,
+      "share_count": 31,
+      "publish_time": 1773306057000
     },
     {
-      "note_id": "67b4732b000000000302b835",
-      "title": "用AI搜题，妈妈再也不用担心我的学习啦",
-      "note_url": "https://www.xiaohongshu.com/explore/67b4732b000000000302b835",
-      "liked_count": 0,
-      "collected_count": 0,
+      "note_id": "69301245000000001b020311",
+      "title": "这个真的好好用！！！💯",
+      "note_url": "https://www.xiaohongshu.com/explore/69301245000000001b020311",
+      "liked_count": 5,
+      "collected_count": 2,
       "comment_count": 0,
-      "share_count": 0,
-      "publish_time": 1739879211000
-    },
-    {
-      "note_id": "67fce04a000000001c02aa77",
-      "title": "告别题海迷茫，拍照搜题做你的智能学伴。详细解析步步引导，挖掘知识盲点，学习蜕变就现在。##学习通考试",
-      "note_url": "https://www.xiaohongshu.com/explore/67fce04a000000001c02aa77",
-      "liked_count": 0,
-      "collected_count": 0,
-      "comment_count": 0,
-      "share_count": 0,
-      "publish_time": 1744625738000
+      "share_count": 3,
+      "publish_time": 1764758085000
     },
     {
       "note_id": "690b1669000000000301172a",
@@ -264,24 +404,174 @@
       "publish_time": 1762334313000
     },
     {
+      "note_id": "6999c7f9000000002802114a",
+      "title": "词典笔到底选哪个啊\n看了半天连豆包都问了[哭惹R][哭惹R][哭惹R]有可以拍照搜题和视频讲解吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/6999c7f9000000002802114a",
+      "liked_count": 2,
+      "collected_count": 0,
+      "comment_count": 7,
+      "share_count": 0,
+      "publish_time": 1771685881000
+    },
+    {
+      "note_id": "67d7d608000000000603c444",
+      "title": "录题技巧分享",
+      "note_url": "https://www.xiaohongshu.com/explore/67d7d608000000000603c444",
+      "liked_count": 4,
+      "collected_count": 0,
+      "comment_count": 4,
+      "share_count": 0,
+      "publish_time": 1742198280000
+    },
+    {
+      "note_id": "67b00af5000000002803d47d",
+      "title": "懒人省力学习📚学生党用AI搞学习5个思路🥰",
+      "note_url": "https://www.xiaohongshu.com/explore/67b00af5000000002803d47d",
+      "liked_count": 2453,
+      "collected_count": 1473,
+      "comment_count": 104,
+      "share_count": 203,
+      "publish_time": 1739615435000
+    },
+    {
+      "note_id": "67fa6139000000001c0286ee",
+      "title": "当我用手机搜答案后",
+      "note_url": "https://www.xiaohongshu.com/explore/67fa6139000000001c0286ee",
+      "liked_count": 2851,
+      "collected_count": 397,
+      "comment_count": 81,
+      "share_count": 30,
+      "publish_time": 1744507817000
+    },
+    {
+      "note_id": "69256339000000001d03c191",
+      "title": "原来用微信，还可以批改作业。你还不知道吧",
+      "note_url": "https://www.xiaohongshu.com/explore/69256339000000001d03c191",
+      "liked_count": 55,
+      "collected_count": 67,
+      "comment_count": 4,
+      "share_count": 46,
+      "publish_time": 1764057913000
+    },
+    {
+      "note_id": "698bfb36000000001d025b87",
+      "title": "今日话题：写作业能用手机搜答案吗？",
+      "note_url": "https://www.xiaohongshu.com/explore/698bfb36000000001d025b87",
+      "liked_count": 32,
+      "collected_count": 65,
+      "comment_count": 0,
+      "share_count": 22,
+      "publish_time": 1771552836000
+    },
+    {
+      "note_id": "69904375000000000e00cbb1",
+      "title": "自学数学，物理遇到不会的题，一招告诉你！",
+      "note_url": "https://www.xiaohongshu.com/explore/69904375000000000e00cbb1",
+      "liked_count": 227,
+      "collected_count": 260,
+      "comment_count": 12,
+      "share_count": 38,
+      "publish_time": 1771062133000
+    },
+    {
+      "note_id": "69b29eeb0000000022031fab",
+      "title": "我的妈啊，大学电路要把我折磨死了，求大佬教教[失望R][失望R][失望R]#电路[话题]# #拍照搜",
+      "note_url": "https://www.xiaohongshu.com/explore/69b29eeb0000000022031fab",
+      "liked_count": 1,
+      "collected_count": 1,
+      "comment_count": 19,
+      "share_count": 0,
+      "publish_time": 1773313771000
+    },
+    {
+      "note_id": "67a85f97000000002503e4c5",
+      "title": "拍照上传卷子，让DeepSeek帮我做卷子",
+      "note_url": "https://www.xiaohongshu.com/explore/67a85f97000000002503e4c5",
+      "liked_count": 6,
+      "collected_count": 3,
+      "comment_count": 4,
+      "share_count": 4,
+      "publish_time": 1739087767000
+    },
+    {
+      "note_id": "69b3fdbe00000000210387b9",
+      "title": "难题钉子户？📲拍搜直接拔钉！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b3fdbe00000000210387b9",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773403582000
+    },
+    {
+      "note_id": "69b2c2af0000000022020556",
+      "title": "难题钉子户？📲拍搜直接拔钉！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b2c2af0000000022020556",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773322927000
+    },
+    {
+      "note_id": "69b2c675000000000800d3ba",
+      "title": "数学拦路虎？拍题秒变纸老虎！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b2c675000000000800d3ba",
+      "liked_count": 1,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773323893000
+    },
+    {
+      "note_id": "69b009200000000022031306",
+      "title": "难题钉子户？📲拍搜直接拔钉！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b009200000000022031306",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773144352000
+    },
+    {
       "note_id": "694bbc42000000001e010ed5",
       "title": "期末复习用夸克，这个搜题软件被夸爆了！",
       "note_url": "https://www.xiaohongshu.com/explore/694bbc42000000001e010ed5",
-      "liked_count": 329,
+      "liked_count": 331,
       "collected_count": 272,
       "comment_count": 49,
       "share_count": 9,
       "publish_time": 1766573924000
     },
     {
-      "note_id": "689068050000000003030a7b",
-      "title": "被狠狠拿捏！拍照搜题+AI解析，强得可怕",
-      "note_url": "https://www.xiaohongshu.com/explore/689068050000000003030a7b",
-      "liked_count": 273,
-      "collected_count": 54,
-      "comment_count": 80,
-      "share_count": 7,
-      "publish_time": 1754295019000
+      "note_id": "69b40623000000001d01d1aa",
+      "title": "难题钉子户？📲拍搜直接拔钉！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b40623000000001d01d1aa",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773405731000
+    },
+    {
+      "note_id": "69b2b451000000000600dbb6",
+      "title": "🧱“这道题卡三天？”拍搜一秒拆墙！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b2b451000000000600dbb6",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773319249000
+    },
+    {
+      "note_id": "69b3fb27000000001f007cd9",
+      "title": "难题钉子户？📲拍搜直接拔钉！",
+      "note_url": "https://www.xiaohongshu.com/explore/69b3fb27000000001f007cd9",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773402919000
     },
     {
       "note_id": "693687f9000000001b030264",
@@ -304,6 +594,16 @@
       "publish_time": 1770194447000
     },
     {
+      "note_id": "68a47d9d000000001d0021e5",
+      "title": "vivo实用功能之即圈即搜",
+      "note_url": "https://www.xiaohongshu.com/explore/68a47d9d000000001d0021e5",
+      "liked_count": 5,
+      "collected_count": 1,
+      "comment_count": 0,
+      "share_count": 1,
+      "publish_time": 1755655286000
+    },
+    {
       "note_id": "68d10bf9000000000e02258b",
       "title": "医学生必备5款神仙软件｜从搜题到科研",
       "note_url": "https://www.xiaohongshu.com/explore/68d10bf9000000000e02258b",
@@ -324,24 +624,54 @@
       "publish_time": 1767501039000
     },
     {
-      "note_id": "689c57b9000000001d017456",
-      "title": "打破信息差",
-      "note_url": "https://www.xiaohongshu.com/explore/689c57b9000000001d017456",
-      "liked_count": 19000,
-      "collected_count": 371,
-      "comment_count": 1143,
-      "share_count": 399,
-      "publish_time": 1755076537000
-    },
-    {
       "note_id": "6975ce92000000000b012bbc",
       "title": "微信长按2秒钟，隐藏了9大实用功能",
       "note_url": "https://www.xiaohongshu.com/explore/6975ce92000000000b012bbc",
       "liked_count": 1655,
       "collected_count": 2809,
       "comment_count": 54,
-      "share_count": 2249,
+      "share_count": 2250,
       "publish_time": 1769328274000
+    },
+    {
+      "note_id": "689c57b9000000001d017456",
+      "title": "打破信息差",
+      "note_url": "https://www.xiaohongshu.com/explore/689c57b9000000001d017456",
+      "liked_count": 19000,
+      "collected_count": 372,
+      "comment_count": 1143,
+      "share_count": 399,
+      "publish_time": 1755076537000
+    },
+    {
+      "note_id": "696a2929000000002202e047",
+      "title": "希望各位活爹，好好看好好学，出去拍照尽量别败坏我的名声#跟着小李学摄影[话题]# #摄影教程[话题]",
+      "note_url": "https://www.xiaohongshu.com/explore/696a2929000000002202e047",
+      "liked_count": 1604,
+      "collected_count": 931,
+      "comment_count": 57,
+      "share_count": 251,
+      "publish_time": 1769072428000
+    },
+    {
+      "note_id": "66bc826e0000000005023ec0",
+      "title": "方圆脸他拍上镜技巧！后置拍照出片速成秘诀",
+      "note_url": "https://www.xiaohongshu.com/explore/66bc826e0000000005023ec0",
+      "liked_count": 5527,
+      "collected_count": 3317,
+      "comment_count": 36,
+      "share_count": 1005,
+      "publish_time": 1723630190000
+    },
+    {
+      "note_id": "67ede077000000000f032c93",
+      "title": "自媒体人必存!5个超清无版权素材网站合集",
+      "note_url": "https://www.xiaohongshu.com/explore/67ede077000000000f032c93",
+      "liked_count": 720,
+      "collected_count": 1065,
+      "comment_count": 2,
+      "share_count": 107,
+      "publish_time": 1743642743000
     },
     {
       "note_id": "694fb8de000000001e00bf34",
@@ -349,29 +679,9 @@
       "note_url": "https://www.xiaohongshu.com/explore/694fb8de000000001e00bf34",
       "liked_count": 6,
       "collected_count": 1,
-      "comment_count": 26,
+      "comment_count": 25,
       "share_count": 0,
       "publish_time": 1766832350000
-    },
-    {
-      "note_id": "68fc6a0b000000000301adbd",
-      "title": "啊哈哈哈哈，上面还有漏掉的吗？",
-      "note_url": "https://www.xiaohongshu.com/explore/68fc6a0b000000000301adbd",
-      "liked_count": 24,
-      "collected_count": 12,
-      "comment_count": 9,
-      "share_count": 2,
-      "publish_time": 1761372683000
-    },
-    {
-      "note_id": "696a2929000000002202e047",
-      "title": "希望各位活爹，好好看好好学，出去拍照尽量别败坏我的名声#跟着小李学摄影[话题]# #摄影教程[话题]",
-      "note_url": "https://www.xiaohongshu.com/explore/696a2929000000002202e047",
-      "liked_count": 1603,
-      "collected_count": 931,
-      "comment_count": 57,
-      "share_count": 251,
-      "publish_time": 1769072428000
     },
     {
       "note_id": "68de2e620000000005000783",
@@ -382,6 +692,16 @@
       "comment_count": 89,
       "share_count": 4,
       "publish_time": 1759391330000
+    },
+    {
+      "note_id": "6901c7fc0000000004010de9",
+      "title": "一次说清：洋葱的AI拍题精学板块",
+      "note_url": "https://www.xiaohongshu.com/explore/6901c7fc0000000004010de9",
+      "liked_count": 12,
+      "collected_count": 9,
+      "comment_count": 4,
+      "share_count": 2,
+      "publish_time": 1761724412000
     },
     {
       "note_id": "68cea531000000001400a877",
@@ -404,24 +724,44 @@
       "publish_time": 1756006185000
     },
     {
-      "note_id": "69842d4e000000002202d2b3",
-      "title": "数学拦路虎？拍题秒变纸老虎！",
-      "note_url": "https://www.xiaohongshu.com/explore/69842d4e000000002202d2b3",
-      "liked_count": 0,
+      "note_id": "6738667a000000001b02b9fb",
+      "title": "如何引导模特摆姿？一个视频教会你！",
+      "note_url": "https://www.xiaohongshu.com/explore/6738667a000000001b02b9fb",
+      "liked_count": 679,
+      "collected_count": 601,
+      "comment_count": 17,
+      "share_count": 101,
+      "publish_time": 1731755282000
+    },
+    {
+      "note_id": "69b0110f00000000220214da",
+      "title": "每天拍10题，把提分宝典装进手机",
+      "note_url": "https://www.xiaohongshu.com/explore/69b0110f00000000220214da",
+      "liked_count": 1,
       "collected_count": 0,
       "comment_count": 0,
       "share_count": 0,
-      "publish_time": 1770270030000
+      "publish_time": 1773146383000
     },
     {
-      "note_id": "68da8997000000001300b903",
-      "title": "接上一个视频接着讲， 类似的题多次出现在习题里。#知识分享[话题]# #每天进步一点[话题]#",
-      "note_url": "https://www.xiaohongshu.com/explore/68da8997000000001300b903",
-      "liked_count": 3945,
-      "collected_count": 977,
-      "comment_count": 355,
-      "share_count": 438,
-      "publish_time": 1759152535000
+      "note_id": "68b076d1000000001d01c9e1",
+      "title": "哪题不会拍哪题 会拍照就能自学",
+      "note_url": "https://www.xiaohongshu.com/explore/68b076d1000000001d01c9e1",
+      "liked_count": 1,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1756427581000
+    },
+    {
+      "note_id": "69a93cb5000000001d01304d",
+      "title": "苏教版数学四下五星学霸勾题精练（p1-p8）",
+      "note_url": "https://www.xiaohongshu.com/explore/69a93cb5000000001d01304d",
+      "liked_count": 235,
+      "collected_count": 315,
+      "comment_count": 25,
+      "share_count": 43,
+      "publish_time": 1772698805000
     },
     {
       "note_id": "695e5c0d0000000022032fde",
@@ -444,6 +784,36 @@
       "publish_time": 1762165860000
     },
     {
+      "note_id": "68da8997000000001300b903",
+      "title": "接上一个视频接着讲， 类似的题多次出现在习题里。#知识分享[话题]# #每天进步一点[话题]#",
+      "note_url": "https://www.xiaohongshu.com/explore/68da8997000000001300b903",
+      "liked_count": 3945,
+      "collected_count": 977,
+      "comment_count": 355,
+      "share_count": 438,
+      "publish_time": 1759152535000
+    },
+    {
+      "note_id": "69b3a037000000001a02ac76",
+      "title": "📚 教育学毕业论文｜从选题到定稿",
+      "note_url": "https://www.xiaohongshu.com/explore/69b3a037000000001a02ac76",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773379639000
+    },
+    {
+      "note_id": "69a6b2c3000000001a01f900",
+      "title": "领导阶层的意义，什么才是中国人的民族性",
+      "note_url": "https://www.xiaohongshu.com/explore/69a6b2c3000000001a01f900",
+      "liked_count": 22,
+      "collected_count": 17,
+      "comment_count": 1,
+      "share_count": 0,
+      "publish_time": 1773140821000
+    },
+    {
       "note_id": "68bb9fe6000000001c006385",
       "title": "小对，帮我讲解这道题",
       "note_url": "https://www.xiaohongshu.com/explore/68bb9fe6000000001c006385",
@@ -454,34 +824,44 @@
       "publish_time": 1757126630000
     },
     {
-      "note_id": "696b4c4000000000220085b9",
-      "title": "一天学会一个高考物理题型之《电磁感应》",
-      "note_url": "https://www.xiaohongshu.com/explore/696b4c4000000000220085b9",
-      "liked_count": 1428,
-      "collected_count": 550,
-      "comment_count": 20,
-      "share_count": 32,
-      "publish_time": 1768657501000
-    },
-    {
-      "note_id": "67e10b32000000001c00461c",
-      "title": "25 届好题精析（二十一）",
-      "note_url": "https://www.xiaohongshu.com/explore/67e10b32000000001c00461c",
-      "liked_count": 22,
-      "collected_count": 16,
-      "comment_count": 0,
-      "share_count": 0,
-      "publish_time": 1742801714000
-    },
-    {
-      "note_id": "688c8e510000000025028a95",
-      "title": "今天算下来一共录了50 道题，",
-      "note_url": "https://www.xiaohongshu.com/explore/688c8e510000000025028a95",
+      "note_id": "69b1c0780000000022022d9c",
+      "title": "六年级数学下册，成数专项训练题",
+      "note_url": "https://www.xiaohongshu.com/explore/69b1c0780000000022022d9c",
       "liked_count": 0,
       "collected_count": 0,
-      "comment_count": 10,
+      "comment_count": 0,
       "share_count": 0,
-      "publish_time": 1754100143000
+      "publish_time": 1773256824000
+    },
+    {
+      "note_id": "69af91100000000008033877",
+      "title": "苏教版数学五下五星学霸勾题p11-p17",
+      "note_url": "https://www.xiaohongshu.com/explore/69af91100000000008033877",
+      "liked_count": 31,
+      "collected_count": 46,
+      "comment_count": 7,
+      "share_count": 14,
+      "publish_time": 1773113616000
+    },
+    {
+      "note_id": "699ef5b2000000001600a297",
+      "title": "写完拍，得分秒知道！",
+      "note_url": "https://www.xiaohongshu.com/explore/699ef5b2000000001600a297",
+      "liked_count": 0,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1772025266000
+    },
+    {
+      "note_id": "699e4f71000000001b01ec8e",
+      "title": "闲下来，评论区讲题",
+      "note_url": "https://www.xiaohongshu.com/explore/699e4f71000000001b01ec8e",
+      "liked_count": 4,
+      "collected_count": 0,
+      "comment_count": 2,
+      "share_count": 0,
+      "publish_time": 1771982705000
     },
     {
       "note_id": "690b1669000000000301172a",
@@ -492,6 +872,26 @@
       "comment_count": 1,
       "share_count": 0,
       "publish_time": 1762334313000
+    },
+    {
+      "note_id": "68384a59000000002100e4aa",
+      "title": "有谁，凭着智商，不靠狂刷题，轻轻松松地，当年高考数学考了130分以上啊？",
+      "note_url": "https://www.xiaohongshu.com/explore/68384a59000000002100e4aa",
+      "liked_count": 3,
+      "collected_count": 2,
+      "comment_count": 3,
+      "share_count": 0,
+      "publish_time": 1748519513000
+    },
+    {
+      "note_id": "69b025ed000000002603dca1",
+      "title": "告别题海，总结规律",
+      "note_url": "https://www.xiaohongshu.com/explore/69b025ed000000002603dca1",
+      "liked_count": 1,
+      "collected_count": 0,
+      "comment_count": 0,
+      "share_count": 0,
+      "publish_time": 1773151725000
     }
   ]
 }

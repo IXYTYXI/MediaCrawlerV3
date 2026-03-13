@@ -641,6 +641,33 @@ window.onerror = function(msg, url, line, col, err) {
           </template>
         </div>
 
+        <!-- 批量爬取 - 飞书 & 通知覆盖 -->
+        <div class="card rounded-xl p-5 space-y-3">
+          <div class="flex items-center gap-2"><span class="text-sm">📊</span><h4 class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">飞书 & 通知（留空用全局配置）</h4></div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知群聊 ID</label>
+              <input v-model="config.batch_crawl.notification_chat_id" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空用全局配置">
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知 Webhook URL</label>
+              <input v-model="config.batch_crawl.notification_webhook_url" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空用全局配置">
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-gray-700/50">
+            <div><label class="text-[11px] text-gray-400">转移所有者</label><p class="text-[10px] text-gray-600">留空=跟随全局</p></div>
+            <select v-model="config.batch_crawl.transfer_owner" class="input-field rounded-lg px-2 py-1.5 text-xs text-white w-24">
+              <option value="">跟随全局</option>
+              <option value="true">转移</option>
+              <option value="false">不转移</option>
+            </select>
+          </div>
+          <div v-if="config.batch_crawl.transfer_owner === 'true'">
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">所有者 Open ID</label>
+            <input v-model="config.batch_crawl.owner_open_id" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空用全局">
+          </div>
+        </div>
+
         <!-- 作者列表 -->
         <div class="card rounded-xl p-5">
           <div class="flex items-center justify-between mb-4">
@@ -921,6 +948,8 @@ window.onerror = function(msg, url, line, col, err) {
               </div>
             </div>
             <p v-if="taskForm.date_start || taskForm.date_end" class="text-[10px] text-amber-400/80 mt-1">⚠ 小红书搜索 API 不支持按日期筛选，实际会先爬取再按发布时间过滤，建议适当增大爬取数量以获得足够的有效数据</p>
+            <p v-if="taskForm.date_start && taskForm.date_end && taskForm.date_start > taskForm.date_end" class="text-[10px] text-red-400 mt-1">⚠ 开始日期晚于结束日期，范围内无有效日期，可能一条都留不下，请修改</p>
+            <p v-if="taskForm.date_end && taskForm.date_end > todayYMD" class="text-[10px] text-amber-400/80 mt-1">⚠ 结束日期晚于今天，实际只保留到今天为止的笔记</p>
           </div>
 
           <!-- 关键词高赞搜索模式 -->
@@ -1002,25 +1031,46 @@ window.onerror = function(msg, url, line, col, err) {
             </div>
           </div>
 
-          <!-- 飞书配置 -->
+          <!-- 飞书 & 通知配置（每任务独立） -->
           <div class="card rounded-lg p-4 space-y-3">
-            <div class="flex items-center gap-2"><span class="text-sm">📊</span><h4 class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">飞书多维表格（可选）</h4></div>
+            <div class="flex items-center gap-2"><span class="text-sm">📊</span><h4 class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">飞书 & 通知（留空用全局配置）</h4></div>
             <div>
               <label class="text-[11px] text-gray-500 uppercase tracking-wider">目标文件夹 Token</label>
-              <input v-model="taskForm.feishu_folder_token" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="留空则使用全局配置的文件夹">
-              <p class="text-[10px] text-gray-600 mt-0.5">从飞书文件夹 URL 获取，如 https://xxx.feishu.cn/drive/folder/<b>XxxFolderToken</b>，不同任务可指定不同文件夹</p>
+              <input v-model="taskForm.feishu_folder_token" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空则使用全局配置的文件夹">
+              <p class="text-[10px] text-gray-600 mt-0.5">从飞书文件夹 URL 获取，如 https://xxx.feishu.cn/drive/folder/<b>XxxFolderToken</b></p>
             </div>
-            <div class="grid grid-cols-1 gap-3 pt-2 border-t border-gray-700/50">
+            <div class="flex items-center justify-between pt-2 border-t border-gray-700/50">
               <div>
-                <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知群聊 ID（可选）</label>
-                <input v-model="taskForm.notification_chat_id" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="如 oc_xxx，留空用全局配置">
-                <p class="text-[10px] text-gray-600 mt-0.5">任务完成后飞书消息发到此群，分任务可指定不同群，实现分任务管理</p>
+                <label class="text-[11px] text-gray-400">写入后转移所有者</label>
+                <p class="text-[10px] text-gray-600">留空=跟随全局；开启=转移给下方 Open ID；关闭=不转移</p>
               </div>
-              <div>
-                <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知 Webhook URL（可选）</label>
-                <input v-model="taskForm.notification_webhook_url" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空则用全局或群聊 ID">
-                <p class="text-[10px] text-gray-600 mt-0.5">自定义机器人 Webhook，填后优先用此 URL 发完成通知</p>
-              </div>
+              <select v-model="taskForm.transfer_owner" class="input-field rounded-lg px-2 py-1.5 text-xs text-white w-24">
+                <option value="">跟随全局</option>
+                <option value="true">转移</option>
+                <option value="false">不转移</option>
+              </select>
+            </div>
+            <div v-if="taskForm.transfer_owner === 'true'">
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">所有者 Open ID</label>
+              <input v-model="taskForm.owner_open_id" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空则用全局 owner_open_id">
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">协作者 Open ID（每行一个）</label>
+              <textarea v-model="taskForm.collaborator_open_ids" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono resize-y" placeholder="留空用全局，每行一个 ou_xxx"></textarea>
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">协作者 User ID（每行一个）</label>
+              <textarea v-model="taskForm.collaborator_user_ids" rows="2" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono resize-y" placeholder="留空用全局，每行一个如 ac9fe8ag"></textarea>
+            </div>
+            <div class="pt-2 border-t border-gray-700/50">
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知群聊 ID</label>
+              <input v-model="taskForm.notification_chat_id" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="如 oc_xxx，留空用全局配置">
+              <p class="text-[10px] text-gray-600 mt-0.5">任务完成后飞书消息发到此群，分任务可指定不同群</p>
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">通知 Webhook URL</label>
+              <input v-model="taskForm.notification_webhook_url" type="text" class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono" placeholder="留空则用全局或群聊 ID">
+              <p class="text-[10px] text-gray-600 mt-0.5">自定义机器人 Webhook，填后优先用此 URL 发完成通知</p>
             </div>
           </div>
 
@@ -1127,8 +1177,8 @@ window.onerror = function(msg, url, line, col, err) {
         </div>
       </section>
 
-      <!-- ========== 飞书配置 ========== -->
-      <section v-show="activeTab === 'feishu'" class="space-y-5 animate-in">
+      <!-- ========== 飞书配置（依赖 config.feishu 已由 loadConfig 规范为完整对象） ========== -->
+      <section v-show="activeTab === 'feishu'" class="space-y-5 animate-in" v-if="config.feishu">
         <div class="flex items-center gap-3 mb-6">
           <span class="text-2xl">📊</span>
           <div><h2 class="text-lg font-semibold text-white">飞书多维表格</h2><p class="text-xs text-gray-500">爬取完成后自动写入飞书 Bitable</p></div>
@@ -1151,6 +1201,15 @@ window.onerror = function(msg, url, line, col, err) {
             <p class="text-[10px] text-gray-600 mt-1.5">从飞书多维表格 URL 中获取，如 https://xxx.feishu.cn/base/<b>HZebb1btnaiCHqs01F4cw3XXnAc</b>，粗体部分即 App Token。留空则使用上次自动记录的表格。</p>
           </div>
         </div>
+        <!-- 上次创建的多维表格链接（写入完成后由后端回写 last_bitable） -->
+        <div class="card rounded-xl p-5 space-y-2" v-if="config.feishu.last_bitable && (config.feishu.last_bitable.url || config.feishu.last_bitable.app_token)">
+          <div class="flex items-center gap-2"><span class="text-base">🔗</span><label class="text-sm text-gray-300 font-medium">上次创建的多维表格</label></div>
+          <p class="text-[11px] text-gray-600">爬取写入完成后会自动更新此处；可直接打开链接查看或复制 App Token 用于复用。</p>
+          <a v-if="config.feishu.last_bitable.url" :href="config.feishu.last_bitable.url" target="_blank" rel="noopener"
+            class="inline-block text-sm text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all">{{ config.feishu.last_bitable.url }}</a>
+          <p v-if="config.feishu.last_bitable.app_token" class="text-[11px] text-gray-500 font-mono mt-1">App Token: {{ config.feishu.last_bitable.app_token }}</p>
+          <p v-if="config.feishu.last_bitable.updated_at" class="text-[10px] text-gray-600 mt-1">更新时间: {{ config.feishu.last_bitable.updated_at }}</p>
+        </div>
         <div class="card rounded-xl p-5 flex items-center justify-between">
           <div><label class="text-sm text-gray-300 font-medium">仅写入汇总表</label><p class="text-[11px] text-gray-600 mt-0.5">增量数据只追加到视频汇总和图文汇总，不创建或更新各作者的独立分表</p></div>
           <div class="toggle" :class="{ active: config.feishu.summary_only }" @click="config.feishu.summary_only = !config.feishu.summary_only"></div>
@@ -1163,9 +1222,27 @@ window.onerror = function(msg, url, line, col, err) {
           <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">文件夹 Token <span class="text-gray-600">(可选，表格创建位置)</span></label>
             <input type="text" v-model="config.feishu.folder_token" placeholder="留空则创建在根目录" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
           <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">协作者 Open ID <span class="text-gray-600">(每行一个，创建表格后自动加为可编辑)</span></label>
-            <textarea v-model="config.feishu.collaborator_open_ids_text" placeholder="如冯杨的 open_id：ou_xxxxxxxx&#10;每行一个，新建多维表格后会自动添加为协作者"
-              rows="3" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-y"></textarea>
-            <p class="text-[10px] text-gray-600 mt-1.5">在飞书管理后台「成员与部门」可查看 open_id；建议把冯杨等同事加在此处</p>
+            <textarea v-model="config.feishu.collaborator_open_ids_text" placeholder="如 ou_d5970a646b75ae420236190ad498b4db&#10;每行一个 open_id"
+              rows="2" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-y"></textarea>
+            <p class="text-[10px] text-gray-600 mt-1.5">在飞书管理后台「成员与部门」可查看 open_id（ou_ 开头）</p>
+          </div>
+          <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">协作者 User ID <span class="text-gray-600">(每行一个，与 Open ID 二选一或同时填)</span></label>
+            <textarea v-model="config.feishu.collaborator_user_ids_text" placeholder="如 ac9fe8ag&#10;每行一个 user_id"
+              rows="2" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-y"></textarea>
+            <p class="text-[10px] text-gray-600 mt-1.5">User ID 示例：ac9fe8ag（成员与部门中可查）</p>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-gray-700/50">
+            <div>
+              <label class="text-sm text-gray-300 font-medium">写入后转移所有者</label>
+              <p class="text-[11px] text-gray-600 mt-0.5">默认将应用创建的多维表格所有者转给下方 open_id；关闭则明确不转移</p>
+            </div>
+            <div class="toggle" :class="{ active: config.feishu.transfer_owner !== false }" @click="config.feishu.transfer_owner = config.feishu.transfer_owner === false"></div>
+          </div>
+          <div v-if="config.feishu.transfer_owner !== false">
+            <label class="text-[11px] text-gray-500 uppercase tracking-wider">所有者 Open ID</label>
+            <input type="text" v-model="config.feishu.owner_open_id" placeholder="ou_d5970a646b75ae420236190ad498b4db"
+              class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white font-mono placeholder-gray-600">
+            <p class="text-[10px] text-gray-600 mt-1">转移后你可在「云文档」中看到该表格；同一账号的 User ID 可填在协作者中（如 ac9fe8ag）</p>
           </div>
         </div>
 
@@ -1180,6 +1257,42 @@ window.onerror = function(msg, url, line, col, err) {
             <input type="text" v-model="config.notification.chat_id" placeholder="oc_xxxx（应用发群消息时用）" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
           <div><label class="text-[11px] text-gray-500 uppercase tracking-wider">Webhook URL</label>
             <input type="text" v-model="config.notification.webhook_url" placeholder="自定义机器人 Webhook（可选）" class="input-field w-full mt-2 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600"></div>
+        </div>
+
+        <!-- 关键词爬取 - 参考多维表格字段 -->
+        <div class="card rounded-xl p-5 space-y-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-base">📋</span>
+            <div>
+              <label class="text-sm text-gray-300 font-medium">关键词爬取字段参考</label>
+              <p class="text-[11px] text-gray-600 mt-0.5">粘贴参考多维表格 URL，拉取字段列表与当前配置对照，确保写入列名一致</p>
+            </div>
+          </div>
+          <div class="flex gap-2 items-end">
+            <div class="flex-1">
+              <label class="text-[11px] text-gray-500 uppercase tracking-wider">参考多维表格 URL</label>
+              <input type="text" v-model="feishuRefFields.url" placeholder="https://guanghe.feishu.cn/base/CcGGb8ejdacDXIsrrDGc5YNen7b"
+                class="input-field w-full mt-1 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600">
+            </div>
+            <button @click="fetchFeishuRefFields()" :disabled="feishuRefFields.loading || !feishuRefFields.url.trim()"
+              class="px-4 py-2.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition">
+              {{ feishuRefFields.loading ? '拉取中...' : '拉取字段' }}
+            </button>
+          </div>
+          <p v-if="feishuRefFields.error" class="text-xs text-red-400">{{ feishuRefFields.error }}</p>
+          <div v-if="feishuRefFields.data && feishuRefFields.data.tables && feishuRefFields.data.tables.length" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+            <div>
+              <p class="text-[11px] text-gray-400 font-medium mb-2">参考表格中的字段</p>
+              <div v-for="tb in feishuRefFields.data.tables" :key="tb.table_id" class="mb-3">
+                <p class="text-[10px] text-cyan-400 font-mono mb-1">{{ tb.name }}</p>
+                <p class="text-xs text-gray-500 break-all">{{ (tb.fields || []).map(f => f.field_name).join('、') || '（无）' }}</p>
+              </div>
+            </div>
+            <div>
+              <p class="text-[11px] text-gray-400 font-medium mb-2">当前配置（关键词笔记表 search_note）</p>
+              <p class="text-xs text-gray-500 break-all">{{ currentSearchNoteFieldNames }}</p>
+            </div>
+          </div>
         </div>
 
         <!-- 视频链接管理 -->
@@ -1467,8 +1580,8 @@ window._mcApp = createApp({
       '并发控制': { max_concurrency: 3 },
       '浏览器控制': { auto_close_browser: false, remove_webdriver_flag: true, spoof_canvas_fingerprint: true, spoof_webgl_fingerprint: true },
       '断点续爬': { enabled: true, auto_save_interval: 10, retry_failed: true, use_sqlite: false },
-      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', incremental_start_override: '', refresh_existing_stats: false, max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '', task_id: 'task_20260210' },
-      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '', collaborator_open_ids: [], collaborator_open_ids_text: '', video_script_enabled: false, reuse_bitable: false, reuse_app_token: '', summary_only: false },
+      batch_crawl: { enabled: false, excel_path: '', crawl_mode: 'full', date_start: '', date_end: '', incremental_start_override: '', refresh_existing_stats: false, max_notes_per_creator: 3000, enable_comments: false, wait_between_creators_sec: 10, resume: true, min_interaction: 50, export_format: 'excel', export_dir: '', task_id: 'task_20260210', notification_chat_id: '', notification_webhook_url: '', transfer_owner: '', owner_open_id: '' },
+      feishu: { enabled: false, app_id: '', app_secret: '', folder_token: '', collaborator_open_ids: [], collaborator_open_ids_text: '', collaborator_user_ids: [], collaborator_user_ids_text: '', video_script_enabled: false, reuse_bitable: false, reuse_app_token: '', summary_only: false, transfer_owner: true, owner_open_id: '' },
       notification: { enabled: false, webhook_url: '', chat_id: '', app_id: '', app_secret: '', at_user_ids: ['all'] },
     }
 
@@ -1566,6 +1679,42 @@ window._mcApp = createApp({
 
     // 飞书视频链接刷新
     const feishuRefresh = reactive({ appToken: '', loading: false, result: null })
+    // 关键词爬取 - 参考多维表格字段
+    const feishuRefFields = reactive({
+      url: 'https://guanghe.feishu.cn/base/CcGGb8ejdacDXIsrrDGc5YNen7b',
+      loading: false,
+      error: '',
+      data: null,
+    })
+    const currentSearchNoteFieldNames = computed(() => {
+      const fn = config.feishu && config.feishu.field_names && config.feishu.field_names.search_note
+      if (!fn || typeof fn !== 'object') return '（未配置）'
+      return Object.values(fn).filter(v => typeof v === 'string' && !v.startsWith('_')).join('、')
+    })
+    async function fetchFeishuRefFields() {
+      const url = (feishuRefFields.url || '').trim()
+      if (!url) return
+      feishuRefFields.loading = true
+      feishuRefFields.error = ''
+      feishuRefFields.data = null
+      try {
+        const r = await fetch(basePath + '/api/dashboard/feishu-bitable-fields?url=' + encodeURIComponent(url), { headers: getAuthHeaders() })
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok) {
+          feishuRefFields.error = data.detail || data.message || '拉取失败'
+          return
+        }
+        if (data.success && data.tables) {
+          feishuRefFields.data = data
+        } else {
+          feishuRefFields.error = data.detail || '未返回表格数据'
+        }
+      } catch (e) {
+        feishuRefFields.error = e.message || '请求异常'
+      } finally {
+        feishuRefFields.loading = false
+      }
+    }
 
     // AI 视频脚本提取
     const scriptExtract = reactive({
@@ -1625,6 +1774,8 @@ window._mcApp = createApp({
       cookies: '', headless: true, notes: '',
       top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
       feishu_folder_token: '',
+      transfer_owner: '', owner_open_id: '',
+      collaborator_open_ids: '', collaborator_user_ids: '',
       notification_chat_id: '', notification_webhook_url: '',
       filter_keywords: '', filter_scope: 'title,desc,tags',
     })
@@ -1639,6 +1790,7 @@ window._mcApp = createApp({
       set: (val) => { taskForm.creator_urls = val.split('\n').map(s => s.trim()).filter(Boolean) }
     })
     const _BASE_SCOPE = ['title', 'desc', 'tags']
+    const todayYMD = computed(() => new Date().toISOString().slice(0, 10))
     const taskFilterScopeArr = computed({
       get: () => {
         const all = (taskForm.filter_scope || '').split(',').map(s => s.trim()).filter(Boolean)
@@ -1656,6 +1808,8 @@ window._mcApp = createApp({
         cookies: '', headless: true, notes: '',
         top_notes_count: 100, top_comment_notes_count: 20, comment_page_count: 2,
         feishu_folder_token: '',
+        transfer_owner: '', owner_open_id: '',
+        collaborator_open_ids: '', collaborator_user_ids: '',
         notification_chat_id: '', notification_webhook_url: '',
         filter_keywords: '', filter_scope: 'title,desc,tags',
       })
@@ -1673,8 +1827,14 @@ window._mcApp = createApp({
     async function saveTask() {
       const url = taskEditId.value ? `${TASK_API}/${taskEditId.value}` : TASK_API
       const method = taskEditId.value ? 'PUT' : 'POST'
+      const payload = JSON.parse(JSON.stringify(taskForm))
+      if (typeof payload.collaborator_open_ids === 'string') payload.collaborator_open_ids = payload.collaborator_open_ids.split(/\n/).map(s => s.trim()).filter(Boolean)
+      if (typeof payload.collaborator_user_ids === 'string') payload.collaborator_user_ids = payload.collaborator_user_ids.split(/\n/).map(s => s.trim()).filter(Boolean)
+      if (payload.transfer_owner === 'true') payload.transfer_owner = true
+      else if (payload.transfer_owner === 'false') payload.transfer_owner = false
+      else delete payload.transfer_owner
       try {
-        const r = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(taskForm) })
+        const r = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(payload) })
         const data = await r.json()
         if (data?.success) {
           showToast(data.message || '操作成功', 'success')
@@ -1704,6 +1864,10 @@ window._mcApp = createApp({
         top_comment_notes_count: t.top_comment_notes_count || 20,
         comment_page_count: t.comment_page_count || 2,
         feishu_folder_token: t.feishu_folder_token || '',
+        transfer_owner: t.transfer_owner != null ? String(t.transfer_owner) : '',
+        owner_open_id: t.owner_open_id || '',
+        collaborator_open_ids: Array.isArray(t.collaborator_open_ids) ? t.collaborator_open_ids.join('\n') : (t.collaborator_open_ids || ''),
+        collaborator_user_ids: Array.isArray(t.collaborator_user_ids) ? t.collaborator_user_ids.join('\n') : (t.collaborator_user_ids || ''),
         notification_chat_id: t.notification_chat_id || '',
         notification_webhook_url: t.notification_webhook_url || '',
       })
@@ -1960,10 +2124,32 @@ window._mcApp = createApp({
       if (res?.success) {
         function merge(t, s) { for (const k in s) { if (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k]) && k in t) merge(t[k], s[k]); else t[k] = s[k] } }
         merge(config, res.data);
+        // 保证 feishu/notification 一定是对象且含所有前端用到的键，避免模板访问 undefined 导致白屏
+        const feishuDef = defaultConfig.feishu;
+        if (!config.feishu || typeof config.feishu !== 'object') {
+          config.feishu = JSON.parse(JSON.stringify(feishuDef));
+        } else {
+          for (const k of Object.keys(feishuDef)) {
+            if (config.feishu[k] === undefined) config.feishu[k] = feishuDef[k] !== undefined ? (Array.isArray(feishuDef[k]) ? [...feishuDef[k]] : feishuDef[k]) : '';
+          }
+        }
+        const notifDef = defaultConfig.notification;
+        if (!config.notification || typeof config.notification !== 'object') {
+          config.notification = JSON.parse(JSON.stringify(notifDef));
+        } else {
+          for (const k of Object.keys(notifDef)) {
+            if (config.notification[k] === undefined) config.notification[k] = notifDef[k] !== undefined ? (Array.isArray(notifDef[k]) ? [...notifDef[k]] : notifDef[k]) : '';
+          }
+        }
         if (config.feishu && Array.isArray(config.feishu.collaborator_open_ids)) {
-          config.feishu.collaborator_open_ids_text = config.feishu.collaborator_open_ids.join('\n')
-        } else if (config.feishu) {
-          config.feishu.collaborator_open_ids_text = ''
+          config.feishu.collaborator_open_ids_text = config.feishu.collaborator_open_ids.join('\n');
+        } else {
+          if (config.feishu.collaborator_open_ids_text === undefined) config.feishu.collaborator_open_ids_text = '';
+        }
+        if (config.feishu && Array.isArray(config.feishu.collaborator_user_ids)) {
+          config.feishu.collaborator_user_ids_text = config.feishu.collaborator_user_ids.join('\n');
+        } else {
+          if (config.feishu.collaborator_user_ids_text === undefined) config.feishu.collaborator_user_ids_text = '';
         }
         configOriginal.value = JSON.stringify(config);
       }
@@ -1975,6 +2161,10 @@ window._mcApp = createApp({
       if (toSave.feishu && typeof toSave.feishu.collaborator_open_ids_text === 'string') {
         toSave.feishu.collaborator_open_ids = toSave.feishu.collaborator_open_ids_text.split(/\n/).map(s => s.trim()).filter(Boolean)
         delete toSave.feishu.collaborator_open_ids_text
+      }
+      if (toSave.feishu && typeof toSave.feishu.collaborator_user_ids_text === 'string') {
+        toSave.feishu.collaborator_user_ids = toSave.feishu.collaborator_user_ids_text.split(/\n/).map(s => s.trim()).filter(Boolean)
+        delete toSave.feishu.collaborator_user_ids_text
       }
       const res = await api('/config', { method: 'PUT', body: JSON.stringify(toSave) });
       setTimeout(() => { saving.value = false }, 500);
@@ -2296,7 +2486,7 @@ window._mcApp = createApp({
       setInterval(() => { if (authenticated.value && activeTab.value === 'tasks') loadTasks() }, 5000)
     })
 
-    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, fullConfigImportInput, exportConfigOnly, exportFullConfig, openFullConfigImport, onFullConfigImportFile, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions, taskList, taskShowForm, taskEditId, taskForm, taskLogView, taskLogContainer, taskImportFileInput, taskCreatorUrlsText, loadTasks, saveTask, editTask, deleteTask, exportTask, openTaskImportDialog, onTaskImportFile, startTaskRun, stopTaskRun, resyncFeishu, viewTaskLogs, refreshTaskLogs, cpTaskId, cpList, cpDetail, loadCheckpoints, exportCheckpoint, importCheckpoint, viewCheckpointDetail, deleteCheckpoint }
+    return { basePath, config, configDirty, saving, activeTab, tabs, creators, newCreator, editingIdx, editForm, addCreator, startEditCreator, saveEditCreator, deleteCreator, creatorIdsText, batchStatus, batchLogs, batchForm, files, toast, logContainer, fileView, openFileView, loadFilePage, closeFileView, fileViewPrevPage, fileViewNextPage, saveConfig, loadConfig, loadCreators, fullConfigImportInput, exportConfigOnly, exportFullConfig, openFullConfigImport, onFullConfigImportFile, startBatch, stopBatch, refreshLogs, triggerExport, resetProgress, loadFiles, sessionStatus, sessionVerify, sessionChecking, newCookieInput, loadSessionStatus, verifySession, updateCookie, openLoginPage, feishuRefresh, refreshVideoLinks, scriptExtract, startScriptExtract, authenticated, loginPassword, loginError, loginLoading, doLogin, doLogout, spList, spStats, spNewWs, spNewLabel, spVerifying, loadSessions, addSessionEntry, deleteSessionEntry, verifySingleSession, verifyAllSessions, taskList, taskShowForm, taskEditId, taskForm, taskLogView, taskLogContainer, taskImportFileInput, taskCreatorUrlsText, todayYMD, taskFilterScopeArr, loadTasks, saveTask, editTask, deleteTask, exportTask, openTaskImportDialog, onTaskImportFile, startTaskRun, stopTaskRun, resyncFeishu, viewTaskLogs, refreshTaskLogs, cpTaskId, cpList, cpDetail, loadCheckpoints, exportCheckpoint, importCheckpoint, viewCheckpointDetail, deleteCheckpoint, feishuRefFields, fetchFeishuRefFields, currentSearchNoteFieldNames }
   }
 });
 try { window._mcApp.mount('#app'); } catch (e) {

@@ -448,6 +448,19 @@ class XiaoHongShuCrawler(AbstractCrawler):
         return parts
 
     @staticmethod
+    def _format_note_publish_date(note_detail: dict) -> str:
+        """从笔记详情解析发布日期，返回 'YYYY-MM-DD' 或 '未知'，便于日志排查."""
+        note_time = note_detail.get("time", 0)
+        if not note_time or not isinstance(note_time, (int, float)):
+            return "未知"
+        try:
+            from datetime import datetime as _dt
+            ts = note_time / 1000 if note_time > 1e12 else note_time
+            return _dt.fromtimestamp(ts).strftime("%Y-%m-%d")
+        except Exception:
+            return "未知"
+
+    @staticmethod
     def _note_in_date_range(note_detail: dict, date_start: str, date_end: str) -> bool:
         """Check if a note's publish time is within [date_start, date_end]."""
         if not date_start and not date_end:
@@ -488,6 +501,24 @@ class XiaoHongShuCrawler(AbstractCrawler):
             utils.logger.info(
                 f"[XiaoHongShuCrawler.search] 日期过滤已启用: {_date_start or '不限'} ~ {_date_end or '不限'}"
             )
+            try:
+                from datetime import datetime as _dt
+                today = _dt.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                if _date_start and _date_end:
+                    d_start = _dt.strptime(_date_start, "%Y-%m-%d")
+                    d_end = _dt.strptime(_date_end, "%Y-%m-%d")
+                    if d_start > d_end:
+                        utils.logger.warning(
+                            "[XiaoHongShuCrawler.search] 开始日期晚于结束日期，范围内无有效日期，可能一条都留不下，请检查任务配置"
+                        )
+                if _date_end:
+                    d_end = _dt.strptime(_date_end, "%Y-%m-%d")
+                    if d_end > today:
+                        utils.logger.warning(
+                            f"[XiaoHongShuCrawler.search] 结束日期 {_date_end} 晚于今天，实际只保留到今天为止的笔记"
+                        )
+            except Exception:
+                pass
         utils.logger.info(
             f"[XiaoHongShuCrawler.search] 关键词模式: {'组合为一个搜索' if combine_mode else '逐词分别搜索'} | "
             f"共 {len(keywords_to_search)} 个搜索项"
@@ -530,9 +561,17 @@ class XiaoHongShuCrawler(AbstractCrawler):
                     _date_skipped = 0
                     for note_detail in note_details:
                         if note_detail:
+                            pub_date = self._format_note_publish_date(note_detail)
+                            note_id = note_detail.get("note_id", "")
                             if _date_filter_active and not self._note_in_date_range(note_detail, _date_start, _date_end):
                                 _date_skipped += 1
+                                utils.logger.info(
+                                    f"[XiaoHongShuCrawler.search] 日期过滤: 跳过 note_id={note_id} 发布日期 {pub_date} (不在范围内)"
+                                )
                                 continue
+                            utils.logger.info(
+                                f"[XiaoHongShuCrawler.search] 收录 note_id={note_id} 发布日期 {pub_date}"
+                            )
                             await xhs_store.update_xhs_note(note_detail)
                             await self.get_notice_media(note_detail)
                             note_ids.append(note_detail.get("note_id"))

@@ -361,6 +361,15 @@ class FeishuBitableClient:
         url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}"
         self._request("PATCH", url, json={"name": new_name})
 
+    def delete_table(self, app_token: str, table_id: str) -> None:
+        """
+        删除数据表。
+        注意：飞书不允许删除多维表格中最后一张表，需至少保留一张。
+        """
+        url = f"{self.BASE_URL}/bitable/v1/apps/{app_token}/tables/{table_id}"
+        self._request("DELETE", url)
+        utils.logger.info(f"[FeishuBitable] 已删除数据表: {table_id[:16]}...")
+
     def add_permission_member(
         self,
         token: str,

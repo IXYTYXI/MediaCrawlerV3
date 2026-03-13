@@ -192,16 +192,16 @@
     "_reuse_app_token_desc": "手动指定要复用的多维表格 App Token（留空则自动使用 last_bitable 中记录的表格）",
     "_summary_only_desc": "仅写入视频汇总和图文汇总表，跳过各作者的独立分表",
     "last_bitable": {
-      "app_token": "CklIb0ALMaAoT1sNOHkciiFench",
-      "url": "https://guanghe.feishu.cn/base/CklIb0ALMaAoT1sNOHkciiFench",
+      "app_token": "PRlgbjQnGab9GCspa7UcUoQqnAh",
+      "url": "https://guanghe.feishu.cn/base/PRlgbjQnGab9GCspa7UcUoQqnAh",
       "tables": {
-        "笔记数据": "tblCXTyk91dRpMjd",
-        "评论数据": "tbl6oEQsnOZyzdpK",
-        "数据概览": "tblXZoggUBLRfSwZ"
+        "笔记数据": "tbl1yd2sinQkoHYP",
+        "评论数据": "tblXSWzlCLBrL88F",
+        "数据概览": "tblgCIjo6Ww6Ajoj"
       },
       "summary_table_id": "",
       "image_text_summary_table_id": "",
-      "updated_at": "2026-03-13 17:44:58"
+      "updated_at": "2026-03-13 20:59:46"
     },
     "_last_bitable_desc": "上次写入的多维表格信息，用于增量复用（自动维护，请勿手动修改）",
     "cleanup_local_media": false,
@@ -210,6 +210,8 @@
     "_app_id_desc": "飞书开放平台 App ID",
     "_app_secret_desc": "飞书开放平台 App Secret",
     "_folder_token_desc": "飞书文件夹 token（可选，为空则创建在根目录）",
+    "transfer_owner": true,
+    "_transfer_owner_desc": "true=默认转移所有者给 owner_open_id，false=明确不转移（留空不变）",
     "_collaborator_open_ids_desc": "创建多维表格后自动添加为可编辑协作者的 open_id 列表（ou_ 开头）",
     "collaborator_user_ids": [
       "ac9fe8ag"
@@ -235,6 +237,7 @@
         "seq": "序号",
         "image_prefix": "图片"
       },
+      "_search_note_reference_desc": "关键词爬取笔记表字段，可与「参考多维表格」拉取结果对照；参考表: https://guanghe.feishu.cn/base/CcGGb8ejdacDXIsrrDGc5YNen7b",
       "search_note": {
         "seq": "序号",
         "keyword": "搜索关键词",
